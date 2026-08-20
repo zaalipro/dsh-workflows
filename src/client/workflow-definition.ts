@@ -1,0 +1,1 @@
+export const workflowRunDefinition={type:'workflow-run',title:'Workflow',fold(events:readonly any[]){const start=events.find(e=>e.type==='tool-workflow/run-start');if(!start)return undefined;return {runId:start.value.runId,displayName:start.value.name,members:events.filter(e=>e.type==='tool-workflow/agent-start'),terminal:events.find(e=>e.type==='tool-workflow/run-end')}}}

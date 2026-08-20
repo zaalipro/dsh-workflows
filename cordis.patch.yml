@@ -1,0 +1,10 @@
+- id: workflow-worker-thread
+  name: '@deepseek-ai/dsh-workflow-worker-thread'
+  disabled: false
+  config:
+    provider: spawn
+- id: ui-workflow-run
+  disabled: true
+- id: zaalipro-workflows
+  name: '@zaalipro/dsh-workflows'
+  config: {}

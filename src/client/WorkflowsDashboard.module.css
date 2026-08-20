@@ -1,0 +1,1 @@
+.dsh-workflows-dashboard{background:var(--ds-alias-surface,#fff);color:var(--ds-alias-text,#111);display:flex;flex-direction:column;min-height:100%;padding:24px}.dsh-workflows-dashboard button{font:inherit}.dsh-workflows-dashboard main{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}@media(max-width:600px){.dsh-workflows-dashboard{padding:12px}}

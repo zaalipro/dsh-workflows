@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2024", "module": "ESNext", "moduleResolution": "Bundler",
+    "strict": true, "skipLibCheck": true, "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true, "forceConsistentCasingInFileNames": true,
+    "rootDir": "src", "outDir": "lib", "declaration": true, "declarationMap": true,
+    "composite": true, "incremental": true, "sourceMap": true,
+    "lib": ["ES2024"], "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["src/client/**/*.ts", "src/client/**/*.tsx", "tests", "node_modules"]
+}
