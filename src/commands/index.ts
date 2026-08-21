@@ -326,28 +326,42 @@ function makeAlias(
       return commandSuccess(`Started workflow "${launched.displayName}" in the background. Open /workflows to watch it.`)
     } catch (error) { return commandError(error) }
   }
+  const contribution = {
+    name: commandName,
+    description: commandName === definition.name
+      ? definition.description
+      : `Saved workflow "${definition.name}": ${definition.description}`,
+    input: { hint: '[json-args]' },
+    handler,
+  }
   const owner = state.agent?.ctx
-  if (typeof owner?.inject !== 'function') {
-    throw new Error('workflow command aliases require exact-Agent command injection')
-  }
-  const fiber = owner.inject(['commands'], (registrationCtx: any) => {
-    if (typeof registrationCtx?.commands?.registerFallback !== 'function') {
-      throw new Error('workflow command aliases require H registerFallback')
+  const hasFallback = typeof ctx?.commands?.registerFallback === 'function'
+  if (hasFallback) {
+    if (typeof owner?.inject !== 'function') {
+      throw new Error('workflow command aliases require exact-Agent command injection')
     }
-    registrationCtx.commands.registerFallback({
-      name: commandName,
-      description: commandName === definition.name
-        ? definition.description
-        : `Saved workflow "${definition.name}": ${definition.description}`,
-      input: { hint: '[json-args]' },
-      handler,
+    const fiber = owner.inject(['commands'], (registrationCtx: any) => {
+      if (typeof registrationCtx?.commands?.registerFallback !== 'function') {
+        throw new Error('workflow command aliases require H registerFallback')
+      }
+      registrationCtx.commands.registerFallback(contribution)
     })
-  })
-  const dispose = asDisposer(fiber)
-  if (fiber === undefined || (typeof fiber !== 'function' && typeof fiber?.dispose !== 'function')) {
+    const dispose = asDisposer(fiber)
+    if (fiber === undefined || (typeof fiber !== 'function' && typeof fiber?.dispose !== 'function')) {
+      throw new Error('workflow command aliases require exact-Agent command injection')
+    }
+    return { commandName, description: definition.description, handler, dispose }
+  }
+  const register = ctx?.commands?.register
+  if (typeof register !== 'function') {
     throw new Error('workflow command aliases require exact-Agent command injection')
   }
-  return { commandName, description: definition.description, handler, dispose }
+  return {
+    commandName,
+    description: definition.description,
+    handler,
+    dispose: asDisposer(register.call(ctx.commands, contribution)),
+  }
 }
 
 /** Mount Host commands and exact-Agent definition aliases. */
@@ -407,17 +421,18 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
     }))
   }
   const addAgent = (agent: any): void => {
-    if (!hasFallback) return
     if (agent === undefined || states.has(agent)) return
-    if (typeof agent?.ctx?.inject !== 'function') {
-      throw new Error('workflow command aliases require exact-Agent command injection')
-    }
-    const probe = agent.ctx.inject(['commands'], (registrationCtx: any) => {
-      if (typeof registrationCtx?.commands?.registerFallback !== 'function') {
-        throw new Error('workflow command aliases require H registerFallback')
+    if (hasFallback) {
+      if (typeof agent?.ctx?.inject !== 'function') {
+        throw new Error('workflow command aliases require exact-Agent command injection')
       }
-    })
-    try { void asDisposer(probe)() } catch { /* contained */ }
+      const probe = agent.ctx.inject(['commands'], (registrationCtx: any) => {
+        if (typeof registrationCtx?.commands?.registerFallback !== 'function') {
+          throw new Error('workflow command aliases require H registerFallback')
+        }
+      })
+      try { void asDisposer(probe)() } catch { /* contained */ }
+    }
     const state: AliasState = {
       agent,
       registrations: new Map(),

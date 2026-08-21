@@ -301,8 +301,9 @@ describe('on-demand reads, controls, and child navigation (RC10)', () => {
 })
 
 describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () => {
-  it('fails closed when remote.$on is missing', async () => {
+  it('still mounts when remote.$on is missing', async () => {
     const pending: Promise<unknown>[] = []
+    const registered: any[] = []
     const ctx: any = {
       effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
       remote: { $mount: async () => () => undefined },
@@ -311,7 +312,7 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         ActionCommandUiSpec: { kind: 'action' },
-        register: () => () => undefined,
+        register(contribution: any) { registered.push(contribution); return () => undefined },
         decorate: () => () => undefined,
       },
       locale: { register: () => () => undefined, bind: () => (key: string) => key },
@@ -319,7 +320,8 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
       on: () => () => undefined,
     }
     apply(ctx)
-    await expect(Promise.all(pending)).rejects.toThrow(/workflow Remote event subscription is unavailable/u)
+    await Promise.all(pending)
+    expect(registered[0]).toMatchObject({ name: 'workflows', ui: { kind: 'action' } })
   })
 
   it('ignores pending-empty list snapshots and does not union byId children into removal', async () => {

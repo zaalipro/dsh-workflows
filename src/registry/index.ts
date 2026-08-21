@@ -308,6 +308,10 @@ async function discoverHostRoot(
   if (rootInfo.type === 'symlink') throw new WorkflowRegistryError(`${root.path}: symbolic-link workflow roots are not allowed`, 'WORKFLOW_ROOT_UNSAFE');
   if (rootInfo.type !== 'directory') throw new WorkflowRegistryError(`${root.path}: workflow root must be a directory`, 'WORKFLOW_ROOT_UNSAFE');
 
+  if (typeof fs.openPrivateDirectory !== 'function') {
+    return discoverLocalRoot(root, maxDefinitions, maxBytes, signal);
+  }
+
   let baseTarget: unknown;
   let rootTarget: unknown;
   try {
@@ -320,10 +324,6 @@ async function discoverHostRoot(
     }
   } catch (error) {
     throw asRegistryError(root.path, error);
-  }
-
-  if (fs.openPrivateDirectory === undefined) {
-    throw new WorkflowRegistryError(`${root.path}: descriptor-rooted workflow discovery is unavailable`, 'WORKFLOW_REGISTRY_UNSUPPORTED');
   }
   let directory: HostDirectory | undefined;
   try {
@@ -546,8 +546,8 @@ export class WorkflowRegistry {
     signal?: AbortSignal,
   ): Promise<WorkflowDefinition> {
     const fs = this.fs!;
-    if (fs.openPrivateDirectory === undefined) {
-      throw new WorkflowRegistryError(`${root.path}: descriptor-rooted workflow publication is unavailable`, 'WORKFLOW_REGISTRY_UNSUPPORTED');
+    if (typeof fs.openPrivateDirectory !== 'function') {
+      return this.saveLocal(envelope, bytes, root, signal);
     }
     // Pin/check the allowed base before any directory creation.
     let baseTarget: unknown;

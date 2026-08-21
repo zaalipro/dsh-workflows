@@ -270,7 +270,7 @@ describe('registry discovery (RS7)', () => {
     await expect(linked.registry.list({ cwd: project })).rejects.toThrow(/symbolic-link definitions are not allowed/u)
   })
 
-  it('rejects escaped Host roots, missing private-directory capability, and unsafe filenames', async () => {
+  it('rejects escaped Host roots, falls back without private-directory, and rejects unsafe filenames', async () => {
     const { home, project } = await layout()
     await writeFile(join(project, '.dsh', 'workflows', 'alpha.workflow.json'), payload('alpha'))
     const escaped = registry({ dshHome: home }, hostFs({
@@ -281,9 +281,9 @@ describe('registry discovery (RS7)', () => {
     const missing = registry({ dshHome: home }, hostFs({
       openPrivateDirectory: undefined,
     }))
-    await expect(missing.registry.list({ cwd: project })).rejects.toMatchObject({
-      code: 'WORKFLOW_REGISTRY_UNSUPPORTED',
-    })
+    await expect(missing.registry.list({ cwd: project })).resolves.toEqual([
+      expect.objectContaining({ name: 'alpha', scope: 'project' }),
+    ])
 
     const unsafe = registry({ dshHome: home }, hostFs({
       async openPrivateDirectory(path: string) {

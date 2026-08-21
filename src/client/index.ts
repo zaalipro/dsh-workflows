@@ -100,21 +100,13 @@ interface WorkflowCommandUi {
   }): unknown
 }
 
-function commandUiSupportsAction(commandUi: object): boolean {
-  const spec = (commandUi as { ActionCommandUiSpec?: unknown }).ActionCommandUiSpec
-  if (spec === true) return true
-  if (typeof spec === 'object' && spec !== null && (spec as { kind?: unknown }).kind === 'action') return true
-  const kinds = (commandUi as { uiKinds?: unknown }).uiKinds
-  return Array.isArray(kinds) && kinds.includes('action')
-}
-
 function requireCommandUi(commandUi: unknown): WorkflowCommandUi {
   if (typeof commandUi !== 'object' || commandUi === null) {
     throw new Error('workflow dashboard action registration is unavailable')
   }
   const register = (commandUi as { register?: unknown }).register
   const decorate = (commandUi as { decorate?: unknown }).decorate
-  if (typeof register !== 'function' || typeof decorate !== 'function' || !commandUiSupportsAction(commandUi)) {
+  if (typeof register !== 'function' || typeof decorate !== 'function') {
     throw new Error('workflow dashboard action registration is unavailable')
   }
   return commandUi as WorkflowCommandUi
@@ -344,8 +336,9 @@ export function apply(ctx: ClientContext): void {
     // The generated event transport is deliberately invalidation-only.  Do
     // not copy run heads from the event into browser state.
     const remoteOn = remote.$on as ((event: string, listener: (change: any) => void) => (() => void)) | undefined
-    if (typeof remoteOn !== 'function') throw new Error('workflow Remote event subscription is unavailable')
-    addCleanup(remoteOn.call(remote, 'workflows/run-change', change => controller.handleChange(change)))
+    if (typeof remoteOn === 'function') {
+      addCleanup(remoteOn.call(remote, 'workflows/run-change', change => controller.handleChange(change)))
+    }
 
     const hostDescription = root.connection?.hostDescription
     if (hostDescription?.subscribe !== undefined) {

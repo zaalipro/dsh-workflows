@@ -52,6 +52,7 @@ import {
   type WorkflowValidation,
 } from './types.js'
 import { WorkflowPackageError } from '../invariant.js'
+import { scriptWithJobMapParallel } from './parallel-compat.js'
 
 export * from './types.js'
 export * from './value-view.js'
@@ -781,7 +782,7 @@ export class WorkflowSupervisor {
     const checkpoint = run.checkpoint
     const scratch = run.scratch
     const request: any = {
-      script: run.script, meta: run.meta, args: run.args,
+      script: scriptWithJobMapParallel(run.script), meta: run.meta, args: run.args,
       maxTotalAgents: run.head.budget.total,
       parent: run.parent,
       signal: run.ownerController.signal,
@@ -1932,7 +1933,7 @@ export class WorkflowSupervisor {
         return { ok: false, status: 'error', error: `${spec.filename}: workflow engine validation is unavailable` }
       }
       const result = await engine.validate({
-        script: source.script,
+        script: scriptWithJobMapParallel(source.script),
         meta: source.meta,
         args,
         maxTotalAgents: budget,

@@ -98,9 +98,14 @@ export function applyInvariant(ctx: Context): void {
   let invariants: { register?: (packageName: string, installer: () => void) => unknown } | undefined
   try {
     const get = (ctx as { get?: (name: string) => unknown }).get
-    invariants = typeof get === 'function'
-      ? get.call(ctx, 'invariants') as typeof invariants
-      : undefined
+    if (typeof get === 'function') {
+      try { invariants = get.call(ctx, 'invariants') as typeof invariants }
+      catch { /* Cordis throws for an uninjected service; fall through. */ }
+    }
+    if (invariants === undefined) {
+      try { invariants = (ctx as { invariants?: typeof invariants }).invariants }
+      catch { return }
+    }
   } catch {
     return
   }

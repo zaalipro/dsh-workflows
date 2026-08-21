@@ -46,7 +46,7 @@ function createSupervisor() {
   }
 }
 
-function createHost() {
+function createHost(options: { readonly fallback?: boolean } = {}) {
   const listeners = new Map<string, Set<(...args: any[]) => void>>()
   const ordinary = new Map<string, CommandDefinition>()
   const fallbacks = new WeakMap<object, Map<string, CommandDefinition>>()
@@ -129,6 +129,7 @@ function createHost() {
     },
     emit,
   }
+  if (options.fallback === false) delete (commands as { registerFallback?: unknown }).registerFallback
   const disposeCommands = applyCommands(ctx, { registerSkill: false })
   return { ctx, workflows, supervisor, recorder, commands, disposeCommands, fallbacks, notifyCommands, ordinary }
 }
@@ -463,6 +464,31 @@ describe('saved-definition aliases (SH17)', () => {
       session: { header: {} },
       ctx: { inject(_deps: unknown, callback: (value: any) => void) { callback({ commands: {} }) } },
     })).toThrow(/registerFallback/u)
+  })
+
+  it('registers saved-name aliases through commands.register when registerFallback is absent', async () => {
+    const host = createHost({ fallback: false })
+    const agent: any = {
+      session: { header: { cwd: '/workspace' }, append() { /* unused */ } },
+      steer: vi.fn(),
+      ctx: {},
+    }
+    host.workflows.definitions = [{ name: 'bug-hunt', description: 'hunt bugs' }]
+    host.ctx.agents.register(agent)
+    await vi.waitFor(() => {
+      expect(host.commands.list(agent).map((item: { name: string }) => item.name)).toContain('bug-hunt')
+    })
+    const launched = await host.commands.execute(agent, '/bug-hunt', [], new AbortController().signal)
+    expect(launched?.result).toMatchObject({
+      kind: 'success',
+      text: 'Started workflow "bug-hunt-2" in the background. Open /workflows to watch it.',
+    })
+    expect(host.supervisor.start).toHaveBeenCalledTimes(1)
+    host.ctx.commands.register = undefined
+    host.workflows.definitions = [{ name: 'fresh', description: 'new' }]
+    host.ctx.emit('workflows/change')
+    await new Promise(resolve => setTimeout(resolve, 20))
+    expect(host.commands.list(agent).map((item: { name: string }) => item.name)).not.toContain('fresh')
   })
 
   it('treats a list AbortError as a cancelled refresh and ignores a missing find() hit', async () => {

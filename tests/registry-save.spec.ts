@@ -173,11 +173,12 @@ describe('registry save (RS8)', () => {
       .rejects.toThrow(/Host filesystem did not return a final-entry version/u)
   })
 
-  it('fails closed without openPrivateDirectory and when the root escapes', async () => {
+  it('saves through the local fallback without openPrivateDirectory and still rejects an escaped root', async () => {
     const { home, project } = await layout()
     const missing = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
-    await expect(missing.registry.save(envelope('a'), { cwd: project, scope: 'project' }))
-      .rejects.toMatchObject({ code: 'WORKFLOW_REGISTRY_UNSUPPORTED' })
+    const saved = await missing.registry.save(envelope('a'), { cwd: project, scope: 'project' })
+    expect(saved.name).toBe('a')
+    expect(await readFile(saved.path, 'utf8')).toContain('"a"')
     const escaped = registry({ dshHome: home }, hostFs({ contains() { return false } }))
     await expect(escaped.registry.save(envelope('a'), { cwd: project, scope: 'project' }))
       .rejects.toThrow(/escapes its project scope through a symbolic-link ancestor/u)

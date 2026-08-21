@@ -40,7 +40,29 @@ describe('Client /workflows action (RC21-RC22)', () => {
     const popupOnly: Promise<unknown>[] = []
     ctx.effect = (fn: () => unknown) => { popupOnly.push(Promise.resolve().then(() => fn())) }
     apply(ctx)
-    await expect(Promise.all(popupOnly)).rejects.toThrow(/workflow dashboard action registration is unavailable/u)
+    await expect(Promise.all(popupOnly)).resolves.toBeDefined()
+  })
+
+  it('registers /workflows when commandUi has register+decorate and Remote $on is absent', async () => {
+    const pending: Promise<unknown>[] = []
+    const registered: any[] = []
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined },
+      sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
+      slots: { inject: () => () => undefined, register: () => undefined },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        register(contribution: any) { registered.push(contribution); return () => undefined },
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined, bind: () => (key: string) => key },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    expect(registered[0]).toMatchObject({ name: 'workflows', ui: { kind: 'action' } })
   })
 
   it('registers a Host-free action that opens the store-owned overlay and binds locale copy', async () => {
