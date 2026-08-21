@@ -111,7 +111,7 @@ function validSkill(text: string): boolean {
   return /^---\s*\n/u.test(text)
     && /^name:\s*create-workflow\s*$/mu.test(text)
     && /\/create-workflow/u.test(text)
-    && /^user-invocable:\s*true\s*$/mu.test(text)
+    && /^user-invocable:\s*false\s*$/mu.test(text)
     && /^model-invocable:\s*true\s*$/mu.test(text)
 }
 
@@ -164,7 +164,7 @@ function registrationForSkill(text: string): Record<string, unknown> {
     description: parsed.description,
     content: parsed.content,
     source: 'bundled',
-    invocation: { modelInvocable: true, userInvocable: true },
+    invocation: { modelInvocable: true, userInvocable: false },
   }
 }
 

@@ -1,7 +1,7 @@
 ---
 name: create-workflow
 description: Author, smoke-check, and save a new saved workflow (invoke via /create-workflow).
-user-invocable: true
+user-invocable: false
 model-invocable: true
 ---
 

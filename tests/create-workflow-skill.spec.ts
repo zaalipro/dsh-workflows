@@ -36,7 +36,7 @@ describe('create-workflow skill asset (SH18)', () => {
     const text = await readFile(SKILL_FILE, 'utf8')
     expect(text.startsWith('---\n')).toBe(true)
     expect(text).toMatch(/^name:\s*create-workflow\s*$/mu)
-    expect(text).toMatch(/^user-invocable:\s*true\s*$/mu)
+    expect(text).toMatch(/^user-invocable:\s*false\s*$/mu)
     expect(text).toMatch(/^model-invocable:\s*true\s*$/mu)
     expect(text).toMatch(/^description:.*\/create-workflow/mu)
     expect(text).toContain('Do not write Rhai')
@@ -67,7 +67,7 @@ describe('create-workflow skill asset (SH18)', () => {
     const fallback = parsePackagedSkillDocument([
       '---',
       'name: create-workflow',
-      'user-invocable: true',
+      'user-invocable: false',
       'model-invocable: true',
       '---',
       '',
@@ -99,7 +99,7 @@ describe('create-workflow skill asset (SH18)', () => {
       expect(entry.options).toEqual({ protectedName: 'create-workflow' })
       expect(entry.registration.name).toBe('create-workflow')
       expect(entry.registration.source).toBe('bundled')
-      expect(entry.registration.invocation).toEqual({ modelInvocable: true, userInvocable: true })
+      expect(entry.registration.invocation).toEqual({ modelInvocable: true, userInvocable: false })
       expect(entry.registration.content.startsWith('---')).toBe(false)
       expect(entry.registration.content).toContain('## Required seven-stage procedure')
       expect(entry.registration.description).toContain('/create-workflow')
@@ -147,7 +147,7 @@ describe('create-workflow skill asset (SH18)', () => {
     expect(candidates[1]?.pathname.endsWith('/skills/create-workflow/SKILL.md')).toBe(true)
     expect(packagedSkillPath(libHere).pathname).toBe(candidates[1]?.pathname)
     expect(packagedSkillPath(String(libHere)).pathname).toBe(candidates[1]?.pathname)
-    expect(await readPackagedSkill()).toContain('user-invocable: true')
+    expect(await readPackagedSkill()).toContain('user-invocable: false')
   })
 
   it('fails activation when the packaged skill is missing or invalid', async () => {
