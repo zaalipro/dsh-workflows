@@ -391,7 +391,7 @@ export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Pro
       ownEffect(ctx, resources.remoteEvents, 'dsh-workflows: remote events')
     }
 
-    applyInvariant(ctx)
+    try { applyInvariant(ctx) } catch { /* invariants is optional and not injected */ }
 
     const effect = optionalProperty(ctx, 'effect')
     if (typeof effect === 'function') effect.call(ctx, () => teardown, 'dsh-workflows: aggregate teardown')

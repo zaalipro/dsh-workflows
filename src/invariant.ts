@@ -95,7 +95,15 @@ export function checkWorkflowRegistryStorageInvariant(state: unknown): readonly 
  * enforced by the concrete components and their tests.
  */
 export function applyInvariant(ctx: Context): void {
-  const invariants = (ctx as { invariants?: { register?: (packageName: string, installer: () => void) => unknown } }).invariants
+  let invariants: { register?: (packageName: string, installer: () => void) => unknown } | undefined
+  try {
+    const get = (ctx as { get?: (name: string) => unknown }).get
+    invariants = typeof get === 'function'
+      ? get.call(ctx, 'invariants') as typeof invariants
+      : undefined
+  } catch {
+    return
+  }
   if (typeof invariants?.register !== 'function') return
   invariants.register('@zaalipro/dsh-workflows', () => undefined)
 }
