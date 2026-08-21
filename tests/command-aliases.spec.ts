@@ -491,6 +491,20 @@ describe('saved-definition aliases (SH17)', () => {
     expect(host.commands.list(agent).map((item: { name: string }) => item.name)).not.toContain('fresh')
   })
 
+  it('registers one stock alias catalog per working directory', async () => {
+    const host = createHost({ fallback: false })
+    host.workflows.definitions = [{ name: 'bug-hunt', description: 'hunt bugs' }]
+    const first: any = { session: { header: { cwd: '/workspace' }, append() { /* unused */ } }, steer: vi.fn(), ctx: {} }
+    const second: any = { session: { header: { cwd: '/workspace' }, append() { /* unused */ } }, steer: vi.fn(), ctx: {} }
+    host.ctx.agents.register(first)
+    host.ctx.agents.register(second)
+    await vi.waitFor(() => {
+      const names = host.commands.list(first).map((item: { name: string }) => item.name)
+      expect(names).toContain('bug-hunt')
+      expect(names).not.toContain('workflow-bug-hunt')
+    })
+  })
+
   it('treats a list AbortError as a cancelled refresh and ignores a missing find() hit', async () => {
     const host = createHost()
     const agent = createAgent(host)

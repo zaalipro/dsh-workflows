@@ -152,17 +152,13 @@ async function loadPickerDefinitions(
 export function apply(ctx: ClientContext): void {
   const root = ctx as AnyContext
   root.effect(async () => {
-    const remote = root.remote as TypertClientRemote & Record<string, any>
-    let remoteDisposer: unknown
-    if (typeof remote?.$mount === 'function') {
-      try { remoteDisposer = await remote.$mount(TYPERT_REMOTE) } catch { remoteDisposer = undefined }
-    }
-
-    const sessions = root.sessions as any
-    const controller = new WorkflowRunsController(remote, sessions)
-    const adapter = new DashboardWorkflowRunsAdapter(controller)
     const cleanup: Array<() => unknown> = []
+    const addCleanup = (value: Disposer): void => {
+      if (value !== undefined) cleanup.push(value)
+    }
     let dashboardActions: WorkflowsStoreInstance['actions'] | undefined
+    let overlayMounted = false
+    let remoteDisposer: unknown
     let overlayState: { readonly invoker: HTMLElement | null } = { invoker: null }
     const overlayListeners = new Set<() => void>()
     const publishOverlay = (next: typeof overlayState): void => {
@@ -175,14 +171,47 @@ export function apply(ctx: ClientContext): void {
         : null
       publishOverlay({ invoker: element ?? active })
     }
+    const commandUi = requireCommandUi(root.commandUi)
+    const translate = typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined
+    const workflowsDescription = typeof translate === 'function'
+      ? String(translate('commandDescription'))
+      : workflowLocales.en.commandDescription
+    addCleanup(asDisposer(commandUi.register({
+      name: 'workflows',
+      description: workflowsDescription,
+      available: () => true,
+      ui: {
+        kind: 'action' as const,
+        run: () => {
+          if (!overlayMounted || dashboardActions === undefined || typeof dashboardActions.open !== 'function') {
+            throw new Error('workflow dashboard overlay is not mounted')
+          }
+          const active = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+            ? document.activeElement
+            : null
+          captureInvoker(active)
+          dashboardActions.open()
+        },
+      },
+    })))
 
-    root.workflowRunsController = controller
-    root.workflowRunsAdapter = adapter
-    root.workflowRunDefinition = workflowRunDefinition
-
-    const addCleanup = (value: Disposer): void => {
-      if (value !== undefined) cleanup.push(value)
+    let controller: WorkflowRunsController | undefined
+    let adapter: DashboardWorkflowRunsAdapter | undefined
+    try {
+    const remote = root.remote as TypertClientRemote & Record<string, any>
+    if (typeof remote?.$mount === 'function') {
+      try { remoteDisposer = await remote.$mount(TYPERT_REMOTE) } catch { remoteDisposer = undefined }
     }
+
+    const sessions = root.sessions as any
+    const liveController = new WorkflowRunsController(remote, sessions)
+    const liveAdapter = new DashboardWorkflowRunsAdapter(liveController)
+    controller = liveController
+    adapter = liveAdapter
+
+    root.workflowRunsController = liveController
+    root.workflowRunsAdapter = liveAdapter
+    root.workflowRunDefinition = workflowRunDefinition
 
     // Locale registration is effect-owned along with the rest of the client
     // aggregate.  The locale face accepts both the RC8 and H dictionary shape.
@@ -200,7 +229,7 @@ export function apply(ctx: ClientContext): void {
       const dict = workflowLocaleFromBind(typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined)
       return createElement(WorkflowRunChatSlot, {
         ...props,
-        operations: adapter,
+        operations: liveAdapter,
         useSessions: props.useSessions,
         labels: workflowChatLabelsFromLocale(dict),
         childAvailable: (parent: string, child: string) => directChildAvailable(sessions, parent, child),
@@ -211,7 +240,7 @@ export function apply(ctx: ClientContext): void {
       key: 'workflow-run',
       locale: NS,
       inject: () => ({
-        operations: adapter,
+        operations: liveAdapter,
         childAvailable: (parent: string, child: string) => directChildAvailable(sessions, parent, child),
       }),
     }, runChatComponent))
@@ -232,9 +261,9 @@ export function apply(ctx: ClientContext): void {
         () => overlayState,
       )
       const source = useSyncExternalStore(
-        adapter.source.subscribe,
-        adapter.source.getSnapshot,
-        adapter.source.getSnapshot,
+        liveAdapter.source.subscribe,
+        liveAdapter.source.getSnapshot,
+        liveAdapter.source.getSnapshot,
       )
       const dict = workflowLocaleFromBind(typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined)
       const close = (): void => {
@@ -265,7 +294,7 @@ export function apply(ctx: ClientContext): void {
           showExecution: () => undefined,
           showRun: () => undefined,
         },
-        operations: adapter,
+        operations: liveAdapter,
         invoker: overlay.invoker,
         onClose: close,
         labels: dashboardLabelsFromLocale(dict),
@@ -280,32 +309,11 @@ export function apply(ctx: ClientContext): void {
       store: createWorkflowsStore,
       inject: (actions?: WorkflowsStoreInstance['actions']) => {
         if (actions !== undefined && typeof actions.open === 'function') dashboardActions = actions
-        return { operations: adapter, hooks: { workflowRuns: adapter.source } }
+        return { operations: liveAdapter, hooks: { workflowRuns: liveAdapter.source } }
       },
     }, DashboardContribution))
     addCleanup(overlayInjection)
-    const overlayMounted = overlayInjection !== undefined
-
-    const commandUi = requireCommandUi(root.commandUi)
-    const translate = typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined
-    const workflowsDescription = typeof translate === 'function'
-      ? String(translate('commandDescription'))
-      : workflowLocales.en.commandDescription
-    addCleanup(asDisposer(commandUi.register({
-      name: 'workflows',
-      description: workflowsDescription,
-      available: () => true,
-      ui: {
-        kind: 'action' as const,
-        run: () => {
-          if (!overlayMounted || dashboardActions === undefined || typeof dashboardActions.open !== 'function') {
-            throw new Error('workflow dashboard overlay is not mounted')
-          }
-          captureInvoker(typeof document !== 'undefined' && document.activeElement instanceof HTMLElement ? document.activeElement : null)
-          dashboardActions.open()
-        },
-      },
-    })))
+    overlayMounted = overlayInjection !== undefined
 
     addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',
@@ -339,19 +347,19 @@ export function apply(ctx: ClientContext): void {
     // not copy run heads from the event into browser state.
     const remoteOn = remote.$on as ((event: string, listener: (change: any) => void) => (() => void)) | undefined
     if (typeof remoteOn === 'function') {
-      addCleanup(remoteOn.call(remote, 'workflows/run-change', change => controller.handleChange(change)))
+      addCleanup(remoteOn.call(remote, 'workflows/run-change', change => liveController.handleChange(change)))
     }
 
     const hostDescription = root.connection?.hostDescription
     if (hostDescription?.subscribe !== undefined) {
       addCleanup(hostDescription.subscribe(() => {
-        if (hostDescription.getSnapshot?.() === undefined) controller.handleDisconnected()
-        else controller.handleConnected()
+        if (hostDescription.getSnapshot?.() === undefined) liveController.handleDisconnected()
+        else liveController.handleConnected()
       }))
-      if (hostDescription.getSnapshot?.() === undefined) controller.handleDisconnected()
+      if (hostDescription.getSnapshot?.() === undefined) liveController.handleDisconnected()
     }
     if (typeof root.on === 'function') {
-      const registered = root.on('connection/reset', () => controller.handleReset())
+      const registered = root.on('connection/reset', () => liveController.handleReset())
       if (typeof registered === 'function') addCleanup(registered)
     }
 
@@ -361,10 +369,11 @@ export function apply(ctx: ClientContext): void {
         const current = sessionListIds(sessions)
         if (current === undefined) return
         const keys = new Set(current)
-        for (const id of previous) if (!keys.has(id)) controller.removeSession(id)
+        for (const id of previous) if (!keys.has(id)) liveController.removeSession(id)
         previous = keys
       }))
     }
+    } catch { /* /workflows slash action stays registered */ }
 
     return async () => {
       dashboardActions = undefined
@@ -374,8 +383,8 @@ export function apply(ctx: ClientContext): void {
       for (const dispose of cleanup.reverse()) {
         try { await dispose() } catch { /* one child cannot block aggregate unload */ }
       }
-      adapter.dispose()
-      controller.dispose()
+      adapter?.dispose()
+      controller?.dispose()
       await disposeValue(remoteDisposer)
     }
   }, 'dsh-workflows: client aggregate')

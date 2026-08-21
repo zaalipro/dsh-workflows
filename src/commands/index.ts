@@ -422,6 +422,13 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
   }
   const addAgent = (agent: any): void => {
     if (agent === undefined || states.has(agent)) return
+    if (!hasFallback) {
+      const cwd = cwdOf(agent).cwd
+      if (cwd === undefined) return
+      for (const existing of states.keys()) {
+        if (cwdOf(existing).cwd === cwd) return
+      }
+    }
     if (hasFallback) {
       if (typeof agent?.ctx?.inject !== 'function') {
         throw new Error('workflow command aliases require exact-Agent command injection')
