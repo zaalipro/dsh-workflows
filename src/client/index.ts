@@ -171,6 +171,7 @@ export function apply(ctx: ClientContext): void {
         : null
       publishOverlay({ invoker: element ?? active })
     }
+    addCleanup(root.locale?.register?.(NS, workflowLocales))
     const commandUi = requireCommandUi(root.commandUi)
     const translate = typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined
     const workflowsDescription = typeof translate === 'function'
@@ -212,10 +213,6 @@ export function apply(ctx: ClientContext): void {
     root.workflowRunsController = liveController
     root.workflowRunsAdapter = liveAdapter
     root.workflowRunDefinition = workflowRunDefinition
-
-    // Locale registration is effect-owned along with the rest of the client
-    // aggregate.  The locale face accepts both the RC8 and H dictionary shape.
-    addCleanup(root.locale?.register?.(NS, workflowLocales))
 
     addCleanup(root.conversationEvents?.register?.(workflowMessageDefinition))
     if (root.conversationEvents !== undefined && root.conversationEvents.register !== undefined
