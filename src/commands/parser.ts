@@ -5,18 +5,21 @@ export type WorkflowCommand =
   | { readonly kind: 'malformed'; readonly error: string }
 
 export const WORKFLOW_COMMAND_HELP = [
-  'Usage: /workflow <name> [<json-object>]',
-  '       /workflow pause <display-name>',
-  '       /workflow resume <display-name>',
-  '       /workflow stop <display-name>',
-  '       /workflow save <display-name>',
+  'Launch or control a workflow.',
+  '',
+  'Usage:',
+  '/workflow <name> [<json-args>]',
+  '/workflow pause <display-name>',
+  '/workflow resume <display-name>',
+  '/workflow stop <display-name>',
+  '/workflow save <display-name>',
   '',
   'Examples:',
-  '  /workflow review-changes {"branch":"main"}',
-  '  /workflow pause review-changes',
-  '  /workflow resume review-changes',
-  '  /workflow stop review-changes',
-  '  /workflow save review-changes',
+  '/workflow review-changes {"target":"origin/main...HEAD"}',
+  '/workflow pause review-changes',
+  '/workflow resume review-changes',
+  '/workflow stop review-changes-2',
+  '/workflow save review-changes',
 ].join('\n')
 
 /** Parse workflow command text without resolving definitions or causing effects. */

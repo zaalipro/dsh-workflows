@@ -1,0 +1,151 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`keyless assembled workflow evidence > reconstructs one durable run with paired members, null-safe detail, and a bounded notice > completed-chat-node 1`] = `
+{
+  "name": "keyless-review",
+  "phases": [
+    {
+      "key": "value:6:review",
+      "members": [
+        {
+          "childId": "child-alpha",
+          "label": "alpha",
+          "seq": 1,
+          "status": "completed",
+        },
+      ],
+      "phase": "review",
+    },
+    {
+      "key": "value:0:",
+      "members": [
+        {
+          "childId": "child-beta",
+          "label": "beta",
+          "seq": 2,
+          "status": "completed",
+        },
+      ],
+      "phase": "",
+    },
+  ],
+  "status": "completed",
+}
+`;
+
+exports[`keyless assembled workflow evidence > reconstructs one durable run with paired members, null-safe detail, and a bounded notice > completed-notice 1`] = `
+"workflow "keyless-review" completed.
+Result:
+{
+  "alpha": "alpha",
+  "beta": null
+}
+Open /workflows to inspect the run."
+`;
+
+exports[`keyless assembled workflow evidence > reconstructs running, failed, and interrupted Chat statuses without leaking the run id > failed-chat-node 1`] = `
+{
+  "name": "keyless-review",
+  "phases": [
+    {
+      "key": "value:6:review",
+      "members": [
+        {
+          "childId": "child-alpha",
+          "label": "alpha",
+          "seq": 1,
+          "status": "failed",
+        },
+      ],
+      "phase": "review",
+    },
+    {
+      "key": "value:0:",
+      "members": [
+        {
+          "childId": "child-beta",
+          "label": "beta",
+          "seq": 2,
+          "status": "completed",
+        },
+      ],
+      "phase": "",
+    },
+  ],
+  "status": "failed",
+}
+`;
+
+exports[`keyless assembled workflow evidence > reconstructs running, failed, and interrupted Chat statuses without leaking the run id > interrupted-chat-node-cancelled 1`] = `
+{
+  "name": "keyless-review",
+  "phases": [
+    {
+      "key": "value:6:review",
+      "members": [
+        {
+          "childId": "child-alpha",
+          "label": "alpha",
+          "seq": 1,
+          "status": "cancelled",
+        },
+      ],
+      "phase": "review",
+    },
+    {
+      "key": "value:0:",
+      "members": [
+        {
+          "childId": "child-beta",
+          "label": "beta",
+          "seq": 2,
+          "status": "completed",
+        },
+      ],
+      "phase": "",
+    },
+  ],
+  "status": "cancelled",
+}
+`;
+
+exports[`keyless assembled workflow evidence > reconstructs running, failed, and interrupted Chat statuses without leaking the run id > running-chat-node 1`] = `
+{
+  "name": "keyless-review",
+  "phases": [
+    {
+      "key": "value:6:review",
+      "members": [
+        {
+          "childId": "child-alpha",
+          "label": "alpha",
+          "seq": 1,
+          "status": "running",
+        },
+      ],
+      "phase": "review",
+    },
+    {
+      "key": "value:0:",
+      "members": [
+        {
+          "childId": "child-beta",
+          "label": "beta",
+          "seq": 2,
+          "status": "running",
+        },
+      ],
+      "phase": "",
+    },
+  ],
+  "status": "running",
+}
+`;
+
+exports[`keyless assembled workflow evidence > records a legal continuous prefix and maps interruption to the official cancelled event > interrupted-durable-jsonl 1`] = `
+"{"type":"tool-workflow/run-start","data":{"runId":"run-keyless-review","name":"keyless-review"}}
+{"type":"tool-workflow/agent-start","data":{"runId":"run-keyless-review","seq":1,"label":"alpha","childId":"child-alpha"}}
+{"type":"tool-workflow/agent-end","data":{"runId":"run-keyless-review","seq":1,"outcome":"completed"}}
+{"type":"tool-workflow/run-end","data":{"runId":"run-keyless-review","stopReason":"cancelled"}}
+"
+`;

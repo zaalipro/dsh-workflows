@@ -2685,7 +2685,7 @@ Testing is layered so a passing unit suite cannot hide an integration, artifact,
   - _Leverage: `packages/workflow/workflow/src/runtime-types.ts` holder-owned `WorkflowRun`, `snapshotJsonValue` from `@deepseek-ai/dsh-session`, and existing contained event dispatch._
   - _Requirements: 3.1, 3.6, 3.7, 3.8, 3.9, 3.11, 4.5, 4.7, 4.8, 5.8, 6.4, 6.5, 8.1, 8.2, 8.3_
 
-- [ ] 7. [U] Extend the worker protocol for replay, gates, scratch, and validation
+- [x] 7. [U] Extend the worker protocol for replay, gates, scratch, and validation
   - Files: `packages/workflow/workflow-worker-thread/src/types.ts` (edit), `packages/workflow/workflow-worker-thread/src/protocol.ts` (edit), `packages/workflow/workflow-worker-thread/tests/protocol-edge-coverage.spec.ts` (new)
   - Purpose: Carry replay state and every new hook/control over a closed validated protocol so malformed worker messages cannot become trusted checkpoint state or filesystem calls.
   - Do:

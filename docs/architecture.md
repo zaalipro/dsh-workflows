@@ -8,6 +8,8 @@ This reference describes the installed architecture of `@zaalipro/dsh-workflows`
 
 The package owns definition discovery, logical-run supervision, retained storage, completion delivery, commands, an exact-Agent model-tool shadow, authorized Remote reads, and the Web dashboard. Release **H** owns the only JavaScript evaluator and child-agent engine. A Headless install evaluates no browser module. A Web install adds the Client aggregate without changing Host execution authority.
 
+Current state: this document describes the package against symbolic **H**. Official worker-thread, remotes, `tools.replace`, `registerFallback`, trusted skill, and nested private-directory I/O have not shipped on `141eb6f`; activation fail-closes instead of loading on that incompatible baseline.
+
 Four invariants organize every component:
 
 1. A start is durable before it is visible, and a deferred official engine attempt has an owner before it can execute.
@@ -108,7 +110,7 @@ The public export map is closed: `.`, `./registry`, `./supervisor`, `./run-recor
 
 The package root owns three compiler faces: solution `tsconfig.json`, Host `tsconfig.host.json`, and Client `tsconfig.client.json`. Build order is **Host TSC -> Typert -> Client TSC -> classic lazy CJS**. A temporary copied mini-workspace provides one staging-root Host aggregate and one copied-package staging `tsconfig.json`; it has no nested Host/Client aggregate files. Focused `WorkspaceTypertGenerator.generate()` returns artifacts, and the build writes exactly `lib/typert.host.js`, `lib/typert.host.d.ts`, `lib/typert.remote-client.js`, and `lib/typert.remote-client.d.ts`, plus a map only when returned.
 
-The final `lib/client.js` calls `window.__ModuleLoader__.load({ id: "@zaalipro/dsh-workflows", factory })`. It keeps baseline Client dependencies external, inlines package Remote and `clsx` code, and lets Lightning CSS own module names and lifecycle. Worker, client, skill, patch, and asset paths derive from `import.meta.url`, never the process cwd. npm tarballs are prebuilt; only a Git install may invoke `prepare` after the consumer permits that build.
+The final `lib/client.js` must call `window.__ModuleLoader__.load({ id: "@zaalipro/dsh-workflows", factory: (require) => ... })` with a non-empty factory. Optional-chaining `?.load` and `factory: () => ({})` placeholders fail the build and package verifier. The bundle keeps baseline Client dependencies external, inlines package Remote and `clsx` code, and lets Lightning CSS own module names and lifecycle. Skill, patch, and Client asset paths derive from `import.meta.url`, never the process cwd. The evaluator is the official worker-thread peer, not a worker packed in this tarball. npm tarballs are prebuilt; only a Git install may invoke `prepare` after the consumer permits that build.
 
 ## Lifecycle authority
 

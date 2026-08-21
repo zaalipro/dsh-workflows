@@ -37,7 +37,7 @@ allowBuilds:
   '@zaalipro/dsh-workflows': true
 ```
 
-Place the `allowBuilds` entry in the profile's `pnpm-workspace.yaml`, then repeat the add command. This permission is necessary only for Git installs whose `prepare` script builds source; npm tarballs already contain the Host, Client, Typert, worker, patch, skill, types, license, and notice assets.
+Place the `allowBuilds` entry in the profile's `pnpm-workspace.yaml`, then repeat the add command. This permission is necessary only for Git installs whose `prepare` script builds source; npm tarballs already contain the Host, Client, Typert, patch, skill, types, license, and notice assets. The JavaScript evaluator is the official `@deepseek-ai/dsh-workflow-worker-thread` peer, not a worker packed inside this package.
 
 ## Removal
 
@@ -75,7 +75,7 @@ Names are lowercase kebab-case, start with a letter, use at most 64 UTF-16 code 
 
 ## Launch and operate
 
-Launch a saved definition with `/workflow <name> [<json-object>]` or its generated `/<name> [<json-object>]` alias. An ordinary command keeps a colliding bare name; the workflow receives the first free repeatedly prefixed alias such as `/workflow-review-changes`, while `/workflow review-changes` always works. Launch returns immediately with `Started workflow "<display-name>" in the background. Open /workflows to watch it.`; later runs of the same metadata name use display handles such as `review-changes-2` without exposing internal ids.
+Launch a saved definition with `/workflow <name> [<json-args>]` or its generated `/<name> [<json-args>]` alias. An ordinary command keeps a colliding bare name; the workflow receives the first free repeatedly prefixed alias such as `/workflow-review-changes`, while `/workflow review-changes` always works. Launch returns immediately with `Started workflow "<display-name>" in the background. Open /workflows to watch it.`; later runs of the same metadata name use display handles such as `review-changes-2` without exposing internal ids.
 
 In Web, bare `/workflow` opens the saved-definition picker and exact bare `/workflows` opens the browser-owned run dashboard without adding a Host command lifecycle or duplicate Chat completion row. In headless, bare `/workflow` prints usage. The dashboard shows live and retained runs, phases, agent spend, member outcomes, logs, terminal results, and chunked scratch artifacts. Pause, Resume, Stop, and eligible Save actions are revision-checked; keyboard and narrow-screen drill-down remain available. `/workflows` is a run inspector, never a definition catalog.
 
@@ -108,4 +108,4 @@ Workflow scripts have the same trust premise as existing model shell access. A w
 - [Testing and release acceptance](docs/testing.md) — automated evidence and the final manual Web checklist.
 - [Installed authoring skill](skills/create-workflow/SKILL.md) — JavaScript globals, schemas, budgets, scratch, and safe authoring patterns.
 - [License](LICENSE) and [native dependency notice](NOTICE.md).
-- [Official workflow subsystem](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/subsystems/workflow.md) — the engine and durable workflow vocabulary supplied by H.
+- Official Harness workflow subsystem docs on the default `master` branch describe stock RC8 (immediate start, parent-turn `await result`). They are API reality for the incompatible baseline, not the H `deferStart` / `validate` / `checkpoint` vocabulary this package consumes. Do not treat `blob/main/...` URLs as H documentation.

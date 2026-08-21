@@ -27,7 +27,7 @@ pnpm exec vitest run tests/keyless-snapshot.spec.ts --reporter=dot && printf 'RD
 pnpm exec vitest run tests/dashboard-snapshot.client.spec.tsx --reporter=dot && printf 'RD6 dashboard snapshots PASS\n'
 ```
 
-第一个命令启动 source-resolved official engine、Session、command plane、package 和 deterministic provider，然后比较 reviewed Session/stdout JSONL 与 restart recovery。第二个命令固定 accessible empty、live、terminal、interrupted、disclosure 和 member-outcome semantic，而不是 CSS hash。
+`tests/keyless-snapshot.spec.ts` 是 source-resolved fixture：它把官方 `tool-workflow/*` event 送进 `ConversationNodeAssembler`，证明 append/prepend/full-replay 一致，把 Interrupted Chat node 映射为 cancelled，并检查 completion-notice footer。它不启动官方 assembled snapshot harness，也不比较 reviewed Session/stdout JSONL；`examples/workflows-keyless/` 输入仍是后续 H-assembled gate。Dashboard snapshot 固定 accessible empty、live、terminal、interrupted、disclosure 和 member-outcome semantic，而不是 CSS hash。
 
 ### Package policy 与 exact packed consumer
 
@@ -36,7 +36,7 @@ pnpm exec vitest run tests/verify-package.spec.ts --reporter=dot && printf 'RD3 
 pnpm exec vitest run tests/packed-consumer.spec.ts --reporter=dot && printf 'RD8 packed consumer PASS\n'
 ```
 
-Packed-consumer test 只执行一次 `pnpm pack --json`，记录 SHA-256，并把完全相同的绝对 tarball 交给 policy verification 和位于两个 repository 之外的临时 consumer。该 consumer 禁用 script 后安装，import 所有 JavaScript 与 strict NodeNext export，启动官方 Web 与 headless profile，serve `lib/client.js`，移除 package，并证明 stock profile 再次启动。Source-tree fallback 或第二次 pack 都是失败。
+Packed-consumer test 只执行一次 `pnpm pack --json`，记录 SHA-256，并把完全相同的绝对 tarball 交给 `scripts/verify-package.mjs --tarball`。缺少 skill、client bundle 或 required peer 会在 verifier 失败，而不会开始任何 consumer Session。`scripts/packed-consumer.mjs` 随后禁用 script 安装同一 byte，import 所有 JavaScript 与 strict NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，并以对 official checkout 的 `official-h-probe` 结束。Live Web/headless profile boot、`dsh plugin` add/remove 和 stock-profile restore 等待官方 H；在 `141eb6f` 上 probe 报告 `not-advertised`，而不是假装 activation 成功。Source-tree fallback 或第二次 pack 都是失败。Isolated install stage 也会由 `pnpm run check:release` 以及 `DSH_RUN_PACKED_CONSUMER=1` 运行。
 
 ### 自动化 Chromium
 
@@ -44,7 +44,7 @@ Packed-consumer test 只执行一次 `pnpm pack --json`，记录 SHA-256，并�
 pnpm exec vitest run tests/browser-smoke.spec.ts --reporter=dot && printf 'RD10 browser automation PASS\n'
 ```
 
-Browser test 把同一 tarball 安装进使用 deterministic model seam 的真实官方 Web server。它覆盖 slash discovery、immediate background acknowledgement、numbered run、live update、completion notice、两个 disclosure、完整 text 与 JSON-null outcome、Retry retention、gate 与 control、reconnect、focus/shortcut、reduced motion，以及 1,199 px、767 px 和 320 px layout。该自动化使用 repository browser runner；它不使用 Ego Lite，也不替代最终人工验收。
+`tests/browser-smoke.spec.ts` 当前只覆盖 `scripts/browser-smoke.mjs` helper boundary：absolute argument、loopback readiness JSON、stdin teardown，以及与 caller workspace 隔离。它并不用 Chromium 驱动 slash discovery、disclosure 或 1,199/767/320 px layout。该 product journey 仍被官方 H Web activation 阻塞，属于下面的最终 Ego Lite checklist，而不是 helper 已经覆盖的替代。
 
 ### Lifecycle、storage 与 Client stress
 
@@ -82,11 +82,11 @@ pnpm exec vitest run --config vitest.config.ts --no-passWithNoTests packages/cor
 pnpm run check:release
 ```
 
-成功时准确以 `release checks passed` 结束。Orchestrator 按顺序运行 clean/frozen-install verification、build、typecheck、lint、per-file coverage、snapshot、documentation、package policy、一次 immutable pack 与 packed consumer、自动化 Chromium、三个 stress suite 和 opt-in provider file。它不会 publish、启动 Ego Lite 或录制 GIF。
+成功时准确以 `release checks passed` 结束。Orchestrator 按顺序运行 clean/frozen-install verification、build、typecheck、lint、per-file coverage、snapshot、documentation、package policy、一次 immutable pack 与 packed consumer（在 H 公布前为 `official-h-probe`）、browser helper boundary、三个 stress suite 和 opt-in provider file。它不会 publish、启动 Ego Lite 或录制 GIF。Live profile boot 与 Chromium product journey 仍被官方 H 阻塞。
 
 ## Coverage policy
 
-每个 owned handwritten runtime source file 都必须**逐文件**达到 100% statement、branch、function 与 line。Aggregate 100% 不充分。Test 覆盖 deterministic clock 与 barrier、每个 error/cancellation branch、effect disposal、HMR registration、authorization 和 external world state，而不依赖 self-reported success。
+每个 owned handwritten runtime source file 都必须在 `pnpm run test:coverage` 下**逐文件**达到 100% statement、branch、function 与 line。Aggregate 100% 不充分。该命令排除 packed-consumer、browser-smoke、snapshot、stress 和 real-provider lane。已保存的 `coverage-all` report 并不是 generated `lib/` 加 dependency 的 100%（最近一次约为 57%）；它不能替代 per-file handwritten gate。Test 覆盖 deterministic clock 与 barrier、每个 error/cancellation branch、effect disposal、HMR registration、authorization 和 external world state，而不依赖 self-reported success。
 
 唯一不 instrument 的 artifact 是 generated 或 browser-delivery product，而不是 handwritten Host behavior 的例外：
 
@@ -95,13 +95,13 @@ pnpm run check:release
 | `lib/typert.host.*` 与 `lib/typert.remote-client.*` | 从 decorated Host source 生成 | `tests/build-artifacts.spec.ts`、Remote API test、packed import 与 browser mount smoke |
 | `lib/client.js`、emitted Client declaration/map 与 Lightning CSS output | Generated bundle product | Client component/controller spec、dashboard semantic snapshot、packed serving 与 `tests/browser-smoke.spec.ts` |
 | `src/client/css-modules.d.ts` | 无 executable statement 的 type-only generated-facing declaration | Client TSC 加 build suite source assertion |
-| CSS module visual branch | Style 不进入 JavaScript statement coverage | source token assertion、semantic component spec、三个 browser breakpoint、light/dark/reduced-motion automation，以及 GUI behavior 改变时最终 real-flow GIF |
+| CSS module visual branch | Style 不进入 JavaScript statement coverage | source token assertion、jsdom semantic snapshot，以及 GUI behavior 改变时最终 Ego Lite real-flow GIF。CI 中的 Automated Chromium 只门禁 `scripts/browser-smoke.mjs`；layout、light/dark 与 reduced-motion 仍是人工 Ego Lite。 |
 
 Handwritten Client TypeScript 仍由其 Client test project 覆盖；generated output 不建立并行 coverage denominator。增加其他 exclusion 必须提供相应 real-browser evidence 和显式 testing-policy change。
 
 ## CI platform matrix
 
-Blocking Ubuntu 24.04 job 运行 Node `22.19.0`、`24` 和 `26`；每个 job 使用 frozen lockfile，并覆盖 build、typecheck、lint、docs、package policy 以及分配的 unit/coverage/snapshot gate。Node 24 还拥有 macOS 14、Windows Server 2022、Chromium、race-stress 和 release-pack/packed-consumer job。Packed lane checkout 官方 commit `141eb6fef83422698aef7a981029e843e8161534`，只应用 H prerequisite patch，只 pack 一次，并保留一个 digest 和 artifact path。
+Blocking Ubuntu 24.04 job 运行 Node `22.19.0`、`24` 和 `26`；每个 job 使用 frozen lockfile，并覆盖 build、typecheck、lint、docs、package policy 以及分配的 unit/coverage/snapshot gate。Node 24 还拥有 macOS 14、Windows Server 2022、Chromium helper、race-stress 和 release-pack/packed-consumer job。Packed lane checkout 官方 commit `141eb6fef83422698aef7a981029e843e8161534` 作为 incompatible baseline，不应用 H prerequisite patch；它只 pack 一次，并保留一个 digest 和 artifact path。在官方 H 存在之前，对该 checkout 的 live activation 预期会 fail closed。
 
 Windows 运行每个支持的 definition、manifest、scratch、retention、recovery 与 subprocess case。它明确断言 junction/hard-link behavior，以及可工作的 native advisory locking 或已记录的 `WORKFLOW_STORAGE_UNSUPPORTED` result；它绝不静默 skip workflow、把 job 标记为 `continue-on-error`，或在没有断言准确 branch 时把 platform limitation 当作成功。
 

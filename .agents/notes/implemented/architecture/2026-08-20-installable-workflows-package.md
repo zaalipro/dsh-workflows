@@ -2,6 +2,8 @@
 
 Status: implemented
 
+This note records the package architecture as implemented in `@zaalipro/dsh-workflows`. Official Harness release **H** has not shipped: the worker-thread evaluator, `tools.replace`, `registerFallback`, trusted packaged-skill binding, `ApiRemoteEventRegistry`, and production nested private-directory I/O are still missing from stock `141eb6f` / `dsh-v0.1.0-rc.8`. The package fail-closes on that baseline rather than activating.
+
 English | [中文](2026-08-20-installable-workflows-package.zh.md)
 
 ## Problem
@@ -62,9 +64,9 @@ Forwarded `workflows/run-change` events contain only a per-Session revision inva
 
 Host and Client are disjoint TypeScript programs. Build order is Host TSC, focused Typert generation in a copied temporary mini-workspace, Client TSC over generated declarations, then the classic lazy-CJS browser bundle. The staging root owns one aggregate Host config; the copied package owns one staging `tsconfig.json`; no hand-authored Remote descriptor or obsolete nested Host/Client face exists. Generated Typert artifacts are consumed from `WorkspaceTypertGenerator.generate()` return values.
 
-Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. A consumer outside both repositories installs and boots that unchanged artifact in official Web and headless profiles, imports every export, serves the Client bundle, removes the package, and verifies stock boot. Browser, stress, provider, and final aggregate gates operate on the same product boundary. npm publication and a GitHub Release, when performed, reuse the tested bytes rather than repacking.
+Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. `scripts/packed-consumer.mjs` installs those bytes with scripts disabled, imports every public JavaScript/NodeNext export, loads `lib/client.js` through the lazy-CJS seam, and ends on an `official-h-probe` of stock `141eb6f`, which reports `not-advertised`. Live `dsh plugin` add/remove, Web/headless profile boot, and stock-profile restore wait on official H and run only when `DSH_RUN_PACKED_CONSUMER=1` against an H-advertising checkout. Browser, stress, provider, and final aggregate gates operate on the same product boundary. npm publication and a GitHub Release, when performed, reuse the tested bytes rather than repacking.
 
-## Alternatives considered
+## Rejected alternatives
 
 **Maintain a permanent Harness fork.** This keeps implementation freedom but makes the workflow product inseparable from a divergent Harness distribution and forces every upstream change through a private merge. The selected official seam plus one external bundle keeps authority narrow and removal reversible.
 

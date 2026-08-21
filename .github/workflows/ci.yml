@@ -1,0 +1,216 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+env:
+  CI: 'true'
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  linux:
+    name: Ubuntu / Node ${{ matrix.node }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.19.0', '24', '26']
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run build
+      - run: pnpm run typecheck
+      - run: pnpm run lint
+      - run: pnpm run doc-sync
+      - run: pnpm run verify:package
+      - name: Unit coverage (100% per owned file)
+        run: pnpm run test:coverage
+      - run: pnpm run test:snapshot
+      - name: Upload Linux diagnostics
+        if: failure()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: linux-${{ matrix.node }}-diagnostics
+          path: |
+            coverage/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  platform:
+    name: ${{ matrix.os }} / Node 24
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run build
+      - run: pnpm run typecheck
+      - name: Run supported platform cases
+        run: pnpm run test:unit
+      - name: Assert Windows storage and filesystem limitations
+        if: runner.os == 'Windows'
+        run: pnpm exec vitest run tests/storage-stress.spec.ts --reporter=dot
+      - name: Upload platform diagnostics
+        if: failure()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: platform-${{ matrix.os }}-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  chromium:
+    name: Browser helper / Node 24 / official 141eb6f
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: 141eb6fef83422698aef7a981029e843e8161534
+          path: official-harness
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run build
+      - name: Run packed-tarball browser helper boundary
+        env:
+          DSH_OFFICIAL_CHECKOUT: ${{ github.workspace }}/official-harness
+        run: pnpm run test:browser
+      - name: Upload browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: chromium-diagnostics
+          path: |
+            test-results/
+            playwright-report/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  stress:
+    name: Host, storage, and Client races / Node 24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run build
+      - run: pnpm run test:stress
+      - name: Upload stress diagnostics
+        if: failure()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: stress-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  release-pack:
+    name: Pack once / official 141eb6f / Node 24
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: 141eb6fef83422698aef7a981029e843e8161534
+          path: official-harness
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Run the sole pack-once release checker
+        env:
+          DSH_OFFICIAL_CHECKOUT: ${{ github.workspace }}/official-harness
+        run: >-
+          node scripts/check-release.mjs
+          --official "${{ github.workspace }}/official-harness"
+          --workspace "${{ github.workspace }}"
+          --artifact-dir "${{ runner.temp }}/dsh-workflows-release"
+      - name: Upload unchanged pack diagnostics
+        if: failure()
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: release-pack-diagnostics
+          path: ${{ runner.temp }}/dsh-workflows-release/
+          if-no-files-found: ignore
+          retention-days: 3
+
+  real-provider:
+    name: Real provider (self-skips without key)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Install immutable dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run build
+      - name: Always run the real-provider test file
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: pnpm run test:e2e

@@ -8,6 +8,8 @@
 
 本包拥有 definition discovery、logical-run supervision、retained storage、completion delivery、命令、exact-Agent model-tool shadow、授权 Remote read 以及 Web dashboard。版本 **H** 拥有唯一的 JavaScript evaluator 和 child-agent engine。Headless 安装不求值任何浏览器模块；Web 安装增加 Client aggregate，但不改变 Host execution authority。
 
+当前状态：本文描述的是面向符号版本 **H** 的 package 架构。官方 worker-thread、remotes、`tools.replace`、`registerFallback`、trusted skill 以及 nested private-directory I/O 尚未随 `141eb6f` 发布；在该不兼容 baseline 上 activation 会 fail-close 而不是加载。
+
 四条不变量组织所有组件：
 
 1. start 在可见前持久化，而且 deferred official engine attempt 在执行前已经有 owner。
@@ -108,7 +110,7 @@ public export map 是闭集：`.`、`./registry`、`./supervisor`、`./run-recor
 
 package root 拥有三个 compiler face：solution `tsconfig.json`、Host `tsconfig.host.json` 和 Client `tsconfig.client.json`。Build 顺序为 **Host TSC -> Typert -> Client TSC -> classic lazy CJS**。临时复制的 mini-workspace 提供一个 staging-root Host aggregate 和一个 copied-package staging `tsconfig.json`；其中没有嵌套 Host/Client aggregate file。Focused `WorkspaceTypertGenerator.generate()` 返回 artifact，build 会准确写入 `lib/typert.host.js`、`lib/typert.host.d.ts`、`lib/typert.remote-client.js` 和 `lib/typert.remote-client.d.ts`，并且只在返回值包含 map 时写 map。
 
-最终的 `lib/client.js` 调用 `window.__ModuleLoader__.load({ id: "@zaalipro/dsh-workflows", factory })`。它保持 baseline Client dependency 为 external，内联 package Remote 与 `clsx` code，并由 Lightning CSS 拥有 module name 和 lifecycle。Worker、client、skill、patch 和 asset path 来自 `import.meta.url`，绝不来自 process cwd。npm tarball 已预构建；只有 Git install 可在 consumer 允许后调用 `prepare`。
+最终的 `lib/client.js` 必须调用 `window.__ModuleLoader__.load({ id: "@zaalipro/dsh-workflows", factory: (require) => ... })`，且 factory 非空。Optional-chaining `?.load` 与 `factory: () => ({})` 占位符会使 build 与 package verifier 失败。bundle 保持 baseline Client dependency 为 external，内联 package Remote 与 `clsx` code，并由 Lightning CSS 拥有 module name 和 lifecycle。Skill、patch 与 Client asset path 来自 `import.meta.url`，绝不来自 process cwd。evaluator 是官方 worker-thread peer，不是打进本 tarball 的 worker。npm tarball 已预构建；只有 Git install 可在 consumer 允许后调用 `prepare`。
 
 ## Lifecycle authority
 

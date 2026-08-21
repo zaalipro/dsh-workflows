@@ -1,4 +1,106 @@
+/** Browser-only copy of the generated Remote data contract. No Host imports. */
+export type JsonValue = null|boolean|number|string|readonly JsonValue[]|{readonly [key:string]:JsonValue}
 export type ClientRunStatus='running'|'pausing'|'stopping'|'needs-input'|'paused'|'budget-limited'|'completed'|'failed'|'cancelled'|'interrupted'
-export interface ClientRunHead {readonly runId:string;readonly displayName:string;readonly name:string;readonly description:string;readonly status:ClientRunStatus;readonly phase?:string;readonly budget:{readonly total:number;readonly spent:number;readonly remaining:number};readonly memberCounts:{readonly total:number;readonly running:number;readonly completed:number;readonly failed:number;readonly cancelled:number};readonly startedAt:number;readonly settledAt?:number;readonly allowedActions:readonly ('pause'|'resume'|'stop'|'save')[];readonly revision:number;readonly detailRevision:number;readonly membersRevision:number;readonly logsRevision:number;readonly resultRevision:number;readonly artifactsRevision:number}
-export interface ClientRunSource {readonly sessionId:string;readonly status:'idle'|'loading'|'ready'|'reconnecting'|'error';readonly revision:number;readonly runs:readonly ClientRunHead[];readonly error?:string}
-export interface WorkflowRemoteClient {list(sessionId:string,request:{cursor?:string;limit?:number},signal?:AbortSignal):Promise<any>;detail(sessionId:string,request:{runId:string},signal?:AbortSignal):Promise<any>;members(sessionId:string,request:any,signal?:AbortSignal):Promise<any>;memberDetail(sessionId:string,request:any,signal?:AbortSignal):Promise<any>;logs(sessionId:string,request:any,signal?:AbortSignal):Promise<any>;result(sessionId:string,request:any,signal?:AbortSignal):Promise<any>;artifacts(sessionId:string,request:any,signal?:AbortSignal):Promise<any>;artifact(sessionId:string,request:any,signal?:AbortSignal):Promise<any>;control(sessionId:string,request:any,signal?:AbortSignal):Promise<any>}
+export type WorkflowRunAction='pause'|'resume'|'stop'|'save'
+export type WorkflowRunOutcomeState='pending'|'available'|'not-produced'|'evicted'
+export interface WorkflowRunTerminalSummary {readonly stopReason:'completed'|'cancelled'|'error'|'interrupted';readonly resultState:Exclude<WorkflowRunOutcomeState,'pending'>;readonly preview?:string;readonly error?:string}
+export interface WorkflowRunHead {readonly runId:string;readonly displayName:string;readonly name:string;readonly description:string;readonly status:ClientRunStatus;readonly phase?:string;readonly budget:{readonly total:number;readonly spent:number;readonly remaining:number};readonly memberCounts:{readonly total:number;readonly running:number;readonly completed:number;readonly failed:number;readonly cancelled:number};readonly startedAt:number;readonly settledAt?:number;readonly terminal?:WorkflowRunTerminalSummary;readonly allowedActions:readonly WorkflowRunAction[];readonly revision:number;readonly detailRevision:number;readonly membersRevision:number;readonly logsRevision:number;readonly resultRevision:number;readonly artifactsRevision:number}
+export interface WorkflowRunDetail {readonly run:WorkflowRunHead;readonly phases?:readonly {readonly title:string;readonly detail?:string;readonly provider?:string;readonly model?:string}[];readonly gate?:{readonly kind:string;readonly message:string;readonly resumable:boolean};readonly error?:string}
+export interface WorkflowRunMemberHead {readonly memberId:string;readonly seq:number;readonly label:string;readonly phase?:string;readonly status:'running'|'completed'|'failed'|'cancelled';readonly startedAt?:number;readonly settledAt?:number;readonly outcome:WorkflowRunOutcomeState;readonly childSessionId?:string}
+export type WorkflowRunValueView={readonly state:'pending'|'not-produced'|'evicted'}|{readonly state:'available';readonly content:{readonly kind:'value';readonly value:JsonValue}|{readonly kind:'preview';readonly text:string};readonly totalBytes:number;readonly truncated:boolean}
+export interface WorkflowRunMemberPage {readonly items:readonly WorkflowRunMemberHead[];readonly nextCursor?:string;readonly total:number;readonly revision:number}
+export interface WorkflowRunMemberDetail {readonly member:WorkflowRunMemberHead;readonly childSessionId?:string;readonly outcome:WorkflowRunValueView}
+export interface WorkflowRunLogPage {readonly items:readonly {readonly index:number;readonly text:string}[];readonly nextCursor?:string;readonly evicted:number;readonly total:number;readonly revision:number}
+export interface WorkflowRunResultView {readonly value:WorkflowRunValueView;readonly error?:string;readonly revision:number}
+export interface WorkflowRunArtifactPage {readonly items:readonly {readonly name:string;readonly bytes:number}[];readonly nextCursor?:string;readonly omitted:number;readonly total:number;readonly revision:number}
+export interface WorkflowRunArtifactChunk {readonly artifact:{readonly name:string;readonly bytes:number};readonly text:string;readonly offsetBytes:number;readonly returnedBytes:number;readonly totalBytes:number;readonly revision:number;readonly nextCursor?:string}
+export interface WorkflowRunControlResult {readonly run:WorkflowRunHead}
+export type WorkflowRemoteFailureCode='invalid-page-limit'|'invalid-artifact-limit'|'invalid-cursor'|'stale-cursor'|'workspace-unavailable'|'definition-invalid'|'run-not-found'|'member-not-found'|'artifact-not-found'|'artifact-changed'|'revision-conflict'|'action-unavailable'|'storage-unavailable'
+
+export interface WorkflowRunsSourceSnapshot {
+  readonly sessionId:string
+  readonly phase:'idle'|'loading'|'ready'|'error'|'reconnecting'
+  readonly runs:readonly WorkflowRunHead[]
+  readonly total:number
+  readonly nextCursor?:string
+  readonly epoch?:string
+  readonly sessionRevision?:number
+  readonly error?:string
+  /** Compatibility aliases used by early package consumers. */
+  readonly status:'idle'|'loading'|'ready'|'error'|'reconnecting'
+  readonly revision:number
+}
+export interface WorkflowRunsSource {getSnapshot():WorkflowRunsSourceSnapshot;subscribe(listener:()=>void):()=>void}
+export interface WorkflowRemoteClient {readonly [method:string]:((...args:any[])=>Promise<unknown>)|unknown}
+export interface ClientAgentCatalog {readonly list?:{getSnapshot():any;subscribe?(listener:()=>void):()=>void};readonly sessions?:any}
+export interface WorkflowRunsOperations {
+  observe(sessionId:string|undefined):void
+  source(sessionId:string):WorkflowRunsSource
+  refresh(sessionId:string,signal?:AbortSignal):Promise<WorkflowRunsSourceSnapshot>
+  loadMore(sessionId:string,signal?:AbortSignal):Promise<WorkflowRunsSourceSnapshot>
+  detail(sessionId:string,runId:string,signal?:AbortSignal):Promise<WorkflowRunDetail>
+  members(sessionId:string,runId:string,cursor?:string,signal?:AbortSignal):Promise<WorkflowRunMemberPage>
+  memberDetail(sessionId:string,runId:string,memberId:string,signal?:AbortSignal):Promise<WorkflowRunMemberDetail>
+  logs(sessionId:string,runId:string,cursor?:string,signal?:AbortSignal):Promise<WorkflowRunLogPage>
+  result(sessionId:string,runId:string,signal?:AbortSignal):Promise<WorkflowRunResultView>
+  artifacts(sessionId:string,runId:string,cursor?:string,signal?:AbortSignal):Promise<WorkflowRunArtifactPage>
+  artifact(sessionId:string,runId:string,name:string,cursor?:string,expectedRevision?:number,signal?:AbortSignal):Promise<WorkflowRunArtifactChunk>
+  control(sessionId:string,runId:string,action:WorkflowRunAction,expectedRevision:number,signal?:AbortSignal):Promise<WorkflowRunControlResult>
+  resolveAndOpenChild(parentSessionId:string,childSessionId:string):Promise<boolean>
+  handleChange(change:{readonly kind:'invalidate-all'}|{readonly kind:'invalidate';readonly sessionId:string;readonly revision:number}):void
+  handleDisconnected():void
+  handleConnected():void
+  handleReset():void
+  removeSession(sessionId:string):void
+  dispose():void
+}
+export class WorkflowRunsRemoteError extends Error {
+  override readonly name = 'WorkflowRunsRemoteError'
+
+  constructor(
+    readonly code: WorkflowRemoteFailureCode,
+    message: string,
+    readonly details?: Readonly<Record<string, unknown>>,
+  ) {
+    super(message)
+  }
+}
+
+/** Unwrap both Typert's transport carrier and the package's business carrier. */
+export function unwrapWorkflowRemoteResult<T>(input: unknown): T {
+  let value = input
+  // A direct package Remote returns WorkflowRemoteResult<T>. Depending on the
+  // mounted Typert face that value may itself be inside RemoteResult<...>.
+  // Iterating, rather than assuming one layer, keeps both faces identical.
+  for (let depth = 0; depth < 2; depth += 1) {
+    if (typeof value !== 'object' || value === null || !Object.hasOwn(value, 'ok')) break
+    const carrier = value as {
+      readonly ok?: unknown
+      readonly value?: unknown
+      readonly error?: unknown
+      readonly code?: unknown
+      readonly message?: unknown
+      readonly details?: unknown
+    }
+    if (carrier.ok === true) {
+      value = carrier.value
+      continue
+    }
+    if (carrier.ok === false) {
+      const failure = typeof carrier.error === 'object' && carrier.error !== null
+        ? carrier.error as { readonly code?: unknown; readonly message?: unknown; readonly details?: unknown }
+        : carrier
+      throw new WorkflowRunsRemoteError(
+        String(failure.code ?? 'storage-unavailable') as WorkflowRemoteFailureCode,
+        String(failure.message ?? 'Unable to load workflow data. Retry.'),
+        typeof failure.details === 'object' && failure.details !== null
+          ? failure.details as Readonly<Record<string, unknown>>
+          : undefined,
+      )
+    }
+    break
+  }
+  return value as T
+}
+export type ClientRunHead=WorkflowRunHead
+export type ClientRunSource=WorkflowRunsSourceSnapshot

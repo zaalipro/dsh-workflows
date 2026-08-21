@@ -49,6 +49,7 @@ const CODE_EXPORTS = PUBLIC_EXPORTS.slice(0, 12)
 const REQUIRED_PEERS = Object.freeze([
   '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-connection',
+  '@deepseek-ai/dsh-client-ui-conversation',
   '@deepseek-ai/dsh-workflow',
   '@deepseek-ai/dsh-workflow-worker-thread',
   'react',
@@ -64,6 +65,32 @@ const REQUIRED_GENERATED_ASSETS = Object.freeze([
   'lib/typert.remote-client.js',
   'lib/typert.remote-client.d.ts',
 ])
+const TYPERT_REMOTE_METHODS = Object.freeze([
+  'workflowDefinitions_list',
+  'workflowRuns_list',
+  'workflowRuns_detail',
+  'workflowRuns_members',
+  'workflowRuns_memberDetail',
+  'workflowRuns_logs',
+  'workflowRuns_result',
+  'workflowRuns_artifacts',
+  'workflowRuns_artifact',
+  'workflowRuns_control',
+])
+const EXPECTED_CODE_EXPORTS = Object.freeze({
+  '.': ['./lib/types/index.d.ts', './lib/types/index.js'],
+  './registry': ['./lib/types/registry/index.d.ts', './lib/types/registry/index.js'],
+  './supervisor': ['./lib/types/supervisor/index.d.ts', './lib/types/supervisor/index.js'],
+  './run-recorder': ['./lib/types/run-recorder.d.ts', './lib/types/run-recorder.js'],
+  './user-questions': ['./lib/types/user-questions.d.ts', './lib/types/user-questions.js'],
+  './commands': ['./lib/types/commands/index.d.ts', './lib/types/commands/index.js'],
+  './tool': ['./lib/types/tool/index.d.ts', './lib/types/tool/index.js'],
+  './client': ['./lib/client-types/index.d.ts', './lib/client.js'],
+  './types': ['./lib/types/types.d.ts', './lib/types/types.js'],
+  './invariant': ['./lib/types/invariant.d.ts', './lib/types/invariant.js'],
+  './typert': ['./lib/typert.host.d.ts', './lib/typert.host.js'],
+  './remote': ['./lib/typert.remote-client.d.ts', './lib/typert.remote-client.js'],
+})
 const DEPENDENCY_FIELDS = Object.freeze([
   'dependencies',
   'optionalDependencies',
@@ -119,6 +146,7 @@ function verifySource(root) {
     assertPathType(resolve(root, target), 'file', `export target ${JSON.stringify(target)}`)
   }
   verifyLegalFiles(root)
+  verifyGeneratedProduct(root)
   assertPathType(resolve(root, 'cordis.patch.yml'), 'file', 'bundle patch')
   assertPathType(
     resolve(root, 'skills/create-workflow/SKILL.md'),
@@ -157,6 +185,7 @@ function verifyTarball(tarballPath, extractionRoot) {
   verifyPackedFiles(files, policy.exportTargets)
   verifyLegalFiles(packageRoot)
   scanPackedText(files)
+  verifyGeneratedProduct(packageRoot)
 }
 
 function verifyManifest(manifest) {
@@ -169,6 +198,8 @@ function verifyManifest(manifest) {
   expectEqual(manifest.engines?.node, NODE_RANGE, 'engines.node')
   expectEqual(manifest.packageManager, PACKAGE_MANAGER, 'packageManager')
   expectEqual(manifest.publishConfig?.access, 'public', 'publishConfig.access')
+  expectEqual(manifest.main, './lib/types/index.js', 'main')
+  expectEqual(manifest.types, './lib/types/index.d.ts', 'types')
 
   if (!isRecord(manifest.dsh)) throw new Error('package.json must declare dsh metadata')
   const dshKeys = Object.keys(manifest.dsh)
@@ -232,6 +263,9 @@ function verifyExports(exportsField) {
     if (typeof runtimeTarget !== 'string' || !runtimeTarget.endsWith('.js')) {
       throw new Error(`code export ${JSON.stringify(key)} must declare a .js runtime target`)
     }
+    const [expectedTypes, expectedRuntime] = EXPECTED_CODE_EXPORTS[key]
+    expectEqual(value.types, expectedTypes, `exports[${JSON.stringify(key)}].types`)
+    expectEqual(runtimeTarget, expectedRuntime, `exports[${JSON.stringify(key)}] runtime`)
   }
 
   expectEqual(exportsField['./cordis.patch.yml'], './cordis.patch.yml', 'patch export target')
@@ -390,10 +424,19 @@ function verifySourcePublicationList(filesField, exportTargets) {
     'cordis.patch.yml',
     'skills/create-workflow/SKILL.md',
     'NOTICE.md',
+    'README.md',
+    'docs/user-guide.md',
+    'docs/architecture.md',
+    'docs/testing.md',
   ])
   for (const path of required) {
     if (!files.some(pattern => npmFilesPatternCovers(pattern, path))) {
       throw new Error(`files does not publish required asset ${JSON.stringify(path)}`)
+    }
+  }
+  for (const generated of REQUIRED_GENERATED_ASSETS) {
+    if (!files.includes(generated)) {
+      throw new Error(`files must explicitly list generated Typert asset ${JSON.stringify(generated)}`)
     }
   }
 }
@@ -414,6 +457,10 @@ function verifyPackedFiles(files, exportTargets) {
     'package.json',
     'cordis.patch.yml',
     'skills/create-workflow/SKILL.md',
+    'README.md',
+    'docs/user-guide.md',
+    'docs/architecture.md',
+    'docs/testing.md',
   ])
   for (const path of required) {
     if (!files.has(path)) throw new Error(`tarball is missing required asset ${JSON.stringify(path)}`)
@@ -484,6 +531,26 @@ function scanSourceText(root, exportTargets) {
     if (!isTextAsset(path, data)) continue
     scanText(path, decoder.decode(data))
     if (path.endsWith('.map')) verifySourceMap(path, decoder.decode(data))
+  }
+}
+
+function verifyGeneratedProduct(root) {
+  const client = decoder.decode(readFileSync(resolve(root, 'lib/client.js')))
+  if (client.includes('?.load')) throw new Error('lib/client.js uses optional-chaining ModuleLoader')
+  if (/factory:\s*\(\s*\)\s*=>\s*\(\s*\{\s*\}\s*\)/u.test(client)) {
+    throw new Error('lib/client.js is an empty placeholder factory')
+  }
+  if (!client.includes('window.__ModuleLoader__.load({')
+    || !client.includes('"@zaalipro/dsh-workflows"')
+    || !/factory:\s*\(\s*require\s*\)/u.test(client)) {
+    throw new Error('lib/client.js is not the lazy-CJS require factory')
+  }
+  const typert = `${decoder.decode(readFileSync(resolve(root, 'lib/typert.host.js')))}\n${decoder.decode(readFileSync(resolve(root, 'lib/typert.remote-client.js')))}`
+  if (!typert.includes('workflowDefinitions') || !typert.includes('workflowRuns')) {
+    throw new Error('Typert artifacts are missing workflowDefinitions/workflowRuns')
+  }
+  for (const method of TYPERT_REMOTE_METHODS) {
+    if (!typert.includes(method)) throw new Error(`Typert artifacts are missing ${method}`)
   }
 }
 

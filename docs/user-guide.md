@@ -100,19 +100,21 @@ If an ordinary command owns `/review-changes`, that command keeps it and the wor
 Bare `/workflow` opens a definition picker in Web and returns this usage in headless:
 
 ```text
+Launch or control a workflow.
+
 Usage:
-  /workflow <name> [<json-object>]
-  /workflow pause <display-name>
-  /workflow resume <display-name>
-  /workflow stop <display-name>
-  /workflow save <display-name>
+/workflow <name> [<json-args>]
+/workflow pause <display-name>
+/workflow resume <display-name>
+/workflow stop <display-name>
+/workflow save <display-name>
 
 Examples:
-  /workflow review-changes {"targets":["src"]}
-  /workflow pause review-changes
-  /workflow resume review-changes
-  /workflow stop review-changes-2
-  /workflow save review-changes
+/workflow review-changes {"target":"origin/main...HEAD"}
+/workflow pause review-changes
+/workflow resume review-changes
+/workflow stop review-changes-2
+/workflow save review-changes
 ```
 
 Arguments must be one JSON object. Arrays and scalars fail before launch; malformed trailing text is not repaired or forwarded to the model.
@@ -125,7 +127,7 @@ In Web, submit exact bare:
 /workflows
 ```
 
-This browser-owned action opens the dialog labelled `Workflows`. It emits no Host `command/run` or `command/done` record and produces no `workflows · Completed` Chat row. `/workflows` with arguments or attachments does not open anything; it remains unresolved in the composer command plane with its draft intact.
+This browser-owned action opens the dialog labelled `Workflows`. It emits no Host `command/run` or `command/done` record and produces no `workflows · Completed` Chat row. `/workflows` with arguments or attachments does not open anything; it remains unresolved in the composer command plane with its draft intact. Dashboard chrome and Chat labels follow the host locale: the package registers English and Chinese dictionaries, English is the fallback, and the close control uses the same `Close workflows` accessible name as the visible label. Inspector headings (`Pending`, `JSON outcome`, and the rest of criterion 11.4) and the exact criterion 11.4/11.11 error strings stay English.
 
 The run navigator shows display name, status, current phase, agents spent/total, running and settled member counts, a bounded terminal summary, and retained-run loaded/total disclosure. Active runs sort oldest-first and history sorts by newest settlement. `Load more` fetches the next authorized bounded page; only terminal rows are eligible for deterministic oldest-first retention eviction, never active rows or display ordinal history.
 

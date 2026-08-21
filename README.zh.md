@@ -37,7 +37,7 @@ allowBuilds:
   '@zaalipro/dsh-workflows': true
 ```
 
-把 `allowBuilds` 条目放进 profile 的 `pnpm-workspace.yaml`，然后重新执行 add 命令。只有通过 `prepare` 从源码构建的 Git 安装需要此权限；npm tarball 已包含 Host、Client、Typert、worker、patch、skill、类型、license 和 notice 资产。
+把 `allowBuilds` 条目放进 profile 的 `pnpm-workspace.yaml`，然后重新执行 add 命令。只有通过 `prepare` 从源码构建的 Git 安装需要此权限；npm tarball 已包含 Host、Client、Typert、patch、skill、类型、license 和 notice 资产。JavaScript evaluator 是官方 `@deepseek-ai/dsh-workflow-worker-thread` peer，不是打进本包的 worker。
 
 ## 移除
 
@@ -75,7 +75,7 @@ dsh plugin --profile headless remove @zaalipro/dsh-workflows
 
 ## 启动与操作
 
-使用 `/workflow <name> [<json-object>]` 或生成的 `/<name> [<json-object>]` alias 启动已保存定义。普通命令会保留冲突的裸名称；workflow 会取得第一个可用的重复前缀 alias，例如 `/workflow-review-changes`，而 `/workflow review-changes` 始终可用。启动会立即返回 `Started workflow "<display-name>" in the background. Open /workflows to watch it.`；同一 metadata name 的后续运行使用 `review-changes-2` 等 display handle，不暴露内部 id。
+使用 `/workflow <name> [<json-args>]` 或生成的 `/<name> [<json-args>]` alias 启动已保存定义。普通命令会保留冲突的裸名称；workflow 会取得第一个可用的重复前缀 alias，例如 `/workflow-review-changes`，而 `/workflow review-changes` 始终可用。启动会立即返回 `Started workflow "<display-name>" in the background. Open /workflows to watch it.`；同一 metadata name 的后续运行使用 `review-changes-2` 等 display handle，不暴露内部 id。
 
 在 Web 中，裸 `/workflow` 打开已保存定义选择器，严格的裸 `/workflows` 打开由浏览器拥有的 run dashboard，不会增加 Host command lifecycle 或重复的 Chat completion row。在 headless 中，裸 `/workflow` 输出 usage。仪表盘显示 live 与 retained run、phase、agent spend、member outcome、log、terminal result 和分块 scratch artifact。Pause、Resume、Stop 与符合条件的 Save action 都检查 revision；键盘操作和窄屏 drill-down 同样可用。`/workflows` 是 run inspector，绝不是 definition catalog。
 
@@ -108,4 +108,4 @@ Workflow script 与现有 model shell access 具有相同的 trust premise。wor
 - [测试与发布验收](docs/testing.zh.md) — 自动化证据与最终人工 Web checklist。
 - [已安装的创作 skill](skills/create-workflow/SKILL.md) — JavaScript global、schema、budget、scratch 和安全创作模式。
 - [License](LICENSE) 与[原生依赖 notice](NOTICE.md)。
-- [官方 workflow subsystem](https://github.com/deepseek-ai/deepseek-harness/blob/main/docs/subsystems/workflow.zh.md) — H 提供的 engine 与 durable workflow vocabulary。
+- 官方 Harness 默认 `master` 分支上的 workflow subsystem 文档描述的是 stock RC8（立即 start、父 turn `await result`）。那是不兼容基线的 API 现实，不是本包消费的 H `deferStart` / `validate` / `checkpoint` vocabulary。不要把 `blob/main/...` URL 当成 H 文档。

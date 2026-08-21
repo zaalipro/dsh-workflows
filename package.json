@@ -12,69 +12,75 @@
     "access": "public"
   },
   "files": [
-    "lib",
-    "dist",
+    "lib/types",
+    "lib/client-types",
+    "lib/client.js",
+    "lib/client.js.map",
+    "lib/typert.host.js",
+    "lib/typert.host.d.ts",
+    "lib/typert.remote-client.js",
+    "lib/typert.remote-client.d.ts",
     "skills",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
     "README.i18n.yaml",
+    "docs",
     "LICENSE",
     "NOTICE.md",
-    "package.json",
-    "tsconfig.client.json"
+    "package.json"
   ],
-  "main": "./lib/index.js",
-  "types": "./lib/index.d.ts",
+  "main": "./lib/types/index.js",
+  "types": "./lib/types/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.js",
-      "default": "./lib/index.js"
+      "types": "./lib/types/index.d.ts",
+      "import": "./lib/types/index.js",
+      "default": "./lib/types/index.js"
     },
     "./registry": {
-      "types": "./lib/registry/index.d.ts",
-      "default": "./lib/registry/index.js"
+      "types": "./lib/types/registry/index.d.ts",
+      "default": "./lib/types/registry/index.js"
     },
     "./supervisor": {
-      "types": "./lib/supervisor/index.d.ts",
-      "default": "./lib/supervisor/index.js"
+      "types": "./lib/types/supervisor/index.d.ts",
+      "default": "./lib/types/supervisor/index.js"
     },
     "./run-recorder": {
-      "types": "./lib/run-recorder.d.ts",
-      "default": "./lib/run-recorder.js"
+      "types": "./lib/types/run-recorder.d.ts",
+      "default": "./lib/types/run-recorder.js"
     },
     "./user-questions": {
-      "types": "./lib/user-questions.d.ts",
-      "default": "./lib/user-questions.js"
+      "types": "./lib/types/user-questions.d.ts",
+      "default": "./lib/types/user-questions.js"
     },
     "./commands": {
-      "types": "./lib/commands/index.d.ts",
-      "default": "./lib/commands/index.js"
+      "types": "./lib/types/commands/index.d.ts",
+      "default": "./lib/types/commands/index.js"
     },
     "./tool": {
-      "types": "./lib/tool/index.d.ts",
-      "default": "./lib/tool/index.js"
+      "types": "./lib/types/tool/index.d.ts",
+      "default": "./lib/types/tool/index.js"
     },
     "./client": {
-      "types": "./lib/client/index.d.ts",
+      "types": "./lib/client-types/index.d.ts",
       "default": "./lib/client.js"
     },
     "./types": {
-      "types": "./lib/types.d.ts",
-      "default": "./lib/types.js"
+      "types": "./lib/types/types.d.ts",
+      "default": "./lib/types/types.js"
     },
     "./invariant": {
-      "types": "./lib/invariant.d.ts",
-      "default": "./lib/invariant.js"
+      "types": "./lib/types/invariant.d.ts",
+      "default": "./lib/types/invariant.js"
     },
     "./typert": {
-      "types": "./lib/typert.d.ts",
-      "default": "./lib/typert.js"
+      "types": "./lib/typert.host.d.ts",
+      "default": "./lib/typert.host.js"
     },
     "./remote": {
-      "types": "./lib/remote.d.ts",
-      "default": "./lib/remote.js"
+      "types": "./lib/typert.remote-client.d.ts",
+      "default": "./lib/typert.remote-client.js"
     },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./skills/create-workflow/SKILL.md": "./skills/create-workflow/SKILL.md",
@@ -84,49 +90,85 @@
   "scripts": {
     "typecheck:host": "tsc -p tsconfig.host.json --noEmit",
     "typecheck": "tsc -b --pretty false",
+    "lint": "tsc -b --pretty false",
     "test:unit": "vitest run",
     "test": "vitest run",
+    "test:browser": "vitest run tests/browser-smoke.spec.ts --reporter=dot",
+    "test:stress": "vitest run tests/race-stress.spec.ts tests/storage-stress.spec.ts tests/client-race-stress.client.spec.ts --reporter=dot",
+    "test:packed-consumer": "vitest run tests/packed-consumer.spec.ts --reporter=dot",
+    "test:e2e": "vitest run tests/real-provider.spec.ts --reporter=dot",
+    "test:snapshot": "vitest run tests/keyless-snapshot.spec.ts tests/dashboard-snapshot.client.spec.tsx --reporter=dot",
     "build": "node scripts/build.mjs",
     "verify:package": "node scripts/verify-package.mjs --source .",
     "verify:docs": "node scripts/verify-docs.mjs",
     "doc-sync": "node scripts/verify-docs.mjs",
     "prepare": "node scripts/build.mjs",
-    "check:release": "node scripts/check-release.mjs"
+    "check:release": "node scripts/check-release.mjs",
+    "test:coverage": "vitest run --exclude=\"tests/keyless-snapshot.spec.ts\" --exclude=\"tests/dashboard-snapshot.client.spec.tsx\" --exclude=\"tests/packed-consumer.spec.ts\" --exclude=\"tests/browser-smoke.spec.ts\" --exclude=\"tests/race-stress.spec.ts\" --exclude=\"tests/storage-stress.spec.ts\" --exclude=\"tests/client-race-stress.client.spec.ts\" --exclude=\"tests/real-provider.spec.ts\" --coverage.enabled=true --coverage.provider=v8 --coverage.thresholds.perFile=true --coverage.thresholds.statements=100 --coverage.thresholds.branches=100 --coverage.thresholds.functions=100 --coverage.thresholds.lines=100"
   },
   "dependencies": {
-    "fs-native-extensions": "1.5.0",
-    "zod": "^4.0.0",
     "@deepseek-ai/schemastery": "3.18.1",
     "chokidar": "^4.0.0",
     "clsx": "^2.1.1",
-    "tar": "^7.4.3"
+    "fs-native-extensions": "1.5.0"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.1",
     "@deepseek-ai/dsh-agent": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-api-remotes": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-connection": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-locale": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-commands": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-layout": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-commands": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-fs": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-llm": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-session": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-skill": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-tools": ">=0.1.0-rc.8",
+    "@deepseek-ai/dsh-typert-protocol": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-user-questions": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-workflow": ">=0.1.0-rc.8",
     "@deepseek-ai/dsh-workflow-worker-thread": ">=0.1.0-rc.8",
-    "@deepseek-ai/dsh-client-connection": ">=0.1.0-rc.8",
     "react": ">=18.2.0"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis": "4.0.1",
+    "@deepseek-ai/dsh-agent": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-api-remotes": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-connection": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-locale": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-runtime": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-commands": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-conversation": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-client-ui-layout": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-commands": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-fs": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-invariants": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-session": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-skill": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-typert-generator": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-typert-protocol": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-user-questions": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-workflow": "0.1.0-rc.8",
+    "@deepseek-ai/dsh-workflow-worker-thread": "0.1.0-rc.8",
     "@types/node": "^22.19.0",
-    "typescript": "^5.8.0",
-    "vitest": "^3.2.0",
-    "tsx": "^4.19.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@vitest/coverage-v8": "3.2.7",
+    "jsdom": "^30.0.1",
+    "lightningcss": "1.33.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@deepseek-ai/dsh-client-connection": "0.1.0-rc.8"
+    "tsdown": "0.22.14",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0",
+    "yaml": "2.8.1"
   },
   "dsh": {
     "compatibility": {
@@ -145,6 +187,7 @@
         "@deepseek-ai/dsh-client-runtime",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-layout"
       ],
       "platform": "web"

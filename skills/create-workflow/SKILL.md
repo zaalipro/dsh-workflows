@@ -1,36 +1,53 @@
 ---
 name: create-workflow
-description: Create, validate, and save a reusable JavaScript workflow when the user invokes /create-workflow.
+description: Author, smoke-check, and save a new saved workflow (invoke via /create-workflow).
 user-invocable: true
 model-invocable: true
 ---
 
-# Create workflow
+# create-workflow
 
-Build a saved workflow as plain JavaScript plus JSON metadata. Do not write Rhai.
+Author a saved workflow: a deterministic JavaScript orchestration script that fans out subagents. The script — not the model turn — holds the loop, the fan-out, the branching, and the intermediate results; child agents do the judgment, the script shards work and verifies. Do not write Rhai.
 
 ## Required seven-stage procedure
 
-1. **Gather intent.** Ask for the objective, expected inputs, deliverable, and success evidence.
+Force these steps, in order. Do not skip ahead to authoring.
+
+1. **Gather intent conversationally.** Ask for the objective, expected inputs, what fans out, what is verified, the final artifact, and roughly how many agents the user will tolerate. Never guess scope.
 2. **Design fan-out.** Identify independent agents, concurrency, labels, phase grouping, and maximum fan-out.
-3. **Design verification.** Add an adversarial or independent verification stage; make failure closed rather than optimistic.
-4. **Choose the artifact and tolerance.** Decide whether results live inline or in scratch files and how `null` child failures affect the result.
-5. **Choose identity and scope.** Pick a lowercase kebab name and project or user save scope.
-6. **Author and validate.** Write the strict envelope, then run `validate_only` with representative args. Validation executes one args-selected canned path; it does not exercise all branches, live tools, or every possible agent output.
-7. **Publish and report.** Save only after validation succeeds. Report the file path, smoke result and limits, launch syntax, and maximum fan-out. Offer, but do not force, a real background launch.
+3. **Design verification.** Add an adversarial or independent verification stage; missing, failed, or unusable verification is not a confirming vote. Require concrete evidence.
+4. **Choose the artifact and tolerance.** Decide whether results live inline or in scratch files and how `null` child failures affect the result. Optional advice may fail open; a proof gate fails closed.
+5. **Choose identity and scope.** Pick a lowercase kebab name (at most 64 UTF-16 code units, `^[a-z](?:[a-z0-9]*)(?:-[a-z0-9]+)*$`) and project (`.dsh/workflows/`, default, shareable) or user (`<dshHome>/workflows/`) save scope. Do not use `pause`, `resume`, `save`, `stop`, `workflow`, `workflows`, `create-workflow`, or a Windows device basename. When a name collides with another slash command, the existing command keeps `/<name>` and the saved workflow is advertised as `/workflow-<name>`; the host repeats the `workflow-` prefix if that name is also occupied. Canonical `/workflow <name>` always works.
+6. **Author and validate.** Write the strict envelope, then run `validate_only` with representative args. Validation parses the entire script, then executes one args-selected canned path; it does not exercise all branches, live tools, or every possible agent output. A gate ends the smoke as `would pause: <message>`.
+7. **Publish and report.** Save only after validation succeeds. Report the file path, smoke result and its limits, launch syntax (`/<name>` or `/workflow <name> ...`), and maximum fan-out. Offer, but do not force, a real background launch watched in `/workflows`. If they decline, say only the path-specific smoke check ran.
 
 ## File format
 
-A flat `<name>.workflow.json` file contains exactly `meta` and `script`. Metadata contains only `name`, `description`, optional `whenToUse`, and optional `phases`; a phase contains only `title`, optional `detail`, `provider`, and `model`. Metadata is JSON data beside the script and is never evaluated.
+A flat `<name>.workflow.json` file contains exactly `meta` and `script`. Metadata contains only `name`, `description`, optional `whenToUse`, and optional `phases`; a phase contains only `title`, optional `detail`, `provider`, and `model`. Metadata is JSON data beside the script and is never evaluated. Filename must equal `<meta.name>.workflow.json`. Unknown envelope, meta, or phase fields fail the whole observation.
+
+```json
+{
+  "meta": {
+    "name": "review-changes",
+    "description": "Review a diff across dimensions, adversarially verify each finding",
+    "whenToUse": "After a large diff, before merge",
+    "phases": [
+      { "title": "Review", "detail": "one reviewer per dimension" },
+      { "title": "Verify", "detail": "one skeptic per finding" }
+    ]
+  },
+  "script": "// plain JS body, top-level await, complete(value) or return"
+}
+```
 
 ## JavaScript hooks
 
 - `agent(prompt, { label?, phase?, schema?, provider?, model? })` returns final text or a schema-validated JSON object; an ordinary child failure returns `null`.
-- `parallel(thunksOrJobs)` is a barrier and preserves slot order. Declarative job panels preflight the unreplayed panel atomically; arbitrary thunks use per-call admission.
+- `parallel(thunksOrJobs)` is a barrier and preserves slot order. Items are zero-arg functions or job maps `{ prompt, label?, phase?, schema?, provider?, model? }`. Declarative job panels preflight the unreplayed panel atomically; arbitrary thunks use per-call admission. Failed slots resolve `null`.
 - `pipeline(items, ...stages)` advances items independently and preserves input order.
 - `phase(title)` and `log(message)` publish bounded progress.
-- `complete(jsonValue)` settles the first valid JSON result.
-- `await_user(kind, message)` commits an acknowledged gate; `pause(kind, message)` repeats after resume while its condition is unchanged.
+- `complete(jsonValue)` settles the first valid JSON result. Prefer `complete()` over `return`.
+- `await await_user(kind, message)` commits an acknowledged gate; `await pause(kind, message)` repeats after resume while its condition is unchanged. Both hooks are asynchronous and must be awaited.
 - `budget()` returns `{ total, spent, reserved: 0, remaining }`.
 - `write_scratch_file(name, content)` and `read_scratch_file(name)` use one safe filename.
 
@@ -40,21 +57,81 @@ Replay uses immutable script, args, and a committed checkpoint. Replayed and sch
 
 Default scratch quotas are 4,096 operations, 64 pending operations, 64 files, 1 MiB per file, and 8 MiB total. Default agent budget is 128 and the hard maximum is 1,024.
 
-## Complete example
+## Good patterns
+
+- Build the fan-out work-list the simplest deterministic way (a fixed list, `args`, a file walk). Spend agents on judgment, not on deciding scope.
+- If an agent discovers the work-list, treat it as untrusted: re-filter it in plain JavaScript against the invariant (for example, keep only paths under `args.root`) before sharding.
+- Plan → parallel fan-out → synthesize.
+- Adversarial verification: independent skeptics prompted to refute each finding. Missing, failed, or unusable verification is not a confirming vote; require concrete evidence.
+- Loop until dry: spawn finders until two consecutive rounds surface nothing new; fingerprint each round to detect stalls.
+- Vote panels: N skeptics per item in one flat `parallel()`, regroup by index arithmetic.
+- Failure policy by purpose: optional advice may fail open; a proof gate fails closed.
+
+## Pitfalls that actually happen
+
+- Terse prompts return empty structured objects without using tools. Command tool use; say what a valid empty answer requires.
+- Guard every agent output against the schema value itself: for example, `r != null && Array.isArray(r.findings)`. A schema-backed `agent()` returns that structured object directly; failed `parallel()` slots are `null`.
+- Meta is pure data — no computed meta.
+- Keep `meta.phases` titles in sync with `phase()` calls.
+- `pause()` in a result-derived branch re-fires forever; use `await_user` for resumable human gates.
+- Silent truncation is not coverage; `log()` whatever a `MAX_*` cap dropped.
+- Agents do not enforce invariants — the script does. Filter and assert in JavaScript.
+- Do not put `meta` in JavaScript, use TypeScript/export syntax, add unsupported agent options such as `fork_context`, mix thunk and declarative parallel forms in one call, assume `null` is success, omit verification, hide truncation, use nondeterministic globals, use nested workflows, or claim validate-only exhaustively proves the workflow.
+
+## Example (review-changes)
+
+Meta is JSON data beside this body in the `{ "meta", "script" }` envelope:
 
 ```json
 {
-  "meta": {
-    "name": "review-changes",
-    "description": "Review the change and independently verify every finding",
-    "whenToUse": "Before merge",
-    "phases": [
-      { "title": "Review", "detail": "Collect concrete evidence" },
-      { "title": "Verify", "detail": "Challenge each finding" }
-    ]
-  },
-  "script": "phase(\"Review\");\nconst reviews = await parallel([\n  { prompt: \"Inspect the requested change. Cite exact files and lines. Return only supported findings.\", label: \"reviewer\", phase: \"Review\" },\n  { prompt: \"Search for regressions and missing tests. Cite reproducible evidence and reject speculation.\", label: \"adversary\", phase: \"Review\" }\n]);\nconst evidence = reviews.filter(Boolean);\nif (evidence.length === 0) complete({ ok: false, findings: [], reason: \"no review agent completed\" });\nphase(\"Verify\");\nconst verified = await agent(`Independently verify these candidate findings against the workspace. Reject anything unsupported and return the remaining evidence:\\n${JSON.stringify(evidence)}`, { label: \"verifier\", phase: \"Verify\" });\nif (verified === null) complete({ ok: false, findings: [], reason: \"verification failed closed\" });\ncomplete({ ok: true, findings: verified });"
+  "name": "review-changes",
+  "description": "Review a diff across dimensions, adversarially verify each finding",
+  "whenToUse": "After a large diff, before merge",
+  "phases": [
+    { "title": "Review", "detail": "one reviewer per dimension" },
+    { "title": "Verify", "detail": "one skeptic per finding" }
+  ]
 }
 ```
 
-Pitfalls: do not put `meta` in JavaScript, use TypeScript/export syntax, add unsupported agent options such as `fork_context`, mix thunk and declarative parallel forms, assume `null` is success, omit verification, hide truncation, use nondeterministic globals, use nested workflows, or claim validate-only exhaustively proves the workflow.
+```js
+const findingsSchema = { type: "object", required: ["findings"],
+  properties: { findings: { type: "array", maxItems: 8,
+    items: { type: "object", required: ["file", "issue"],
+      properties: { file: { type: "string" }, issue: { type: "string" } } } } } };
+const verdictSchema = { type: "object", required: ["real", "reason", "evidence"],
+  properties: { real: { type: "boolean" }, reason: { type: "string" },
+    evidence: { type: "string" } } };
+
+const target = args && args.target;
+if (target == null) await pause("verification", "Pass args.target — the diff, branch, or path to review.");
+
+phase("Review");
+const dimensions = ["correctness bugs", "error handling gaps", "performance problems"];
+const results = await parallel(dimensions.map((d) => async () => await agent(
+  "Review " + target + " for " + d + ". Use read-only tools to inspect the actual code — " +
+  "do not answer from memory. Report at most 8 concrete findings as {file, issue}; " +
+  "an empty list is valid only after you have read the code.",
+  { label: "review:" + d, schema: findingsSchema })));
+
+const findings = [];
+for (const r of results) {
+  if (r != null && Array.isArray(r.findings)) for (const f of r.findings) findings.push(f);
+}
+if (findings.length === 0) complete({ summary: "No findings.", confirmed: [] });
+
+phase("Verify");
+const verdicts = await parallel(findings.map((f) => async () => await agent(
+  "Adversarially verify this review finding by reading the shipped code: \"" +
+  f.issue + "\" in " + f.file + ". Set real=true only with concrete evidence you " +
+  "independently inspected. Otherwise default real=false.",
+  { label: "verify:" + f.file, schema: verdictSchema })));
+
+const confirmed = [];
+for (let i = 0; i < verdicts.length; i++) {
+  const v = verdicts[i];
+  if (v != null && v.real === true && v.evidence) confirmed.push(findings[i]);
+}
+log(String(confirmed.length) + "/" + String(findings.length) + " findings survived verification");
+complete({ summary: String(confirmed.length) + " confirmed findings", confirmed });
+```

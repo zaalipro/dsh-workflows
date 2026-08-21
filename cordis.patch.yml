@@ -5,6 +5,6 @@
     provider: spawn
 - id: ui-workflow-run
   disabled: true
-- id: zaalipro-workflows
-  name: '@zaalipro/dsh-workflows'
-  config: {}
+- insert:
+    - id: zaalipro-workflows
+      name: '@zaalipro/dsh-workflows'

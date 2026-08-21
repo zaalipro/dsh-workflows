@@ -1,1 +1,248 @@
-.panel{display:block}
+.root,
+.root * {
+  box-sizing: border-box;
+}
+
+.root {
+  width: 100%;
+  min-width: 0;
+  color: var(--dsw-alias-label-primary);
+}
+
+.runHeader,
+.phaseHeader {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: start;
+}
+
+button.runHeader,
+button.phaseHeader {
+  cursor: pointer;
+}
+
+.runHeader {
+  min-height: 2.25rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.5rem;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.phaseHeader {
+  min-height: 2rem;
+  padding: 0.125rem 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+.runHeader:focus-visible,
+.phaseHeader:focus-visible,
+.memberButton:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+
+.chevron {
+  display: inline-grid;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  place-items: center;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 1rem;
+  line-height: 1;
+  transform: rotate(90deg);
+}
+
+.chevron[data-open='false'] {
+  transform: rotate(0deg);
+}
+
+.runName,
+.phaseTitle,
+.memberLabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.runName {
+  max-width: 42%;
+  flex: 0 1 auto;
+  color: var(--dsw-alias-label-primary);
+  font-size: 0.875rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.runCount,
+.phaseCount {
+  min-width: 0;
+  flex: 1;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.runStatus,
+.phaseStatus,
+.memberStatus {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.stateDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 50%;
+  background: var(--dsw-alias-label-tertiary);
+}
+
+.stateDot[data-status='running'] {
+  background: var(--dsw-alias-state-business-primary);
+}
+
+.stateDot[data-status='completed'] {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.stateDot[data-status='failed'] {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.stateDot[data-status='cancelled'],
+.stateDot[data-status='interrupted'] {
+  background: var(--dsw-alias-state-warn-primary);
+}
+
+.phaseList {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.375rem 0 0 1rem;
+}
+
+.phase {
+  min-width: 0;
+}
+
+.phaseTitle {
+  max-width: 36%;
+  flex: 0 1 auto;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 0.8125rem;
+  font-weight: 580;
+}
+
+.phaseStatus {
+  max-width: 45%;
+  text-align: end;
+}
+
+.members {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding-left: 1rem;
+}
+
+.memberRow,
+.memberButton {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.875rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.1875rem 0.25rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font: inherit;
+  text-align: start;
+}
+
+.memberButton {
+  cursor: pointer;
+}
+
+.memberButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.memberButton .memberLabel {
+  color: var(--dsw-alias-state-business-primary);
+  text-decoration: underline;
+  text-underline-position: from-font;
+}
+
+.memberLabel {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.empty,
+.navigationFeedback {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.navigationFeedback {
+  padding: 0.375rem 0.625rem 0;
+  color: var(--dsw-alias-label-secondary);
+}
+
+@media (max-width: 35rem) {
+  .runHeader,
+  .phaseHeader {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .runName,
+  .phaseTitle {
+    max-width: calc(100% - 1.5rem);
+  }
+
+  .runCount,
+  .phaseCount {
+    flex-basis: calc(100% - 1.5rem);
+    padding-left: 1.5rem;
+  }
+
+  .runStatus,
+  .phaseStatus {
+    margin-left: 1.5rem;
+  }
+
+  .phaseList,
+  .members {
+    padding-left: 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root *,
+  .root *::before,
+  .root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

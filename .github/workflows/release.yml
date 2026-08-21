@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+# A tag release is never cancelled by a later CI run. Publication is also
+# serialized so two tags cannot race a public npm dist-tag.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CI: 'true'
+  DSH_TELEMETRY_DISABLED: '1'
+  DSH_OFFICIAL_BASE_COMMIT: 141eb6fef83422698aef7a981029e843e8161534
+
+jobs:
+  pack:
+    name: Verify and pack once
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    outputs:
+      filename: ${{ steps.artifact.outputs.filename }}
+      sha256: ${{ steps.artifact.outputs.sha256 }}
+      dist_tag: ${{ steps.artifact.outputs.dist_tag }}
+      prerelease: ${{ steps.artifact.outputs.prerelease }}
+    steps:
+      - name: Check out the tagged package commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check out the read-only official Harness base
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: 141eb6fef83422698aef7a981029e843e8161534
+          path: official-harness
+          persist-credentials: false
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+      - name: Install pinned pnpm
+        run: npm install --global --ignore-scripts pnpm@11.7.0
+      - name: Verify annotated tag and package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git for-each-ref --format='%(objecttype)' "refs/tags/$GITHUB_REF_NAME")" = tag
+          test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+          test "$(git -C official-harness rev-parse HEAD)" = "$DSH_OFFICIAL_BASE_COMMIT"
+      - name: Install immutable dependencies without lifecycle scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Run the sole release checker and pack owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/dsh-workflows-release"
+          mkdir -p "$RUNNER_TEMP/dsh-workflows-release"
+          node scripts/check-release.mjs \
+            --official "$GITHUB_WORKSPACE/official-harness" \
+            --workspace "$GITHUB_WORKSPACE" \
+            --tag "$GITHUB_REF_NAME" \
+            --artifact-dir "$RUNNER_TEMP/dsh-workflows-release"
+      - id: artifact
+        name: Record and validate the one immutable artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$RUNNER_TEMP/dsh-workflows-release"/*.tgz)
+          test "${#files[@]}" -eq 1
+          file="${files[0]}"
+          filename="${file##*/}"
+          sha256="$(sha256sum "$file" | cut -d' ' -f1)"
+          test -f "$file.sha256"
+          (cd "${file%/*}" && sha256sum --check "$filename.sha256")
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$version" == *-* ]]; then
+            dist_tag=next
+            prerelease=true
+          else
+            dist_tag=latest
+            prerelease=false
+          fi
+          printf 'filename=%s\nsha256=%s\ndist_tag=%s\nprerelease=%s\n' \
+            "$filename" "$sha256" "$dist_tag" "$prerelease" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
+        with:
+          name: dsh-workflows-release-artifact
+          path: |
+            ${{ runner.temp }}/dsh-workflows-release/${{ steps.artifact.outputs.filename }}
+            ${{ runner.temp }}/dsh-workflows-release/${{ steps.artifact.outputs.filename }}.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish the tested bytes
+    needs: pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: npm
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16
+        with:
+          name: dsh-workflows-release-artifact
+          path: artifact
+      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+        with:
+          node-version: '24'
+          registry-url: https://registry.npmjs.org
+      - name: Verify downloaded bytes and digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="artifact/${{ needs.pack.outputs.filename }}"
+          test -f "$file"
+          test "$(sha256sum "$file" | cut -d' ' -f1)" = "${{ needs.pack.outputs.sha256 }}"
+          (cd artifact && sha256sum --check "${{ needs.pack.outputs.filename }}.sha256")
+      - name: Publish the same file with npm provenance
+        run: npm publish "artifact/${{ needs.pack.outputs.filename }}" --access public --provenance --tag "${{ needs.pack.outputs.dist_tag }}"
+      - name: Create the matching GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "${{ needs.pack.outputs.prerelease }}" == true ]]; then
+            gh release create "$GITHUB_REF_NAME" \
+              "artifact/${{ needs.pack.outputs.filename }}" \
+              "artifact/${{ needs.pack.outputs.filename }}.sha256" \
+              --prerelease --generate-notes --verify-tag
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "artifact/${{ needs.pack.outputs.filename }}" \
+              "artifact/${{ needs.pack.outputs.filename }}.sha256" \
+              --generate-notes --verify-tag
+          fi

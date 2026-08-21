@@ -2,6 +2,8 @@
 
 Status: implemented
 
+本笔记记录 `@zaalipro/dsh-workflows` 中已实现的 package 架构。官方 Harness 版本 **H** 尚未发布：worker-thread evaluator、`tools.replace`、`registerFallback`、trusted packaged-skill binding、`ApiRemoteEventRegistry` 以及 production nested private-directory I/O 在 stock `141eb6f` / `dsh-v0.1.0-rc.8` 中仍然缺失。本包在该 baseline 上 fail-close，而不是 activation。
+
 [English](2026-08-20-installable-workflows-package.md) | 中文
 
 ## Problem
@@ -62,9 +64,9 @@ Forwarded `workflows/run-change` event 只包含 per-Session revision invalidati
 
 Host 与 Client 是 disjoint TypeScript program。Build 顺序是 Host TSC、在 copied temporary mini-workspace 中 focused Typert generation、Client TSC 消费 generated declaration，最后生成 classic lazy-CJS browser bundle。Staging root 拥有一个 aggregate Host config；copied package 拥有一个 staging `tsconfig.json`；不存在 hand-authored Remote descriptor 或 obsolete nested Host/Client face。Generated Typert artifact 从 `WorkspaceTypertGenerator.generate()` return value 消费。
 
-Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。位于两个 repository 外的 consumer 把同一 artifact 安装到官方 Web 与 headless profile，import 每个 export，serve Client bundle，移除 package，并验证 stock boot。Browser、stress、provider 与 final aggregate gate 都在同一 product boundary 上运行。执行 npm publication 与 GitHub Release 时，它们复用 tested byte，而不是 repack。
+Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`scripts/packed-consumer.mjs` 以 scripts disabled 安装这些 byte，import 每个 public JavaScript/NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，并以对 stock `141eb6f` 的 `official-h-probe` 结束，probe 报告 `not-advertised`。Live `dsh plugin` add/remove、Web/headless profile boot 与 stock-profile restore 等待官方 H，并且只在 `DSH_RUN_PACKED_CONSUMER=1` 且 checkout 已 advertise H 时运行。Browser、stress、provider 与 final aggregate gate 都在同一 product boundary 上运行。执行 npm publication 与 GitHub Release 时，它们复用 tested byte，而不是 repack。
 
-## Alternatives considered
+## Rejected alternatives
 
 **维护永久 Harness fork。** 这保留 implementation freedom，但使 workflow product 无法与 divergent Harness distribution 分离，并迫使每个 upstream change 经过 private merge。选定的 official seam 加一个 external bundle 使 authority 狭窄且 removal 可逆。
 

@@ -1,0 +1,594 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`dashboard semantic snapshots > distinguishes never-produced logs from a fully evicted retained window > logs-evicted 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-com",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-completedCompletedReview a small deterministic fixturePhase: No phase yet2/8 agents · 2/2 agents5sResult retainedStop reason: completed",
+    "button: Runs",
+    "h2: review-completed",
+    "div: Controls for review-completed",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "button: Execution",
+    "h2: Logs",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-completed Completed Review a small deterministic fixture Phase: No phase yet 2/8 agents · 2/2 agents 5s Result retained Stop reason: completed 1 loaded of 1 runs Runs Completed review-completed Review a small deterministic fixture 5s Status Completed Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 2/2 agents Stop reason completed Result Result retained Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Execution Logs No retained log lines Loaded 0 of 0 retained log lines.",
+}
+`;
+
+exports[`dashboard semantic snapshots > distinguishes never-produced logs from a fully evicted retained window > logs-never-produced 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-runningRunningReview a small",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-runningRunningReview a small deterministic fixturePhase: No phase yet2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-running",
+    "div: Controls for review-running",
+    "button: Pause",
+    "button: Stop",
+    "button: Save",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "button: Execution",
+    "h2: Logs",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-running Running Review a small deterministic fixture Phase: No phase yet 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Running review-running Review a small deterministic fixture 5s Pause Stop Save Status Running Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Execution Logs No log lines Loaded 0 of 0 retained log lines.",
+}
+`;
+
+exports[`dashboard semantic snapshots > distinguishes phase omission from an empty phase and forces abnormal groups open > chat-completed-collapsed 1`] = `"› keyless-review Inspect · 2 members Completed"`;
+
+exports[`dashboard semantic snapshots > distinguishes phase omission from an empty phase and forces abnormal groups open > chat-interrupted-forced-open 1`] = `"› keyless-review Inspect · 2 members Interrupted › Unphased Inspect · 1 member Interrupted 1 alpha Interrupted › Empty phase name Inspect · 1 member Completed 1"`;
+
+exports[`dashboard semantic snapshots > keeps empty, loading, and error panes exclusive of 11.1 copy > generic-load-error 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 0 loaded of 0 runsP pause · R resume · X stop · S save · Esc closeCloseUnable to load workflow data. Retry.Retry",
+    "h1: Workflows",
+    "button: Close workflows",
+    "alert: Unable to load workflow data. Retry.Retry",
+    "button: Retry",
+  ],
+  "text": "Background orchestration Workflows 0 active · 0 loaded of 0 runs P pause · R resume · X stop · S save · Esc close Close Unable to load workflow data. Retry. Retry",
+}
+`;
+
+exports[`dashboard semantic snapshots > keeps empty, loading, and error panes exclusive of 11.1 copy > loading 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 0 loaded of 0 runsP pause · R resume · X stop · S save · Esc closeCloseLoading workflow runs…",
+    "h1: Workflows",
+    "button: Close workflows",
+    "status: Loading workflow runs…",
+  ],
+  "text": "Background orchestration Workflows 0 active · 0 loaded of 0 runs P pause · R resume · X stop · S save · Esc close Close Loading workflow runs…",
+}
+`;
+
+exports[`dashboard semantic snapshots > keeps empty, loading, and error panes exclusive of 11.1 copy > reconnecting 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 0 loaded of 0 runsP pause · R resume · X stop · S save · Esc closeCloseReconnecting…",
+    "h1: Workflows",
+    "button: Close workflows",
+    "status: Reconnecting…",
+  ],
+  "text": "Background orchestration Workflows 0 active · 0 loaded of 0 runs P pause · R resume · X stop · S save · Esc close Close Reconnecting…",
+}
+`;
+
+exports[`dashboard semantic snapshots > keeps the empty dashboard accessible and free of internal identifiers > empty 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 0 loaded of 0 runsP pause · R resume · X stop · S save · Esc closeCloseNo workflow runs yetLaunch a saved workflow t",
+    "h1: Workflows",
+    "button: Close workflows",
+    "h2: No workflow runs yet",
+  ],
+  "text": "Background orchestration Workflows 0 active · 0 loaded of 0 runs P pause · R resume · X stop · S save · Esc close Close No workflow runs yet Launch a saved workflow to see its progress here.",
+}
+`;
+
+exports[`dashboard semantic snapshots > locks exact stale, budget-limited, and generic control error strings > budget-limited-resume-error 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-paused-budgetPausedReview a ",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-paused-budgetPausedReview a small deterministic fixturePhase: No phase yet2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-paused-budget",
+    "div: Controls for review-paused-budget",
+    "button: Resume",
+    "button: Stop",
+    "button: Save",
+    "alert: workflow "review-paused-budget" requires a higher agent_budget to resume",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-paused-budget Paused Review a small deterministic fixture Phase: No phase yet 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Paused review-paused-budget Review a small deterministic fixture 5s Resume Stop Save workflow "review-paused-budget" requires a higher agent_budget to resume Status Paused Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > locks exact stale, budget-limited, and generic control error strings > generic-control-error 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-genericRunningReview a small",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-genericRunningReview a small deterministic fixturePhase: No phase yet2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-generic",
+    "div: Controls for review-generic",
+    "button: Pause",
+    "button: Stop",
+    "button: Save",
+    "alert: Unable to update workflow. Retry.Retry",
+    "button: Retry",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-generic Running Review a small deterministic fixture Phase: No phase yet 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Running review-generic Review a small deterministic fixture 5s Pause Stop Save Unable to update workflow. Retry. Retry Status Running Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > locks exact stale, budget-limited, and generic control error strings > stale-control-error 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-pausedPausedReview a small d",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-pausedPausedReview a small deterministic fixturePhase: No phase yet2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-paused",
+    "div: Controls for review-paused",
+    "button: Resume",
+    "button: Stop",
+    "button: Save",
+    "alert: workflow run changed; refresh it before applying a control",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-paused Paused Review a small deterministic fixture Phase: No phase yet 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Paused review-paused Review a small deterministic fixture 5s Resume Stop Save workflow run changed; refresh it before applying a control Status Paused Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > opens a clean completed disclosure without exposing internal identifiers > chat-completed-open 1`] = `
+{
+  "roles": [
+    "button: ›keyless-reviewInspect · 2 membersCompleted",
+    "section: Unphased",
+    "button: ›UnphasedInspect · 1 memberCompleted 1",
+    "section: Empty phase name",
+    "button: ›Empty phase nameInspect · 1 memberCompleted 1",
+  ],
+  "text": "› keyless-review Inspect · 2 members Completed › Unphased Inspect · 1 member Completed 1 › Empty phase name Inspect · 1 member Completed 1",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for budget-limited > status-budget-limited 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-budget-limitedBudget limited",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-budget-limitedBudget limitedReview a small deterministic fixturePhase: Review8/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-budget-limited",
+    "div: Controls for review-budget-limited",
+    "button: Stop",
+    "button: Save",
+    "note: Agent budget exhaustedThis run cannot resume here. Resume through the model workflow tool with a higher agent_budget. Stop remains available; Save is available ",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-budget-limited Budget limited Review a small deterministic fixture Phase: Review 8/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Budget limited review-budget-limited Review a small deterministic fixture 5s Stop Save Agent budget exhausted This run cannot resume here. Resume through the model workflow tool with a higher agent_budget. Stop remains available; Save is available only when this run is eligible. Status Budget limited Live phase Review Agent budget 8/8 spent · 0 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Current Verify Upcoming Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for cancelled > status-cancelled 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-can",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-cancelledStoppedReview a small deterministic fixturePhase: No phase yet2/8 agents · 2/2 agents5sNo result producedStop reason: cancelled",
+    "button: Runs",
+    "h2: review-cancelled",
+    "div: Controls for review-cancelled",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaStoppedOutcome ready",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaDoneOutcome ready",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-cancelled Stopped Review a small deterministic fixture Phase: No phase yet 2/8 agents · 2/2 agents 5s No result produced Stop reason: cancelled 1 loaded of 1 runs Runs Stopped review-cancelled Review a small deterministic fixture 5s Status Stopped Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 2/2 agents Stop reason cancelled Result No result produced Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Stopped Outcome ready Empty phase name beta Done Outcome ready Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for completed > status-completed 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-com",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-completedCompletedReview a small deterministic fixturePhase: No phase yet2/8 agents · 2/2 agents5sResult retainedStop reason: completed",
+    "button: Runs",
+    "h2: review-completed",
+    "div: Controls for review-completed",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaDoneOutcome ready",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaDoneOutcome ready",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-completed Completed Review a small deterministic fixture Phase: No phase yet 2/8 agents · 2/2 agents 5s Result retained Stop reason: completed 1 loaded of 1 runs Runs Completed review-completed Review a small deterministic fixture 5s Status Completed Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 2/2 agents Stop reason completed Result Result retained Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Done Outcome ready Empty phase name beta Done Outcome ready Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for failed > status-failed 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-fai",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-failedFailedReview a small deterministic fixturePhase: No phase yet2/8 agents · 1/2 agents5sNo result producedError: provider failedStop reason: error",
+    "button: Runs",
+    "h2: review-failed",
+    "div: Controls for review-failed",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaFailedOutcome ready",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaDoneOutcome ready",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-failed Failed Review a small deterministic fixture Phase: No phase yet 2/8 agents · 1/2 agents 5s No result produced Error: provider failed Stop reason: error 1 loaded of 1 runs Runs Failed review-failed Review a small deterministic fixture 5s Status Failed Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 1/2 agents Stop reason error Result No result produced Error provider failed Declared phases Review first Upcoming Verify Upcoming Retained error: provider failed Members Logs Result Artifacts Review alpha Failed Outcome ready Empty phase name beta Done Outcome ready Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for interrupted > status-interrupted 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-int",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-interruptedInterruptedReview a small deterministic fixturePhase: No phase yet2/8 agents · 2/2 agents5sNo result producedProcess exited before workflow se",
+    "button: Runs",
+    "h2: review-interrupted",
+    "div: Controls for review-interrupted",
+    "status: Process exited before workflow settlement.",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaStoppedOutcome ready",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaDoneOutcome ready",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-interrupted Interrupted Review a small deterministic fixture Phase: No phase yet 2/8 agents · 2/2 agents 5s No result produced Process exited before workflow settlement. Stop reason: interrupted 1 loaded of 1 runs Runs Interrupted review-interrupted Review a small deterministic fixture 5s Process exited before workflow settlement. Status Interrupted Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 2/2 agents Stop reason interrupted Result No result produced Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Stopped Outcome ready Empty phase name beta Done Outcome ready Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for needs-input > status-needs-input 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-needs-inputNeeds inputReview",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-needs-inputNeeds inputReview a small deterministic fixturePhase: approval2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-needs-input",
+    "div: Controls for review-needs-input",
+    "button: Resume",
+    "button: Stop",
+    "button: Save",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-needs-input Needs input Review a small deterministic fixture Phase: approval 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Needs input review-needs-input Review a small deterministic fixture 5s Resume Stop Save Status Needs input Live phase approval Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Waiting for input: Approve the diff. Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for paused > status-paused 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-pausedPausedReview a small d",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-pausedPausedReview a small deterministic fixturePhase: No phase yet2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-paused",
+    "div: Controls for review-paused",
+    "button: Resume",
+    "button: Stop",
+    "button: Save",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-paused Paused Review a small deterministic fixture Phase: No phase yet 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Paused review-paused Review a small deterministic fixture 5s Resume Stop Save Status Paused Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders semantic status and control vocabulary for running > status-running 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows1 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 1review-runningRunningReview a small",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 1",
+    "button: review-runningRunningReview a small deterministic fixturePhase: No phase yet2/8 agents · 0/2 agents5sResult pendingStop reason: —",
+    "h2: History · 0",
+    "button: Runs",
+    "h2: review-running",
+    "div: Controls for review-running",
+    "button: Pause",
+    "button: Stop",
+    "button: Save",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "section: Workflow members",
+    "section: Review",
+    "h3: Review",
+    "button: alphaRunningPending",
+    "section: Empty phase name",
+    "h3: Empty phase name",
+    "button: betaRunningPending",
+    "button: Execution",
+    "h2: Member outcome",
+  ],
+  "text": "Background orchestration Workflows 1 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 1 review-running Running Review a small deterministic fixture Phase: No phase yet 2/8 agents · 0/2 agents 5s Result pending Stop reason: — History · 0 No settled runs 1 loaded of 1 runs Runs Running review-running Review a small deterministic fixture 5s Pause Stop Save Status Running Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 0/2 agents Stop reason — Result Result pending Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Review alpha Running Pending Empty phase name beta Running Pending Loaded 2 of 2 members. Execution Member outcome Select a member to inspect its outcome.",
+}
+`;
+
+exports[`dashboard semantic snapshots > renders the evicted member outcome state > inspector-evicted 1`] = `"Member outcome alpha review Close Outcome evicted The retained outcome was evicted to stay within storage limits."`;
+
+exports[`dashboard semantic snapshots > renders the json-null member outcome state > inspector-json-null 1`] = `"Member outcome alpha review Close JSON outcome null Copy JSON"`;
+
+exports[`dashboard semantic snapshots > renders the pending member outcome state > inspector-pending 1`] = `"Member outcome alpha review Close Pending The member has not produced an outcome yet."`;
+
+exports[`dashboard semantic snapshots > renders the text member outcome state > inspector-text 1`] = `"Member outcome alpha review Close Text outcome hello Copy"`;
+
+exports[`dashboard semantic snapshots > renders the truncated member outcome state > inspector-truncated 1`] = `"Member outcome alpha review Close Truncated outcome 5 bytes retained of 20 bytes total. {&quot;x&quot;:"`;
+
+exports[`dashboard semantic snapshots > renders the unavailable member outcome state > inspector-unavailable 1`] = `"Member outcome alpha review Close No outcome produced This member finished without a retained result."`;
+
+exports[`dashboard semantic snapshots > snapshots completed result JSON-null and scratch retention disclosure > artifacts-retained 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-com",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-completedCompletedReview a small deterministic fixturePhase: No phase yet2/8 agents · 2/2 agents5sResult retainedStop reason: completed",
+    "button: Runs",
+    "h2: review-completed",
+    "div: Controls for review-completed",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "button: Execution",
+    "h2: Scratch artifacts",
+    "button: report.md12 bytes",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-completed Completed Review a small deterministic fixture Phase: No phase yet 2/8 agents · 2/2 agents 5s Result retained Stop reason: completed 1 loaded of 1 runs Runs Completed review-completed Review a small deterministic fixture 5s Status Completed Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 2/2 agents Stop reason completed Result Result retained Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Execution Scratch artifacts report.md 12 bytes Loaded 1 of 1 retained artifact names.",
+}
+`;
+
+exports[`dashboard semantic snapshots > snapshots completed result JSON-null and scratch retention disclosure > result-json-null 1`] = `
+{
+  "roles": [
+    "dialog: Background orchestrationWorkflows0 active · 1 loaded of 1 runsP pause · R resume · X stop · S save · Esc closeCloseActive · 0No active runsHistory · 1review-com",
+    "h1: Workflows",
+    "button: Close workflows",
+    "nav: Workflow runs",
+    "h2: Active · 0",
+    "h2: History · 1",
+    "button: review-completedCompletedReview a small deterministic fixturePhase: No phase yet2/8 agents · 2/2 agents5sResult retainedStop reason: completed",
+    "button: Runs",
+    "h2: review-completed",
+    "div: Controls for review-completed",
+    "h3: Declared phases",
+    "tablist: Workflow execution details",
+    "tab: Members",
+    "tab: Logs",
+    "tab: Result",
+    "tab: Artifacts",
+    "button: Execution",
+    "h2: Final result",
+    "h3: Final result",
+  ],
+  "text": "Background orchestration Workflows 0 active · 1 loaded of 1 runs P pause · R resume · X stop · S save · Esc close Close Active · 0 No active runs History · 1 review-completed Completed Review a small deterministic fixture Phase: No phase yet 2/8 agents · 2/2 agents 5s Result retained Stop reason: completed 1 loaded of 1 runs Runs Completed review-completed Review a small deterministic fixture 5s Status Completed Live phase No phase yet Agent budget 2/8 spent · 6 remaining Members 2/2 agents Stop reason completed Result Result retained Declared phases Review first Upcoming Verify Upcoming Members Logs Result Artifacts Execution Final result Final result { "alpha": "alpha", "beta": null }",
+}
+`;
+
+exports[`dashboard semantic snapshots > snapshots request-error and unavailable-transcript inspector states > inspector-request-error 1`] = `"Member outcome alpha review Unable to load member outcome Retry"`;
+
+exports[`dashboard semantic snapshots > snapshots request-error and unavailable-transcript inspector states > inspector-unavailable-transcript 1`] = `
+{
+  "roles": [
+    "section: Workflow member inspector",
+    "h2: alpha",
+    "h3: JSON outcome",
+    "pre: JSON outcome",
+    "button: Copy JSON",
+    "button: Open child session",
+    "status: Child transcript unavailable",
+  ],
+  "text": "Member outcome alpha review JSON outcome null Copy JSON Open child session Child transcript unavailable",
+}
+`;

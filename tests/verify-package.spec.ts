@@ -43,6 +43,34 @@ describe('package policy verifier', () => {
     const tarball = makeTarball(fixture, new Set(['package/NOTICE.md']))
     expectFailure('--tarball', tarball)
   }))
+
+  it('rejects a tarball missing the packaged skill', () => withFixture(fixture => {
+    const tarball = makeTarball(fixture, new Set(['package/skills/create-workflow/SKILL.md']))
+    expectFailure('--tarball', tarball)
+  }))
+
+  it('rejects a tarball missing the client bundle', () => withFixture(fixture => {
+    const tarball = makeTarball(fixture, new Set(['package/lib/client.js']))
+    expectFailure('--tarball', tarball)
+  }))
+
+  it('rejects a source fixture missing a required peer', () => withFixture(fixture => {
+    const manifestPath = join(fixture, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    delete manifest.peerDependencies.react
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    expectFailure('--source', fixture)
+  }))
+
+  it('rejects a tarball missing the packed user guide', () => withFixture(fixture => {
+    const tarball = makeTarball(fixture, new Set(['package/docs/user-guide.md']))
+    expectFailure('--tarball', tarball)
+  }))
+
+  it('rejects an empty client factory', () => withFixture(fixture => {
+    writeFileSync(join(fixture, 'lib/client.js'), 'window.__ModuleLoader__?.load({ id: "@zaalipro/dsh-workflows", factory: () => ({}) })\n')
+    expectFailure('--source', fixture)
+  }))
 })
 
 function withFixture(callback: (fixture: string) => void) {
@@ -56,12 +84,13 @@ function withFixture(callback: (fixture: string) => void) {
 }
 
 function makeFixture(fixture: string) {
-  mkdirSync(join(fixture, 'lib'), { recursive: true })
+  mkdirSync(join(fixture, 'lib/types'), { recursive: true })
+  mkdirSync(join(fixture, 'lib/client-types'), { recursive: true })
   mkdirSync(join(fixture, 'skills/create-workflow'), { recursive: true })
   const jsExports = [
-    'index', 'registry/index', 'supervisor/index', 'run-recorder', 'user-questions',
-    'commands/index', 'tool/index', 'client/index', 'client', 'types', 'invariant',
-    'typert', 'remote',
+    'types/index', 'types/registry/index', 'types/supervisor/index',
+    'types/run-recorder', 'types/user-questions', 'types/commands/index',
+    'types/tool/index', 'types/types', 'types/invariant',
   ]
   for (const name of jsExports) {
     const path = join(fixture, `lib/${name}.js`)
@@ -71,13 +100,34 @@ function makeFixture(fixture: string) {
     writeFileSync(join(resolve(path, '..'), `${basename}.js.map`), '{"version":3,"sources":[]}\n')
     writeFileSync(join(fixture, `lib/${name}.d.ts`), 'export declare const fixture: boolean\n')
   }
+  writeFileSync(join(fixture, 'lib/client-types/index.d.ts'), 'export declare const fixture: boolean\n')
+  writeFileSync(join(fixture, 'lib/client.js'), 'window.__ModuleLoader__.load({\n  id: "@zaalipro/dsh-workflows",\n  factory: (require) => ({ apply() {} })\n})\n//# sourceMappingURL=client.js.map\n')
+  const typert = [
+    'export const workflowDefinitions_list = true',
+    'export const workflowRuns_list = true',
+    'export const workflowRuns_detail = true',
+    'export const workflowRuns_members = true',
+    'export const workflowRuns_memberDetail = true',
+    'export const workflowRuns_logs = true',
+    'export const workflowRuns_result = true',
+    'export const workflowRuns_artifacts = true',
+    'export const workflowRuns_artifact = true',
+    'export const workflowRuns_control = true',
+    'export const workflowDefinitions = true',
+    'export const workflowRuns = true',
+  ].join('\n')
   for (const name of ['typert.host', 'typert.remote-client']) {
-    writeFileSync(join(fixture, `lib/${name}.js`), 'export const fixture = true\n')
+    writeFileSync(join(fixture, `lib/${name}.js`), `${typert}\n`)
     writeFileSync(join(fixture, `lib/${name}.d.ts`), 'export declare const fixture: boolean\n')
   }
   writeFileSync(join(fixture, 'lib/client.js.map'), '{"version":3,"sources":[]}\n')
   writeFileSync(join(fixture, 'cordis.patch.yml'), '[]\n')
   writeFileSync(join(fixture, 'skills/create-workflow/SKILL.md'), '# create-workflow\n')
+  mkdirSync(join(fixture, 'docs'), { recursive: true })
+  writeFileSync(join(fixture, 'README.md'), '# README\n')
+  writeFileSync(join(fixture, 'docs/user-guide.md'), '# User guide\n')
+  writeFileSync(join(fixture, 'docs/architecture.md'), '# Architecture\n')
+  writeFileSync(join(fixture, 'docs/testing.md'), '# Testing\n')
   writeFileSync(join(fixture, 'LICENSE'), readFileSync(join(root, 'LICENSE')))
   writeFileSync(join(fixture, 'NOTICE.md'), readFileSync(join(root, 'NOTICE.md')))
   writeFileSync(join(fixture, 'package.json'), `${JSON.stringify(makeManifest(), null, 2)}\n`)
@@ -86,24 +136,33 @@ function makeFixture(fixture: string) {
 function makeManifest() {
   const target = (name: string) => ({ types: `./lib/${name}.d.ts`, default: `./lib/${name}.js` })
   const exports: Record<string, unknown> = {
-    '.': target('index'), './registry': target('registry/index'), './supervisor': target('supervisor/index'),
-    './run-recorder': target('run-recorder'), './user-questions': target('user-questions'),
-    './commands': target('commands/index'), './tool': target('tool/index'), './client': target('client/index'),
-    './types': target('types'), './invariant': target('invariant'), './typert': target('typert'), './remote': target('remote'),
+    '.': target('types/index'), './registry': target('types/registry/index'), './supervisor': target('types/supervisor/index'),
+    './run-recorder': target('types/run-recorder'), './user-questions': target('types/user-questions'),
+    './commands': target('types/commands/index'), './tool': target('types/tool/index'),
+    './client': { types: './lib/client-types/index.d.ts', default: './lib/client.js' },
+    './types': target('types/types'), './invariant': target('types/invariant'),
+    './typert': target('typert.host'), './remote': target('typert.remote-client'),
     './cordis.patch.yml': './cordis.patch.yml', './skills/create-workflow/SKILL.md': './skills/create-workflow/SKILL.md',
     './package.json': './package.json',
   }
   const peers = {
     '@deepseek-ai/cordis': '>=4.0.1', '@deepseek-ai/dsh-client-connection': '>=0.1.0-rc.8',
+    '@deepseek-ai/dsh-client-ui-conversation': '>=0.1.0-rc.8',
     '@deepseek-ai/dsh-workflow': '>=0.1.0-rc.8', '@deepseek-ai/dsh-workflow-worker-thread': '>=0.1.0-rc.8', react: '>=18',
   }
   return {
     name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.1', type: 'module', license: 'MIT',
     engines: { node: '^22.19.0 || >=24.0.0' }, packageManager: 'pnpm@11.7.0', publishConfig: { access: 'public' },
-    files: ['lib', 'skills', 'cordis.patch.yml', 'LICENSE', 'NOTICE.md', 'package.json'], exports,
+    main: './lib/types/index.js', types: './lib/types/index.d.ts',
+    files: [
+      'lib/types', 'lib/client-types', 'lib/client.js', 'lib/client.js.map',
+      'lib/typert.host.js', 'lib/typert.host.d.ts',
+      'lib/typert.remote-client.js', 'lib/typert.remote-client.d.ts',
+      'skills', 'cordis.patch.yml', 'README.md', 'docs', 'LICENSE', 'NOTICE.md', 'package.json',
+    ], exports,
     dependencies: { chokidar: '^4.0.0', clsx: '^2.1.1', 'fs-native-extensions': '1.5.0' },
     peerDependencies: peers, devDependencies: { ...peers },
-    dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-connection'] } },
+    dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-conversation'] } },
   }
 }
 
