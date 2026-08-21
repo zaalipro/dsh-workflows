@@ -306,7 +306,7 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
     const registered: any[] = []
     const ctx: any = {
       effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
-      remote: { $mount: async () => () => undefined },
+      remote: {},
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: { inject: () => () => undefined, register: () => undefined },
       conversationEvents: { register: () => () => undefined },

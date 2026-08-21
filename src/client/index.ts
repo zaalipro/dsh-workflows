@@ -153,8 +153,10 @@ export function apply(ctx: ClientContext): void {
   const root = ctx as AnyContext
   root.effect(async () => {
     const remote = root.remote as TypertClientRemote & Record<string, any>
-    if (typeof remote?.$mount !== 'function') throw new Error('workflow Remote mount is unavailable')
-    const remoteDisposer = await remote.$mount(TYPERT_REMOTE)
+    let remoteDisposer: unknown
+    if (typeof remote?.$mount === 'function') {
+      try { remoteDisposer = await remote.$mount(TYPERT_REMOTE) } catch { remoteDisposer = undefined }
+    }
 
     const sessions = root.sessions as any
     const controller = new WorkflowRunsController(remote, sessions)

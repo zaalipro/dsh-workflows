@@ -43,12 +43,12 @@ describe('Client /workflows action (RC21-RC22)', () => {
     await expect(Promise.all(popupOnly)).resolves.toBeDefined()
   })
 
-  it('registers /workflows when commandUi has register+decorate and Remote $on is absent', async () => {
+  it('registers /workflows when commandUi has register+decorate and Remote mount fails', async () => {
     const pending: Promise<unknown>[] = []
     const registered: any[] = []
     const ctx: any = {
       effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
-      remote: { $mount: async () => () => undefined },
+      remote: { $mount: async () => { throw new Error('typert projection unavailable') } },
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: { inject: () => () => undefined, register: () => undefined },
       conversationEvents: { register: () => () => undefined },
