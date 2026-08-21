@@ -399,11 +399,8 @@ function isIdentityDependency(name) {
 function verifyInstallLifecycle(scripts) {
   if (scripts === undefined) return
   if (!isRecord(scripts)) throw new Error('scripts must be an object')
-  for (const hook of ['preinstall', 'install', 'postinstall']) {
-    if (hook in scripts) throw new Error(`${hook} is forbidden; npm tarballs must not build at install time`)
-  }
-  if ('prepare' in scripts && (typeof scripts.prepare !== 'string' || scripts.prepare.trim().length === 0)) {
-    throw new Error('prepare must be a non-empty command when present')
+  for (const hook of ['preinstall', 'install', 'postinstall', 'prepare', 'prepack']) {
+    if (hook in scripts) throw new Error(`${hook} is forbidden; dsh plugin add must not build at install time`)
   }
 }
 

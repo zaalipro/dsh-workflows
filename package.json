@@ -102,7 +102,6 @@
     "verify:package": "node scripts/verify-package.mjs --source .",
     "verify:docs": "node scripts/verify-docs.mjs",
     "doc-sync": "node scripts/verify-docs.mjs",
-    "prepare": "node scripts/build.mjs",
     "check:release": "node scripts/check-release.mjs",
     "test:coverage": "vitest run --exclude=\"tests/keyless-snapshot.spec.ts\" --exclude=\"tests/dashboard-snapshot.client.spec.tsx\" --exclude=\"tests/packed-consumer.spec.ts\" --exclude=\"tests/browser-smoke.spec.ts\" --exclude=\"tests/race-stress.spec.ts\" --exclude=\"tests/storage-stress.spec.ts\" --exclude=\"tests/client-race-stress.client.spec.ts\" --exclude=\"tests/real-provider.spec.ts\" --coverage.enabled=true --coverage.provider=v8 --coverage.thresholds.perFile=true --coverage.thresholds.statements=100 --coverage.thresholds.branches=100 --coverage.thresholds.functions=100 --coverage.thresholds.lines=100"
   },

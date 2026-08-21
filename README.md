@@ -12,32 +12,21 @@ The package requires Node `^22.19.0 || >=24.0.0`, uses `pnpm@11.7.0`, and is dis
 
 ## Installation
 
-### npm tarballs
+Same command as any other profile plugin. It adds one dependency and one bundle layer named `@zaalipro/dsh-workflows`. There is no extra patch file, no `allowBuilds` entry, and no install-time build.
 
-Published npm tarballs are prebuilt and require no install-time build. Install the same package into either official profile:
+```sh
+dsh plugin --profile web add github:zaalipro/dsh-workflows
+dsh plugin --profile headless add github:zaalipro/dsh-workflows
+```
+
+When the package is on npm, use the registry name instead:
 
 ```sh
 dsh plugin --profile web add @zaalipro/dsh-workflows
 dsh plugin --profile headless add @zaalipro/dsh-workflows
 ```
 
-The command adds one top-level dependency and one bundle entry named `@zaalipro/dsh-workflows`. Web loads the Host product and browser Client; headless loads only the Host product and never evaluates browser code.
-
-### Git URLs
-
-A Git install receives source and runs the package's `prepare` build, so pin a reviewed commit and enable that build only in the target profile:
-
-```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows#<commit>
-dsh plugin --profile headless add github:zaalipro/dsh-workflows#<commit>
-```
-
-```yaml
-allowBuilds:
-  '@zaalipro/dsh-workflows': true
-```
-
-Place the `allowBuilds` entry in the profile's `pnpm-workspace.yaml`, then repeat the add command. This permission is necessary only for Git installs whose `prepare` script builds source; npm tarballs already contain the Host, Client, Typert, patch, skill, types, license, and notice assets. The JavaScript evaluator is the official `@deepseek-ai/dsh-workflow-worker-thread` peer, not a worker packed inside this package.
+Web loads the Host product and browser Client; headless loads only the Host product and never evaluates browser code. The JavaScript evaluator is the official `@deepseek-ai/dsh-workflow-worker-thread` peer, not a worker packed inside this package.
 
 ## Removal
 

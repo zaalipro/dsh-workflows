@@ -8,14 +8,14 @@ This tutorial takes a Web or headless user from installation to one saved JavaSc
 
 Use the symbolic official release **H**, the first release with all external-workflow prerequisites. Stock `0.1.0-rc.8` is incompatible and activation stops before storage or Session admission.
 
-Install the prebuilt npm tarball into the surface you use:
+Install it like any other profile plugin:
 
 ```sh
-dsh plugin --profile web add @zaalipro/dsh-workflows
-dsh plugin --profile headless add @zaalipro/dsh-workflows
+dsh plugin --profile web add github:zaalipro/dsh-workflows
+dsh plugin --profile headless add github:zaalipro/dsh-workflows
 ```
 
-Restart the profile. Web gains the dashboard and durable Chat renderer in addition to Host behavior; headless gains registry, supervisor, commands, questions, recorder, and model tool without loading browser code. Git installs and removal are covered in the [package README](../README.md#installation).
+Restart the profile. Web gains the dashboard and durable Chat renderer in addition to Host behavior; headless gains registry, supervisor, commands, questions, recorder, and model tool without loading browser code. Removal is covered in the [package README](../README.md#installation).
 
 ## 2. Create a project definition
 

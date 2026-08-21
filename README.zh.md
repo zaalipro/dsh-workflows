@@ -12,32 +12,21 @@
 
 ## 安装
 
-### npm tarball
+与其他 profile 插件相同的一条命令。它增加一个依赖和一个名为 `@zaalipro/dsh-workflows` 的 bundle 层。没有额外 patch 文件，没有 `allowBuilds` 条目，也没有安装时构建。
 
-发布到 npm 的 tarball 已预构建，不需要安装时构建。可把同一个包安装到任一官方 profile：
+```sh
+dsh plugin --profile web add github:zaalipro/dsh-workflows
+dsh plugin --profile headless add github:zaalipro/dsh-workflows
+```
+
+包发布到 npm 后，改用 registry 名：
 
 ```sh
 dsh plugin --profile web add @zaalipro/dsh-workflows
 dsh plugin --profile headless add @zaalipro/dsh-workflows
 ```
 
-该命令增加一个名为 `@zaalipro/dsh-workflows` 的顶层依赖和一个同名 bundle 条目。Web 会加载 Host 产品和浏览器 Client；headless 只加载 Host 产品，绝不求值浏览器代码。
-
-### Git URL
-
-Git 安装取得源码并运行本包的 `prepare` 构建，因此应固定到已审查的提交，并只在目标 profile 中允许该构建：
-
-```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows#<commit>
-dsh plugin --profile headless add github:zaalipro/dsh-workflows#<commit>
-```
-
-```yaml
-allowBuilds:
-  '@zaalipro/dsh-workflows': true
-```
-
-把 `allowBuilds` 条目放进 profile 的 `pnpm-workspace.yaml`，然后重新执行 add 命令。只有通过 `prepare` 从源码构建的 Git 安装需要此权限；npm tarball 已包含 Host、Client、Typert、patch、skill、类型、license 和 notice 资产。JavaScript evaluator 是官方 `@deepseek-ai/dsh-workflow-worker-thread` peer，不是打进本包的 worker。
+Web 会加载 Host 产品和浏览器 Client；headless 只加载 Host 产品，绝不求值浏览器代码。JavaScript evaluator 是官方 `@deepseek-ai/dsh-workflow-worker-thread` peer，不是打进本包的 worker。
 
 ## 移除
 

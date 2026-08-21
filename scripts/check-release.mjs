@@ -151,8 +151,8 @@ function validateManifest(manifest) {
   if (manifest.engines?.node !== '^22.19.0 || >=24.0.0') throw new Error('engines.node does not match release policy')
   if (manifest.packageManager !== 'pnpm@11.7.0') throw new Error('packageManager must be pnpm@11.7.0')
   if (manifest.publishConfig?.access !== 'public') throw new Error('publishConfig.access must be public')
-  if (manifest.scripts?.prepare && manifest.scripts.prepare.trim() !== 'node scripts/build.mjs') {
-    throw new Error('prepare must only run node scripts/build.mjs')
+  if ('prepare' in (manifest.scripts ?? {})) {
+    throw new Error('prepare is forbidden; profile plugin add must not build at install time')
   }
   for (const hook of ['prepublish', 'prepublishOnly', 'publish', 'postpublish']) {
     if (manifest.scripts && hook in manifest.scripts) throw new Error(`${hook} is forbidden`) 
@@ -225,8 +225,7 @@ async function packOnce(source, artifactDir) {
     temporaryArtifactDir = await mkdtemp(join(tmpdir(), 'dsh-workflows-release-'))
     destination = temporaryArtifactDir
   }
-  // `prepare` is only for Git installs. The release closure was already built,
-  // so packing must not run lifecycle scripts and mutate the tested bytes.
+  // Packing must not run lifecycle scripts and mutate the tested bytes.
   const output = await capturePnpm(
     ['pack', '--json', '--pack-destination', destination, '--config.ignore-scripts=true'],
     source,

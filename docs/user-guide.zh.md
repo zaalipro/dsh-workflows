@@ -8,14 +8,14 @@
 
 使用符号化官方版本 **H**，即第一个包含全部 external-workflow prerequisite 的版本。原版 `0.1.0-rc.8` 不兼容，activation 会在 storage 或 Session admission 前停止。
 
-把预构建 npm tarball 安装到所用 surface：
+像其他 profile 插件一样安装：
 
 ```sh
-dsh plugin --profile web add @zaalipro/dsh-workflows
-dsh plugin --profile headless add @zaalipro/dsh-workflows
+dsh plugin --profile web add github:zaalipro/dsh-workflows
+dsh plugin --profile headless add github:zaalipro/dsh-workflows
 ```
 
-重启 profile。Web 除 Host behavior 外还获得 dashboard 与 durable Chat renderer；headless 获得 registry、supervisor、command、question、recorder 与 model tool，但不加载 browser code。Git install 与 removal 见 [package README](../README.zh.md#安装)。
+重启 profile。Web 除 Host behavior 外还获得 dashboard 与 durable Chat renderer；headless 获得 registry、supervisor、command、question、recorder 与 model tool，但不加载 browser code。移除见 [package README](../README.zh.md#安装)。
 
 ## 2. 创建 project definition
 
