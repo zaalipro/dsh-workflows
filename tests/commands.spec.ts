@@ -354,9 +354,10 @@ describe('Host /workflow and /create-workflow (SH16)', () => {
     expect(commands.list(agent).filter((item: { name: string }) => item.name === 'workflow')).toHaveLength(1)
   })
 
-  it('fails closed without register or registerFallback and no-ops when disabled', () => {
+  it('fails closed without register, mounts without fallback, and no-ops when disabled', () => {
     expect(() => applyCommands({ commands: {} })).toThrow(/workflow command registry is unavailable/u)
-    expect(() => applyCommands({ commands: { register() { return () => undefined } } })).toThrow(/registerFallback/u)
+    const dispose = applyCommands({ commands: { register() { return () => undefined } } })
+    expect(typeof dispose).toBe('function')
     expect(applyCommands({ commands: { register() {}, registerFallback() {} } }, { enabled: false })).toBeUndefined()
   })
 

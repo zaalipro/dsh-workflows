@@ -184,10 +184,17 @@ export async function registerTrustedWorkflowSkill(ctx: any): Promise<() => void
   return asDisposer(register.call(ctx.skills, registrationForSkill(content), { protectedName: 'create-workflow' })) as () => void
 }
 
-export function registerTrustedWorkflowSkillSync(ctx: any): () => unknown {
-  const register = ctx?.skills?.registerTrustedPackageSkill
-  if (typeof register !== 'function') throw new Error('trusted packaged skill registration is unavailable')
-  return asDisposer(register.call(ctx.skills, registrationForSkill(readPackagedSkillSync()), { protectedName: 'create-workflow' }))
+export function registerTrustedWorkflowSkillSync(ctx: any, options: { readonly required?: boolean } = {}): () => unknown {
+  const trusted = ctx?.skills?.registerTrustedPackageSkill
+  if (typeof trusted === 'function') {
+    return asDisposer(trusted.call(ctx.skills, registrationForSkill(readPackagedSkillSync()), { protectedName: 'create-workflow' }))
+  }
+  const register = ctx?.skills?.register
+  if (typeof register === 'function') {
+    return asDisposer(register.call(ctx.skills, registrationForSkill(readPackagedSkillSync())))
+  }
+  if (options.required !== false) throw new Error('trusted packaged skill registration is unavailable')
+  return () => undefined
 }
 
 interface AliasRegistration {
@@ -349,9 +356,7 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
   const cleanup: Array<() => unknown> = []
   const commands = ctx?.commands
   if (typeof commands?.register !== 'function') throw new Error('workflow command registry is unavailable')
-  if (typeof commands.registerFallback !== 'function') {
-    throw new Error('workflow command aliases require H registerFallback')
-  }
+  const hasFallback = typeof commands.registerFallback === 'function'
   const supervisor: WorkflowSupervisor = ctx.workflowSupervisor
   if (config.registerSkill !== false && ctx?.skills?.registerTrustedPackageSkill !== undefined) {
     cleanup.push(asDisposer(registerTrustedWorkflowSkillSync(ctx)))
@@ -402,6 +407,7 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
     }))
   }
   const addAgent = (agent: any): void => {
+    if (!hasFallback) return
     if (agent === undefined || states.has(agent)) return
     if (typeof agent?.ctx?.inject !== 'function') {
       throw new Error('workflow command aliases require exact-Agent command injection')

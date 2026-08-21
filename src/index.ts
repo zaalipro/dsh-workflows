@@ -28,7 +28,7 @@ export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErro
 export const name = 'dsh-workflows'
 export const version = '0.1.0-rc.1'
 
-/** The exact Host services required by the aggregate. Loader waits for these. */
+/** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export const inject = [
   'agents',
   'commands',
@@ -36,7 +36,6 @@ export const inject = [
   'skills',
   'userQuestions',
   'workflowEngine',
-  'apiRemoteEvents',
 ] as const
 
 /** Manifest `dsh.compatibility` mirrored for the runtime marker check. */
@@ -84,6 +83,16 @@ function isRejectedHostRelease(value: unknown): boolean {
   if (!isRecord(value)) return false
   return ['version', 'hostVersion', 'harnessVersion', 'releaseVersion']
     .some(key => isRejectedHostRelease(value[key]))
+}
+
+/** True when the Host declared the symbolic H workflow package contract. */
+export function isCompatibleHost(ctx: Context | any): boolean {
+  try {
+    assertCompatibleHost(ctx)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Verify H's explicit compatibility declaration before package I/O. */
@@ -202,6 +211,20 @@ function assertHostFaces(ctx: any): void {
   }
 }
 
+/** Faces that exist on stock dsh 0.1.1-rc.2. Missing H seams degrade, they do not hang boot. */
+function assertStockFaces(ctx: any): void {
+  requireService(ctx, 'agents')
+  requireFunction(optionalProperty(requireService(ctx, 'commands'), 'register'), 'register', 'commands')
+  requireService(ctx, 'fs')
+  requireService(ctx, 'skills')
+  requireService(ctx, 'userQuestions')
+  requireFunction(optionalProperty(requireService(ctx, 'workflowEngine'), 'start'), 'start', 'workflowEngine')
+  if (optionalProperty(ctx, 'provide') === undefined
+    && optionalProperty(optionalProperty(ctx, 'reflect'), 'provide') === undefined) {
+    throw new Error('workflow package requires a Cordis service-registration context')
+  }
+}
+
 function asCleanup(value: unknown): Cleanup | undefined {
   if (typeof value === 'function') return value as Cleanup
   if (isRecord(value) && typeof value.dispose === 'function') {
@@ -295,14 +318,18 @@ function makeTeardown(resources: OwnedResources): Cleanup {
 
 /** Compose the complete Host-side workflow product as one lifecycle unit. */
 export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Promise<void> {
-  // Keep this before home resolution, skill I/O, and all filesystem access.
-  assertCompatibleHost(ctx)
+  const compatible = isCompatibleHost(ctx)
+  if (!compatible) {
+    const log = optionalProperty(ctx, 'logger') as { warn?(message: string): void } | undefined
+    log?.warn?.(INCOMPATIBLE_MESSAGE)
+  }
   const config = resolveWorkflowPackageConfig(normalizeInputPaths(input), hostHome(ctx))
   if (config.enabled === false) return
 
-  // Preflight every required face and installed asset before taking the
-  // process-global storage lease.  The Host never imports ./client here.
-  assertHostFaces(ctx)
+  // Preflight faces before the process-global storage lease.
+  // The Host never imports ./client here.
+  if (compatible) assertHostFaces(ctx)
+  else assertStockFaces(ctx)
   await readPackagedSkill()
 
   const resources: OwnedResources = {}
@@ -312,7 +339,9 @@ export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Pro
     // nested workflow storage.  The storage module retains a local-only seam
     // for standalone fixtures when this argument is absent, never as a silent
     // downgrade in a real Host context.
-    resources.storage = await openWorkflowStorage(config, readService(ctx, 'fs'))
+    const hostFs = readService(ctx, 'fs')
+    const privateHostFs = typeof optionalProperty(hostFs, 'openPrivateDirectory') === 'function' ? hostFs : undefined
+    resources.storage = await openWorkflowStorage(config, privateHostFs)
     resources.storageService = provideService(ctx, 'workflowStorage', resources.storage)
     resources.storeService = provideService(ctx, 'workflowStore', resources.storage.store)
     ownEffect(ctx, resources.storageService, 'dsh-workflows: workflowStorage')
@@ -339,7 +368,7 @@ export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Pro
     // This is a protected H binding, not a low-rank ordinary skill.  The
     // helper re-reads the asset to retain the standalone registration API;
     // the pre-read above guarantees missing assets fail before storage.
-    resources.skill = asCleanup(registerTrustedWorkflowSkillSync(ctx)) as Cleanup
+    resources.skill = asCleanup(registerTrustedWorkflowSkillSync(ctx, { required: compatible })) as Cleanup
     ownEffect(ctx, resources.skill, 'dsh-workflows: create-workflow skill')
 
     resources.tool = asCleanup(applyToolShadow(ctx, {

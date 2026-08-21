@@ -49,7 +49,9 @@ export declare function readPackagedSkill(): Promise<string>;
 export declare function readPackagedSkillSync(): string;
 /** Use H's protected package binding; never emulate trust with a low rank. */
 export declare function registerTrustedWorkflowSkill(ctx: any): Promise<() => void>;
-export declare function registerTrustedWorkflowSkillSync(ctx: any): () => unknown;
+export declare function registerTrustedWorkflowSkillSync(ctx: any, options?: {
+    readonly required?: boolean;
+}): () => unknown;
 /** Mount Host commands and exact-Agent definition aliases. */
 export declare function applyCommands(ctx: any, config?: CommandsConfig): (() => Promise<void>) | undefined;
 export declare const apply: typeof applyCommands;

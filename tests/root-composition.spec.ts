@@ -166,11 +166,11 @@ async function provideHost(ctx: Context, options: { readonly remoteEvents?: bool
 }
 
 describe('package identity and Host inject', () => {
-  it('exports the package row identity and waits for apiRemoteEvents', () => {
+  it('exports the package row identity without blocking boot on optional Remote events', () => {
     expect(name).toBe('dsh-workflows')
     expect(version).toBe('0.1.0-rc.1')
     expect([...inject]).toEqual([
-      'agents', 'commands', 'fs', 'skills', 'userQuestions', 'workflowEngine', 'apiRemoteEvents',
+      'agents', 'commands', 'fs', 'skills', 'userQuestions', 'workflowEngine',
     ])
     expect(apply).toHaveProperty('inject', inject)
     expect(HOST_COMPATIBILITY).toEqual({
@@ -326,7 +326,7 @@ describe('Host aggregate lifecycle', () => {
     await webFiber.dispose()
   })
 
-  it('keeps a plugin fiber pending until apiRemoteEvents exists, then loads', async () => {
+  it('loads without waiting for apiRemoteEvents so stock dsh web can boot', async () => {
     const ctx = new Context()
     ctx.provide('workflowPrerequisites', { release: 'H' })
     ctx.provide('agents', { list: () => [] })
@@ -336,12 +336,10 @@ describe('Host aggregate lifecycle', () => {
     ctx.provide('userQuestions', { ask: async () => ({ answers: [] }) })
     ctx.provide('workflowEngine', { start: noop, validate: async () => ({ ok: true }) })
     const fiber = ctx.plugin({
-      name: 'dsh-workflows-pending',
+      name: 'dsh-workflows-optional-events',
       inject: [...inject],
       apply: (child: Context) => apply(child, { enabled: false }),
     })
-    expect(fiber.state).toBe(0)
-    ctx.provide('apiRemoteEvents', { register: noop })
     await fiber
     expect(fiber.state).toBe(2)
     await fiber.dispose()

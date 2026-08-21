@@ -5,14 +5,16 @@ export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvari
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode };
 export declare const name = "dsh-workflows";
 export declare const version = "0.1.0-rc.1";
-/** The exact Host services required by the aggregate. Loader waits for these. */
-export declare const inject: readonly ["agents", "commands", "fs", "skills", "userQuestions", "workflowEngine", "apiRemoteEvents"];
+/** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
+export declare const inject: readonly ["agents", "commands", "fs", "skills", "userQuestions", "workflowEngine"];
 /** Manifest `dsh.compatibility` mirrored for the runtime marker check. */
 export declare const HOST_COMPATIBILITY: Readonly<{
     release: "H";
     reject: readonly string[];
     verifiedLaterReleases: readonly string[];
 }>;
+/** True when the Host declared the symbolic H workflow package contract. */
+export declare function isCompatibleHost(ctx: Context | any): boolean;
 /** Verify H's explicit compatibility declaration before package I/O. */
 export declare function assertCompatibleHost(ctx: Context | any): void;
 /** Compose the complete Host-side workflow product as one lifecycle unit. */
