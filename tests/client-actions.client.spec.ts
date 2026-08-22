@@ -365,6 +365,148 @@ describe('Client /workflows action (RC21-RC22)', () => {
     expect(actions.opened).toBe(true)
   })
 
+  it('does not reopen a restored /workflows node after refresh', async () => {
+    const pending: Promise<unknown>[] = []
+    const actions = { open() { this.opened = true }, opened: false }
+    const snapshot = {
+      openState: 'open',
+      nodes: [{ kind: 'command', seq: 9, name: 'workflows' }],
+    }
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined, $on: () => () => undefined },
+      sessions: {
+        list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined },
+        binding() {
+          return {
+            session: {
+              getSnapshot: () => snapshot,
+              subscribe() { return () => undefined },
+            },
+          }
+        },
+      },
+      slots: {
+        inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
+        register(entry: any) { entry.inject?.(actions); return () => undefined },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        register: () => () => undefined,
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    expect(actions.opened).toBe(false)
+  })
+
+  it('baselines history after the session finishes loading instead of reopening it', async () => {
+    const pending: Promise<unknown>[] = []
+    const actions = { open() { this.opened = true }, opened: false }
+    let snapshot: { openState: string; nodes: Array<{ kind: string; seq: number; name: string }> } = {
+      openState: 'cold',
+      nodes: [],
+    }
+    const sessionListeners = new Set<() => void>()
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined, $on: () => () => undefined },
+      sessions: {
+        list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined },
+        binding() {
+          return {
+            session: {
+              getSnapshot: () => snapshot,
+              subscribe(listener: () => void) {
+                sessionListeners.add(listener)
+                return () => { sessionListeners.delete(listener) }
+              },
+            },
+          }
+        },
+      },
+      slots: {
+        inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
+        register(entry: any) { entry.inject?.(actions); return () => undefined },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        register: () => () => undefined,
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    snapshot = {
+      openState: 'loading',
+      nodes: [{ kind: 'command', seq: 9, name: 'workflows' }],
+    }
+    for (const listener of sessionListeners) listener()
+    expect(actions.opened).toBe(false)
+    snapshot = {
+      openState: 'open',
+      nodes: [{ kind: 'command', seq: 9, name: 'workflows' }],
+    }
+    for (const listener of sessionListeners) listener()
+    expect(actions.opened).toBe(false)
+    snapshot = {
+      openState: 'open',
+      nodes: [
+        { kind: 'command', seq: 9, name: 'workflows' },
+        { kind: 'command', seq: 10, name: 'workflows' },
+      ],
+    }
+    for (const listener of sessionListeners) listener()
+    expect(actions.opened).toBe(true)
+  })
+
+  it('does not auto-open when a restored command-row mounts; click still reopens', async () => {
+    const pending: Promise<unknown>[] = []
+    const actions = { open() { this.opened = true }, opened: false }
+    let commandRow: ((props: any) => unknown) | undefined
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined, $on: () => () => undefined },
+      sessions: {
+        list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined },
+      },
+      slots: {
+        inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
+        register(entry: any, component?: (props: any) => unknown) {
+          entry.inject?.(actions)
+          if (entry?.key === 'workflows') commandRow = component
+          return () => undefined
+        },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        register: () => () => undefined,
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    expect(typeof commandRow).toBe('function')
+    commandRow!({ node: { seq: 8, name: 'workflows', outcome: { kind: 'error' } } })
+    const element = commandRow!({ node: { seq: 9, name: 'workflows', outcome: { kind: 'success', text: 'Opened the workflow dashboard.' } } }) as { props?: any }
+    expect(actions.opened).toBe(false)
+    const button = Array.isArray(element?.props?.children)
+      ? element.props.children.find((child: { type?: unknown }) => child?.type === 'button')
+      : undefined
+    button?.props?.onClick?.()
+    expect(actions.opened).toBe(true)
+  })
+
   it('fails loud when the definition picker Remote is missing and keeps argued /workflows in the command plane', async () => {
     const pending: Promise<unknown>[] = []
     const decorated: any[] = []

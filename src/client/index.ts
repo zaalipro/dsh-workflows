@@ -1,4 +1,4 @@
-import { createElement, useEffect, useSyncExternalStore, type ReactElement } from 'react'
+import { createElement, useSyncExternalStore, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import TYPERT_REMOTE from '@zaalipro/dsh-workflows/remote'
@@ -188,6 +188,11 @@ function listenCommandExecuted(root: AnyContext, onWorkflows: () => void): Dispo
   return () => { for (const dispose of disposers) void dispose() }
 }
 
+function conversationWatchReady(snapshot: unknown): boolean {
+  const state = (snapshot as { openState?: unknown } | undefined)?.openState
+  return state !== 'cold' && state !== 'loading'
+}
+
 function watchWorkflowsCommands(sessions: any, onWorkflows: () => void): () => void {
   let stopSession: (() => void) | undefined
   let attachedId: string | undefined
@@ -203,17 +208,29 @@ function watchWorkflowsCommands(sessions: any, onWorkflows: () => void): () => v
     if (session === undefined
       || typeof session.subscribe !== 'function'
       || typeof session.getSnapshot !== 'function') return
+    let primed = false
     let baseline = 0
-    for (const node of conversationCommandNodes(session.getSnapshot())) {
-      if (node.seq > baseline) baseline = node.seq
-    }
-    const unsubscribe = session.subscribe(() => {
-      for (const node of conversationCommandNodes(session.getSnapshot())) {
-        if (node.seq <= baseline) continue
-        baseline = node.seq
-        if (node.name === 'workflows') onWorkflows()
+    const ingest = (openNew: boolean): void => {
+      const snapshot = session.getSnapshot()
+      if (!conversationWatchReady(snapshot)) return
+      const nodes = conversationCommandNodes(snapshot)
+      if (!primed) {
+        for (const node of nodes) if (node.seq > baseline) baseline = node.seq
+        primed = true
+        return
       }
-    })
+      let sawWorkflows = false
+      let max = baseline
+      for (const node of nodes) {
+        if (node.seq <= baseline) continue
+        if (node.seq > max) max = node.seq
+        if (node.name === 'workflows') sawWorkflows = true
+      }
+      baseline = max
+      if (openNew && sawWorkflows) onWorkflows()
+    }
+    ingest(false)
+    const unsubscribe = session.subscribe(() => { ingest(true) })
     stopSession = asDisposer(unsubscribe)
   }
   attach(sessions?.list?.getSnapshot?.()?.current)
@@ -536,12 +553,6 @@ export function apply(ctx: ClientContext): void {
 
     function WorkflowsCommandRow(props: any): ReactElement {
       const node = props?.node
-      const seq = node?.seq
-      const kind = node?.outcome?.kind
-      useEffect(() => {
-        if (kind === 'error') return
-        requestOpen()
-      }, [seq, kind])
       const text = typeof node?.outcome?.text === 'string' && node.outcome.text.length > 0
         ? node.outcome.text
         : workflowsDescription
