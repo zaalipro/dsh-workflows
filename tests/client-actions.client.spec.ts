@@ -247,8 +247,8 @@ describe('Client /workflows action (RC21-RC22)', () => {
       remote: { $mount: async () => () => undefined, $on: () => () => undefined },
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: {
-        inject(_name: string, factory: () => unknown) {
-          storedFactory = factory
+        inject(name: string, factory: () => unknown) {
+          if (name === 'shell.overlay') storedFactory = factory
           return () => undefined
         },
         register(entry: any) {
@@ -276,6 +276,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
   it('opens the dashboard from Host command/executed on stock commandUi', async () => {
     const pending: Promise<unknown>[] = []
     const registered: any[] = []
+    const slotEntries: any[] = []
     const executed: Array<(sessionId: string, name: string) => void> = []
     const actions = { open() { this.opened = true }, opened: false }
     const ctx: any = {
@@ -284,7 +285,11 @@ describe('Client /workflows action (RC21-RC22)', () => {
       sessions: { list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined } },
       slots: {
         inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
-        register(entry: any) { entry.inject?.(actions); return () => undefined },
+        register(entry: any) {
+          slotEntries.push(entry)
+          entry.inject?.(actions)
+          return () => undefined
+        },
       },
       conversationEvents: { register: () => () => undefined },
       commandUi: {
@@ -301,6 +306,9 @@ describe('Client /workflows action (RC21-RC22)', () => {
     apply(ctx)
     await Promise.all(pending)
     expect(registered).toEqual([])
+    expect(slotEntries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'conversation.chat.commandview', key: 'workflows' }),
+    ]))
     expect(executed).toHaveLength(1)
     executed[0]!('s1', 'workflows')
     expect(actions.opened).toBe(true)

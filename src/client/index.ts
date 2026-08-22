@@ -1,4 +1,4 @@
-import { createElement, useSyncExternalStore, type ReactElement } from 'react'
+import { createElement, useEffect, useSyncExternalStore, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import TYPERT_REMOTE from '@zaalipro/dsh-workflows/remote'
@@ -132,18 +132,31 @@ function commandUiDispatchesActions(commandUi: object): boolean {
   return false
 }
 
+function commandNodeName(record: { name?: unknown; data?: unknown }): string | null {
+  if (typeof record.name === 'string') return record.name
+  const nested = (record.data as { name?: unknown } | undefined)?.name
+  return typeof nested === 'string' ? nested : null
+}
+
 function conversationCommandNodes(snapshot: unknown): readonly { readonly seq: number; readonly name: string | null }[] {
-  const nodes = (snapshot as { nodes?: unknown } | undefined)?.nodes
-  if (!Array.isArray(nodes)) return []
+  const record = snapshot as { nodes?: unknown; chat?: { legacy?: { nodes?: unknown } } } | undefined
+  const nodes = Array.isArray(record?.nodes)
+    ? record.nodes
+    : Array.isArray(record?.chat?.legacy?.nodes)
+      ? record.chat.legacy.nodes
+      : []
   const out: Array<{ seq: number; name: string | null }> = []
   for (const node of nodes) {
     if (typeof node !== 'object' || node === null) continue
-    const record = node as { kind?: unknown; seq?: unknown; name?: unknown }
-    if (record.kind !== 'command' || typeof record.seq !== 'number') continue
-    out.push({
-      seq: record.seq,
-      name: typeof record.name === 'string' ? record.name : null,
-    })
+    const item = node as { kind?: unknown; seq?: unknown; name?: unknown; data?: unknown }
+    if (item.kind !== 'command') continue
+    const seq = typeof item.seq === 'number'
+      ? item.seq
+      : typeof (item.data as { seq?: unknown } | undefined)?.seq === 'number'
+        ? (item.data as { seq: number }).seq
+        : undefined
+    if (seq === undefined) continue
+    out.push({ seq, name: commandNodeName(item) })
   }
   return out
 }
@@ -524,6 +537,32 @@ export function apply(ctx: ClientContext): void {
     }, DashboardContribution))
     addCleanup(overlayInjection)
     overlayMounted = overlayInjection !== undefined
+
+    function WorkflowsCommandRow(props: any): ReactElement {
+      const node = props?.node
+      const seq = node?.seq
+      const kind = node?.outcome?.kind
+      useEffect(() => {
+        if (kind === 'error') return
+        requestOpen()
+      }, [seq, kind])
+      const text = typeof node?.outcome?.text === 'string' && node.outcome.text.length > 0
+        ? node.outcome.text
+        : workflowsDescription
+      return createElement('div', { 'data-workflows-command-row': '' },
+        createElement('span', null, 'workflows'),
+        createElement('span', null, text),
+        createElement('button', {
+          type: 'button',
+          onClick: () => { requestOpen() },
+        }, workflowLocales.en.title),
+      )
+    }
+    addCleanup(asDisposer(root.slots?.inject?.('conversation.chat.commandview', () => root.slots.register({
+      name: 'conversation.chat.commandview',
+      key: 'workflows',
+      locale: NS,
+    }, WorkflowsCommandRow))))
 
     if (typeof remote?.workflowDefinitions?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',
