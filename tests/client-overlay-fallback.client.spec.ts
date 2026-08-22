@@ -57,4 +57,48 @@ describe('stock overlay fallback portal', () => {
     await act(async () => { await registered[0].ui.onSelect({ id: 'open' }, { sessionId: 's1' }) })
     host?.querySelector('button[aria-label="Close workflows"], button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
+
+  it('falls back to a portal when store open() does not mount a slot', async () => {
+    const pending: Promise<unknown>[] = []
+    const registered: any[] = []
+    const ctx: any = {
+      effect(fn: () => unknown) {
+        pending.push(Promise.resolve().then(async () => {
+          const dispose = await fn()
+          if (typeof dispose === 'function') cleanups.push(dispose)
+        }))
+      },
+      remote: {
+        $mount: async () => () => undefined,
+        $on: () => () => undefined,
+        workflowRuns: { list: async () => ({ items: [], total: 0, sessionRevision: 0, epoch: 'e' }) },
+      },
+      sessions: {
+        list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined },
+      },
+      slots: {
+        inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
+        register(entry: any) {
+          entry.inject?.({ open() { /* slot never renders */ }, close() { /* noop */ } })
+          return () => undefined
+        },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        ActionCommandUiSpec: { kind: 'action' },
+        register(contribution: any) { registered.push(contribution); return () => undefined },
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    await act(async () => {
+      registered[0].ui.run()
+      await Promise.resolve()
+    })
+    expect(document.getElementById('dsh-workflows-overlay')).toBeTruthy()
+  })
 })

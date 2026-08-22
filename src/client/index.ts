@@ -248,6 +248,14 @@ export function apply(ctx: ClientContext): void {
         captureInvoker(active)
         dashboardActions.open()
         pendingOpen = false
+        if (typeof document !== 'undefined' && liveAdapter !== undefined) {
+          queueMicrotask(() => {
+            if (document.querySelector('[data-workflows-dashboard]') === null) {
+              fallbackOpen = true
+              renderFallbackDashboard()
+            }
+          })
+        }
         return true
       }
       pendingOpen = true
