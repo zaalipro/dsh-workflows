@@ -191,6 +191,53 @@ describe('workflow supervisor validation', () => {
     }
   })
 
+  it('uses canned stubs when the engine has no validate()', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-canned-'))
+    roots.push(root)
+    const store = new MemoryStore()
+    const supervisor = new WorkflowSupervisor({
+      workflowEngine: { start() { throw new Error('validate must not start') } },
+      on: () => () => undefined,
+      emit: () => undefined,
+      logger: { warn: () => undefined },
+      workflows: { save: async () => ({ path: '/tmp/unused' }) },
+      workflowStorage: { layout: scratchLayout() },
+    }, { defaultAgentBudget: 8, maxAgentBudget: 8, maxMembersPerRun: 8 }, store)
+    await supervisor.initialize()
+    const parent = { session: { id: 'session-canned', header: { cwd: '/tmp' } } }
+    try {
+      await expect(supervisor.validate({
+        script: 'complete({ canned: true })',
+        meta: { name: 'review-changes', description: 'smoke' },
+        parent,
+        filename: '/tmp/review-changes.workflow.json',
+      })).resolves.toMatchObject({
+        ok: true, status: 'completed', value: { canned: true },
+      })
+      await expect(supervisor.validate({
+        script: 'complete({ a: 1; b: 2 })',
+        meta: { name: 'review-changes', description: 'smoke' },
+        parent,
+        filename: '/tmp/review-changes.workflow.json',
+      })).resolves.toMatchObject({
+        ok: true, status: 'completed', value: { a: 1, b: 2 },
+      })
+      const failed = await supervisor.validate({
+        script: 'foo(;)',
+        meta: { name: 'review-changes', description: 'smoke' },
+        parent,
+        filename: '/tmp/review-changes.workflow.json',
+      })
+      expect(failed.ok).toBe(false)
+      if (failed.ok) throw new Error('expected parse failure')
+      expect(failed.error).toMatch(/Unexpected token ';'/u)
+      expect(failed.error).toMatch(/commas between fields, not semicolons/u)
+      expect(store.inserted).toEqual([])
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+
   it('propagates caller cancellation without creating storage residue', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-validate-abort-'))
     roots.push(root)

@@ -28,6 +28,15 @@ describe('workflow tool request schema', () => {
     expect(parseWorkflowToolRequest({
       script: 'return 1',
       meta: { name: 'inline', description: 'inline workflow' },
+    })).toMatchObject({ validateOnly: true })
+    expect(parseWorkflowToolRequest({
+      script: 'return 1',
+      meta: { name: 'inline', description: 'inline workflow' },
+      validate_only: false,
+    })).toMatchObject({ validateOnly: false })
+    expect(parseWorkflowToolRequest({
+      script: 'return 1',
+      meta: { name: 'inline', description: 'inline workflow' },
       validate_only: true,
       agent_budget: 1024,
     })).toEqual({

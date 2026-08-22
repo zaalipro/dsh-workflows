@@ -72,7 +72,7 @@ export declare const WORKFLOW_TOOL_PARAMETERS: {
     };
     readonly script: {
         readonly type: "string";
-        readonly description: "The plain-JS workflow script body (top-level await allowed; NO `export const meta` statement). Requires `meta`.";
+        readonly description: "The plain-JS workflow script body (top-level await allowed; NO `export const meta` statement). Requires `meta`. Inline script defaults to validate_only (no live children) and saves .dsh/workflows/<meta.name>.workflow.json unless validate_only is false. Commas in object literals, never semicolons.";
     };
     readonly script_path: {
         readonly type: "string";
@@ -133,7 +133,7 @@ export declare const WORKFLOW_TOOL_PARAMETERS: {
     };
     readonly validate_only: {
         readonly type: "boolean";
-        readonly description: "Smoke-check one canned-host path instead of starting a live run (no children, no run record).";
+        readonly description: "Smoke-check one canned-host path instead of starting a live run (no children, no run record). Defaults true for inline script (and then saves the definition); defaults false for name/script_path. Never launches children.";
     };
     readonly resume_from_run_id: {
         readonly type: "string";

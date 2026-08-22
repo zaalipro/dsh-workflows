@@ -57,6 +57,7 @@ import {
   type WorkflowValidation,
 } from './types.js'
 import { WorkflowPackageError } from '../invariant.js'
+import { cannedStockValidate, repairObjectLiteralSemicolons } from './canned-validate.js'
 import { scriptWithJobMapParallel } from './parallel-compat.js'
 import {
   adaptEngineHandle,
@@ -222,6 +223,9 @@ function utf8Prefix(text: string, maxBytes: number): string {
 function rewriteValidationDiagnostic(message: string, filename: string, metaName: string): string {
   let rewritten = message
   if (metaName.length > 0) rewritten = rewritten.replaceAll(`workflow:${metaName}`, filename)
+  if (/Unexpected token ';'/u.test(rewritten)) {
+    rewritten += '\nHint: this is plain JavaScript — object and array literals use commas between fields, not semicolons.'
+  }
   if (rewritten.includes(filename)) return rewritten
   return `${filename}: ${rewritten}`
 }
@@ -1952,17 +1956,19 @@ export class WorkflowSupervisor {
       metaName = source.meta.name
       const budget = this.resolveBudget(spec.agentBudget)
       const args = this.snapshotArgs(spec.args)
+      const script = repairObjectLiteralSemicolons(source.script)
       const engine = this.ctx?.workflowEngine
-      if (typeof engine?.validate !== 'function') {
-        return { ok: false, status: 'error', error: `${spec.filename}: workflow engine validation is unavailable` }
-      }
-      const result = await engine.validate({
-        script: scriptWithJobMapParallel(source.script),
-        meta: source.meta,
-        args,
-        maxTotalAgents: budget,
-        ...(spec.signal === undefined ? {} : { signal: spec.signal }),
-      })
+      const result = typeof engine?.validate === 'function'
+        ? await engine.validate({
+          script: scriptWithJobMapParallel(script),
+          meta: source.meta,
+          args,
+          maxTotalAgents: budget,
+          ...(spec.signal === undefined ? {} : { signal: spec.signal }),
+        })
+        : await cannedStockValidate(script, args, {
+          filename: spec.filename ?? `workflow:${metaName}`,
+        })
       return this.presentValidation(result, spec.filename, metaName)
     } catch (error) {
       if (spec.signal?.aborted) throw error

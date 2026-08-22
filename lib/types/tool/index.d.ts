@@ -27,6 +27,7 @@ type WorkflowToolOutput = {
     status: 'validated';
     ok: true;
     result?: JsonValue;
+    saved_path?: string;
 };
 export interface WorkflowToolServices {
     readonly registry: WorkflowRegistry;

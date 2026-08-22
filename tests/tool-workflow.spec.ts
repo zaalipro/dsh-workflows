@@ -55,10 +55,21 @@ function services(overrides: Record<string, unknown> = {}) {
       return { displayName: 'audit', runId }
     },
   }
+  const saved: any[] = []
   const registry = {
     async get(name: string, options?: { cwd?: string }) {
       if (name !== 'audit') return undefined
       return { name: 'audit', description: 'd', script: SCRIPT, path: '/tmp/audit.workflow.json', scope: 'project', cwd: options?.cwd }
+    },
+    async save(envelope: { meta: { name: string }; script: string }, options: { cwd?: string; scope?: string }) {
+      saved.push({ envelope, options })
+      return {
+        name: envelope.meta.name,
+        description: 'd',
+        script: envelope.script,
+        path: `/tmp/.dsh/workflows/${envelope.meta.name}.workflow.json`,
+        scope: options.scope ?? 'project',
+      }
     },
   }
   return {
@@ -68,6 +79,7 @@ function services(overrides: Record<string, unknown> = {}) {
     launched,
     validated,
     resumed,
+    saved,
     ...overrides,
   }
 }
@@ -87,7 +99,9 @@ describe('workflow tool execute (SH21)', () => {
     const deps = services()
     const parent = agent()
     const tool = createWorkflowTool(deps as any)
-    await expect(tool.execute({ script: SCRIPT, meta: META, args: { files: ['a.ts'] }, agent_budget: 32 }, exec({ agent: parent }))).resolves.toEqual({
+    await expect(tool.execute({
+      script: SCRIPT, meta: META, args: { files: ['a.ts'] }, agent_budget: 32, validate_only: false,
+    }, exec({ agent: parent }))).resolves.toEqual({
       status: 'started', displayName: 'audit', runId: 'logical-1', script_path: '/tmp/audit.js',
     })
     expect(deps.launched[0]).toMatchObject({ script: SCRIPT, meta: META, args: { files: ['a.ts'] }, agentBudget: 32, parent })
@@ -118,9 +132,93 @@ describe('workflow tool execute (SH21)', () => {
       return { status: 'started', displayName: spec.meta.name, runId: 'logical-1' }
     }
     const tool = createWorkflowTool(deps as any)
-    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent() }))).resolves.toEqual({
+    await expect(tool.execute({ script: SCRIPT, meta: META, validate_only: false }, exec({ agent: agent() }))).resolves.toEqual({
       status: 'started', displayName: 'audit', runId: 'logical-1',
     })
+  })
+
+  it('does not save when validate_only is used on a named definition', async () => {
+    const deps = services()
+    const tool = createWorkflowTool(deps as any)
+    await expect(tool.execute({ name: 'audit', validate_only: true }, exec({ agent: agent('/repo') }))).resolves.toEqual({
+      status: 'validated', ok: true, result: { smoke: true },
+    })
+    expect(deps.saved).toEqual([])
+    expect(deps.launched).toEqual([])
+  })
+
+  it('defaults inline script calls to validate_only so authoring never launches children', async () => {
+    const deps = services()
+    const tool = createWorkflowTool(deps as any)
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent() }))).resolves.toEqual({
+      status: 'validated', ok: true, result: { smoke: true },
+    })
+    expect(deps.launched).toEqual([])
+    expect(deps.validated).toHaveLength(1)
+    expect(deps.saved).toEqual([])
+  })
+
+  it('saves an inline smoke to the project registry when the session has a cwd', async () => {
+    const deps = services()
+    const tool = createWorkflowTool(deps as any)
+    const parent = agent('/repo')
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: parent }))).resolves.toEqual({
+      status: 'validated',
+      ok: true,
+      result: { smoke: true },
+      saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
+    })
+    expect(deps.saved).toEqual([{
+      envelope: { meta: META, script: SCRIPT },
+      options: { scope: 'project', cwd: '/repo', signal: SIGNAL },
+    }])
+    expect(deps.launched).toEqual([])
+  })
+
+  it('repairs object-literal semicolons before smoke and save', async () => {
+    const deps = services()
+    const tool = createWorkflowTool(deps as any)
+    const parent = agent('/repo')
+    await expect(tool.execute({
+      script: 'complete({ a: 1; b: 2 })',
+      meta: META,
+    }, exec({ agent: parent }))).resolves.toMatchObject({
+      status: 'validated',
+      saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
+    })
+    expect(deps.validated[0].script).toBe('complete({ a: 1, b: 2 })')
+    expect(deps.saved[0].envelope.script).toBe('complete({ a: 1, b: 2 })')
+  })
+
+  it('keeps a successful smoke when project save throws or returns no path', async () => {
+    const deps = services()
+    deps.registry.save = async () => { throw new Error('disk full') }
+    const tool = createWorkflowTool(deps as any)
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
+      status: 'validated', ok: true, result: { smoke: true },
+    })
+    deps.registry.save = async () => ({ name: 'audit', path: '' })
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
+      status: 'validated', ok: true, result: { smoke: true },
+    })
+    const noSave = services()
+    delete (noSave.registry as { save?: unknown }).save
+    const toolNoSave = createWorkflowTool(noSave as any)
+    await expect(toolNoSave.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
+      status: 'validated', ok: true, result: { smoke: true },
+    })
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('   ') }))).resolves.toEqual({
+      status: 'validated', ok: true, result: { smoke: true },
+    })
+    const withSave = services()
+    const toolSave = createWorkflowTool(withSave as any)
+    await expect(toolSave.execute({ script: SCRIPT, meta: META }, { agent: agent('/repo') })).resolves.toEqual({
+      status: 'validated',
+      ok: true,
+      result: { smoke: true },
+      saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
+    })
+    expect(withSave.saved[0].options).toEqual({ scope: 'project', cwd: '/repo' })
   })
 
   it('validate_only returns canonical JSON and never records a Chat prefix', async () => {
@@ -183,8 +281,12 @@ describe('workflow tool execute (SH21)', () => {
     expect(tool.output.schema).toMatchObject({ oneOf: [{}, {}, {}] })
     expect(tool.parameters).toMatchObject({ type: 'object' })
     expect(tool.description).toContain('Launch is BACKGROUND')
+    expect(tool.description).toContain('SAVES')
     expect(tool.description).not.toContain('The run executes in the foreground')
     expect(JSON.stringify(tool.output.schema)).not.toContain('agentsStarted')
+    expect(tool.output.render!({}, { status: 'validated', ok: true, result: { smoke: true } } as any)).toEqual([
+      { type: 'text', text: renderLaunch({ status: 'validated', ok: true, result: { smoke: true } }) },
+    ])
   })
 
   it('renders validated coverage text without putting the logical id in prose besides JSON', () => {
@@ -192,7 +294,11 @@ describe('workflow tool execute (SH21)', () => {
     expect(validated).toContain('workflow smoke check passed.')
     expect(validated).toContain(VALIDATION_NOTE)
     expect(validated).toContain('… [truncated]')
+    expect(validated).toContain('Not saved.')
     expect(renderLaunch({ status: 'validated', ok: true })).toContain('null')
+    expect(renderLaunch({
+      status: 'validated', ok: true, saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
+    })).toContain('Saved /tmp/.dsh/workflows/audit.workflow.json')
     expect(renderLaunch({ status: 'started', displayName: 'audit', runId: 'logical-1' })).toBe(
       '{"status":"started","displayName":"audit","runId":"logical-1"}',
     )

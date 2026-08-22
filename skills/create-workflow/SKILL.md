@@ -9,6 +9,8 @@ model-invocable: true
 
 Author a saved workflow: a deterministic JavaScript orchestration script that fans out subagents. The script — not the model turn — holds the loop, the fan-out, the branching, and the intermediate results; child agents do the judgment, the script shards work and verifies. Do not write Rhai.
 
+**This turn fails unless `.dsh/workflows/<name>.workflow.json` exists.** Chat, repo walks, interviews, and live child launches are not a saved workflow.
+
 ## Fast path (default)
 
 If `/create-workflow` already states a usable objective (what to do, and optionally how many agents / what fans out), skip the interview. Do not call `ask_user_question`. Do not explore the workspace first — child agents inspect the code at run time.
@@ -16,9 +18,19 @@ If `/create-workflow` already states a usable objective (what to do, and optiona
 In this same turn after the skill is loaded:
 
 1. Infer a kebab `meta.name`, project save scope (`.dsh/workflows/`), and a simple fan-out. If they named an agent count, stay at or under it (default 8). Add adversarial verification only when it still fits that budget; otherwise skip it and say so.
-2. Author the `{ meta, script }` envelope. Prefer `complete(value)` (this package injects it on stock). Do not use `minItems`/`maxItems`.
-3. Run the workflow tool with `validate_only: true` and representative args.
-4. Save only after validation succeeds. Report path, smoke limits, and `/workflow <name>` / `/<name>`. Offer a real launch; do not force it.
+2. Author the `{ meta, script }` envelope as **plain JavaScript** (commas in object/array literals, never semicolons — `{ a: 1, b: 2 }` not `{ a: 1; b: 2 }`). `Unexpected token ';'` means you put `;` inside `{ ... }`. Prefer `complete(value)`. Do not use `minItems`/`maxItems`.
+3. Call the workflow tool with inline `script` + `meta` only. Inline script **defaults to `validate_only`** (canned stubs, no live children) and **SAVES** `.dsh/workflows/<name>.workflow.json`. Do not pass `validate_only: false`. Do not launch `/workflow <name>` yet.
+4. If smoke fails with a parse error, fix commas and retry once. If the tool result has no `saved_path`, write `.dsh/workflows/<name>.workflow.json` yourself with exactly `{ meta, script }`.
+5. Report the path, smoke limits, and `/workflow <name>`. Offer a live launch; do not start children until the user agrees.
+
+Copy this call shape (plain JS, commas, no `validate_only: false`):
+
+```js
+workflow({
+  meta: { name: "review-changes", description: "Review a diff and verify findings" },
+  script: "phase(\"Review\");\ncomplete({ ok: true });",
+})
+```
 
 Ask in ordinary chat (not a picker) only when the objective is empty or contradictory. One short question max.
 
@@ -90,6 +102,7 @@ Default scratch quotas are 4,096 operations, 64 pending operations, 64 files, 1 
 - Silent truncation is not coverage; `log()` whatever a `MAX_*` cap dropped.
 - Agents do not enforce invariants — the script does. Filter and assert in JavaScript.
 - A complete `/create-workflow` brief is enough — do not stall on `ask_user_question` or a repo walk.
+- Do not pass `validate_only: false` while authoring. That launches live children and the parent tool call can sit for tens of minutes. Inline script already defaults to smoke + save.
 - Do not put `minItems`/`maxItems` on schemas; bound counts in the prompt and clip in JavaScript.
 - Do not put `meta` in JavaScript, use TypeScript/export syntax, add unsupported agent options such as `fork_context`, mix thunk and declarative parallel forms in one call, assume `null` is success, omit verification, hide truncation, use nondeterministic globals, use nested workflows, or claim validate-only exhaustively proves the workflow.
 
