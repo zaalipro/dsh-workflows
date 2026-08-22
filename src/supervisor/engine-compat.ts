@@ -103,6 +103,10 @@ export function adaptEngineHandle(raw: unknown): EngineHandle | undefined {
     async dispose() {
       try {
         await disposeRaw()
+      } catch {
+        // Stock WorkerRun.dispose() can throw after the worker has already
+        // died (`undefined.disposed`). The supervisor treats cleanup errors
+        // as terminal, so contain them here and still allow checkpoint().
       } finally {
         disposed = true
       }

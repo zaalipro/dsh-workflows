@@ -131,7 +131,7 @@ describe('stock engine handle compatibility', () => {
       dispose: async () => { throw new Error('already gone') },
     })
     await afterFailedDispose!.result
-    await expect(afterFailedDispose!.dispose()).rejects.toThrow(/already gone/u)
+    await expect(afterFailedDispose!.dispose()).resolves.toBeUndefined()
     expect(afterFailedDispose!.checkpoint()).toEqual({ journal: [], agentSpend: 2, agentSeq: 2 })
     expect(() => rejectPartialEngineHandle(undefined)).not.toThrow()
     expect(() => rejectPartialEngineHandle({})).not.toThrow()
