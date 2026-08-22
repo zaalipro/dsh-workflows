@@ -101,3 +101,52 @@ export function snapshotWorkflowJsonValue(value: unknown): JsonValue {
 
   return walk(value)
 }
+
+function assistantTextBlocks(message: unknown): string {
+  const content = (message as { content?: unknown } | undefined)?.content
+  if (!Array.isArray(content)) {
+    return typeof (message as { text?: unknown } | undefined)?.text === 'string'
+      ? String((message as { text: string }).text).trim()
+      : ''
+  }
+  const parts: string[] = []
+  for (const block of content) {
+    if (typeof block !== 'object' || block === null) continue
+    if ((block as { type?: unknown }).type !== 'text') continue
+    if (typeof (block as { text?: unknown }).text !== 'string') continue
+    const text = (block as { text: string }).text.trim()
+    if (text.length > 0) parts.push(text)
+  }
+  return parts.join('\n')
+}
+
+/** Last non-empty assistant/message text in a child session log. */
+export function lastAssistantText(events: unknown): string | undefined {
+  if (!Array.isArray(events)) return undefined
+  let last: string | undefined
+  for (const event of events) {
+    if (typeof event !== 'object' || event === null) continue
+    if ((event as { type?: unknown }).type !== 'assistant/message') continue
+    const data = (event as { data?: unknown }).data
+    const message = (data as { message?: unknown } | undefined)?.message ?? data
+    const text = assistantTextBlocks(message)
+    if (text.length > 0) last = text
+  }
+  return last
+}
+
+/** Recover a stock child agent's reply when journal-commit never fired. */
+export function childTranscriptValue(ctx: unknown, childId: unknown): JsonValue | undefined {
+  if (typeof childId !== 'string' || childId.length === 0) return undefined
+  try {
+    const record = ctx as { agents?: { get?: (id: string) => unknown }; get?: (name: string) => unknown }
+    const agents = record?.agents ?? (typeof record?.get === 'function' ? record.get('agents') : undefined)
+    const child = (agents as { get?: (id: string) => unknown } | undefined)?.get?.(childId) as
+      { session?: { events?: unknown } } | undefined
+    const text = lastAssistantText(child?.session?.events)
+    if (text === undefined) return undefined
+    return snapshotWorkflowJsonValue(text)
+  } catch {
+    return undefined
+  }
+}

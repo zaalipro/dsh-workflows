@@ -16,7 +16,7 @@ import type {
 import { openPrivateDirectory } from './storage/private-root.js'
 import { openRunScratch, type ScratchStoreOptions, type WorkflowScratchStore } from './storage/run-files.js'
 import { WorkflowCompletionNotifier } from './completion-notice.js'
-import { snapshotWorkflowJsonValue, workflowRunValueView } from './value-view.js'
+import { childTranscriptValue, snapshotWorkflowJsonValue, workflowRunValueView } from './value-view.js'
 import {
   VALIDATION_NOTE,
   type SupervisedWorkflowRunId,
@@ -472,6 +472,7 @@ export class WorkflowSupervisor {
           if (raw !== undefined) {
             try { captured = snapshotWorkflowJsonValue(raw) } catch { captured = undefined }
           }
+          captured ??= childTranscriptValue(this.ctx, member?.childId ?? members[index]!.childSessionId)
         }
         const stored = {
           ...members[index]!, status, settledAt: Date.now(),
@@ -1634,10 +1635,17 @@ export class WorkflowSupervisor {
     const members = await this.readAllMembers(String(request.runId), signal)
     const member = members.find(candidate => candidate.memberId === String(request.memberId))
     if (member === undefined) throw new WorkflowPackageError('workflow member was not found in this run', 'WORKFLOW_RUN_NOT_FOUND')
+    let outcome = valueViewFromStored(member.value, member.outcome, this.config.memberOutcomeMaxBytes)
+    if (outcome.state === 'not-produced' || (outcome.state === 'pending' && member.status !== 'running')) {
+      const recovered = childTranscriptValue(this.ctx, member.childSessionId)
+      if (recovered !== undefined) {
+        outcome = valueViewFromStored(recovered, 'available', this.config.memberOutcomeMaxBytes)
+      }
+    }
     return {
       member: this.memberHead(member),
       ...(member.childSessionId === undefined ? {} : { childSessionId: member.childSessionId }),
-      outcome: valueViewFromStored(member.value, member.outcome, this.config.memberOutcomeMaxBytes),
+      outcome,
     }
   }
 

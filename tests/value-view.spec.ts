@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  childTranscriptValue,
+  lastAssistantText,
   snapshotWorkflowJsonValue,
   workflowRunValueView,
 } from '../src/supervisor/value-view.js'
@@ -107,5 +109,38 @@ describe('snapshotWorkflowJsonValue', () => {
     const decorated = [1] as number[] & { extra?: number }
     decorated.extra = 2
     expect(() => snapshotWorkflowJsonValue(decorated)).toThrow(/sparse or decorated/u)
+  })
+})
+
+describe('lastAssistantText', () => {
+  it('returns the last non-empty assistant/message text', () => {
+    expect(lastAssistantText([
+      { type: 'user/message', data: { content: [{ type: 'text', text: 'hi' }] } },
+      { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'alpha' }] } } },
+      { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: '' }] } } },
+      { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'beta' }] } } },
+    ])).toBe('beta')
+  })
+})
+
+describe('childTranscriptValue', () => {
+  it('snapshots the child session assistant text through ctx.agents.get', () => {
+    const ctx = {
+      agents: {
+        get(id: string) {
+          if (id !== 'child-1') return undefined
+          return {
+            session: {
+              events: [
+                { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'alpha' }] } } },
+              ],
+            },
+          }
+        },
+      },
+    }
+    expect(childTranscriptValue(ctx, 'child-1')).toBe('alpha')
+    expect(childTranscriptValue(ctx, 'missing')).toBeUndefined()
+    expect(childTranscriptValue({}, 'child-1')).toBeUndefined()
   })
 })
