@@ -78,6 +78,13 @@ const MAX_PICKER_DEFINITIONS = 4_096
 interface WorkflowActionCommandUi {
   readonly kind: 'action'
   run(session?: unknown): void | Promise<void>
+  /**
+   * Stock dsh 0.1.1-rc.2 always opens a popupSelect shell for every client
+   * contribution, including `kind: 'action'`. These extras open the dashboard
+   * instead of hanging on "Loading options…".
+   */
+  options?(session: any, signal: AbortSignal): Promise<readonly { readonly id: string; readonly label: string; readonly detail?: string }[]>
+  onSelect?(option: any, session: any): void | Promise<void>
 }
 
 interface WorkflowPopupSelectCommandUi {
@@ -183,6 +190,7 @@ export function apply(ctx: ClientContext): void {
     }
     let dashboardActions: WorkflowsStoreInstance['actions'] | undefined
     let overlayMounted = false
+    let pendingOpen = false
     let remoteDisposer: unknown
     let overlayState: { readonly invoker: HTMLElement | null } = { invoker: null }
     const overlayListeners = new Set<() => void>()
@@ -195,6 +203,19 @@ export function apply(ctx: ClientContext): void {
         ? document.activeElement
         : null
       publishOverlay({ invoker: element ?? active })
+    }
+    const openDashboard = (): boolean => {
+      if (dashboardActions === undefined || typeof dashboardActions.open !== 'function') {
+        pendingOpen = true
+        return false
+      }
+      const active = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null
+      captureInvoker(active)
+      dashboardActions.open()
+      pendingOpen = false
+      return true
     }
     addCleanup(root.locale?.register?.(NS, workflowLocales))
     const commandUi = requireCommandUi(root.commandUi)
@@ -212,12 +233,13 @@ export function apply(ctx: ClientContext): void {
           if (!overlayMounted || dashboardActions === undefined || typeof dashboardActions.open !== 'function') {
             throw new Error('workflow dashboard overlay is not mounted')
           }
-          const active = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-            ? document.activeElement
-            : null
-          captureInvoker(active)
-          dashboardActions.open()
+          openDashboard()
         },
+        options: async () => {
+          openDashboard()
+          return [{ id: 'open', label: workflowsDescription, detail: 'Live runs and subagent traces' }]
+        },
+        onSelect: async () => { openDashboard() },
       },
     })))
 
@@ -330,7 +352,13 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       store: createWorkflowsStore,
       inject: (actions?: WorkflowsStoreInstance['actions']) => {
-        if (actions !== undefined && typeof actions.open === 'function') dashboardActions = actions
+        if (actions !== undefined && typeof actions.open === 'function') {
+          dashboardActions = actions
+          if (pendingOpen) {
+            pendingOpen = false
+            actions.open()
+          }
+        }
         return { operations: liveAdapter, hooks: { workflowRuns: liveAdapter.source } }
       },
     }, DashboardContribution))

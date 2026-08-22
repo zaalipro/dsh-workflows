@@ -439,7 +439,7 @@ describe('WorkflowsDashboard (RC14-RC18)', () => {
     expect(css).toContain('@media (max-width: 320px)')
     expect(css).toContain('min-height: 44px')
     expect(css).toContain('min-width: 44px')
-    expect(css).toContain('z-index: 1000')
+    expect(css).toContain('z-index: 2000')
     expect(css).toContain(':has([data-workflows-dashboard])')
     expect(css).not.toContain(':has(> [data-workflows-dashboard])')
     expect(css).not.toContain('100vw')

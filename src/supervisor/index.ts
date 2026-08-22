@@ -53,10 +53,17 @@ import {
 } from './types.js'
 import { WorkflowPackageError } from '../invariant.js'
 import { scriptWithJobMapParallel } from './parallel-compat.js'
+import {
+  adaptEngineHandle,
+  rejectPartialEngineHandle,
+  type EngineHandle,
+  type EngineResult,
+} from './engine-compat.js'
 
 export * from './types.js'
 export * from './value-view.js'
 export * from './completion-notice.js'
+export * from './engine-compat.js'
 
 export interface SupervisorConfig {
   readonly defaultAgentBudget?: number
@@ -119,22 +126,6 @@ interface WorkflowCheckpoint {
   readonly journal: readonly WorkflowJournalEntry[]
   readonly agentSpend: number
   readonly agentSeq: number
-}
-interface EngineResult {
-  readonly value: unknown
-  readonly stopReason: 'completed'|'cancelled'|'error'
-  readonly error?: string
-  readonly errorCode?: string
-  readonly agentsStarted: number
-}
-interface EngineHandle {
-  readonly id: string
-  readonly result: Promise<EngineResult>
-  cancel(reason?: string): void
-  resume(): void
-  release(): void
-  checkpoint(): WorkflowCheckpoint
-  dispose(): Promise<void>
 }
 type AttemptIntent = 'running'|'pause'|'stop'|'teardown'
 interface AttemptOutcome { readonly result: EngineResult; readonly checkpoint?: WorkflowCheckpoint; readonly cleanupError?: string }
@@ -795,20 +786,13 @@ export class WorkflowSupervisor {
         },
       }),
     }
-    let handle: EngineHandle
-    try { handle = engine.start(request) as EngineHandle } catch (error) {
+    let raw: unknown
+    try { raw = engine.start(request) } catch (error) {
       throw new WorkflowPackageError(`workflow engine could not start: ${renderThrown(error)}`, 'WORKFLOW_INVALID_STATE', { cause: error })
     }
-    if (handle == null
-      || typeof handle.result?.then !== 'function'
-      || typeof handle.cancel !== 'function'
-      || typeof handle.release !== 'function'
-      || typeof handle.resume !== 'function'
-      || typeof handle.dispose !== 'function'
-      || typeof handle.checkpoint !== 'function') {
-      const partial = handle as Partial<EngineHandle> | undefined
-      try { partial?.cancel?.('invalid workflow run handle') } catch { /* contained */ }
-      if (typeof partial?.dispose === 'function') void partial.dispose().catch(() => undefined)
+    const handle = adaptEngineHandle(raw)
+    if (handle === undefined) {
+      rejectPartialEngineHandle(raw)
       throw new WorkflowPackageError('workflow engine returned an invalid run handle', 'WORKFLOW_INVALID_STATE')
     }
     const executionId = typeof handle.id === 'string' && handle.id.length > 0 ? handle.id : opaqueId<string>()

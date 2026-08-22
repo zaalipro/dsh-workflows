@@ -4,6 +4,7 @@ import { type SupervisedWorkflowRunId, type WorkflowGateId, type WorkflowLaunche
 export * from './types.js';
 export * from './value-view.js';
 export * from './completion-notice.js';
+export * from './engine-compat.js';
 export interface SupervisorConfig {
     readonly defaultAgentBudget?: number;
     readonly maxAgentBudget?: number;

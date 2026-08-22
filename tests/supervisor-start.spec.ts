@@ -268,7 +268,7 @@ describe('workflow supervisor start', () => {
     }
   })
 
-  it('rejects an engine handle missing release/resume/checkpoint without publishing', async () => {
+  it('rejects an engine handle missing cancel/dispose without keeping it live', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-invalid-'))
     roots.push(root)
     const store = new MemoryStore(root)
@@ -277,8 +277,6 @@ describe('workflow supervisor start', () => {
       workflowEngine: {
         start: () => ({
           result: Promise.resolve({ value: null, stopReason: 'completed', agentsStarted: 0 }),
-          cancel() { /* rc8 */ },
-          dispose: async () => undefined,
         }),
       },
       on: bus.on.bind(bus),
@@ -297,6 +295,44 @@ describe('workflow supervisor start', () => {
       })
       const rows = await store.readSession('session-start')
       expect(rows[0]?.status).toBe('failed')
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+
+  it('admits a stock RC8 handle that only exposes result/cancel/dispose', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-stock-handle-'))
+    roots.push(root)
+    const store = new MemoryStore(root)
+    const bus = new EventBus()
+    let settle!: (value: any) => void
+    const result = new Promise(resolve => { settle = resolve })
+    const supervisor = new WorkflowSupervisor({
+      workflowEngine: {
+        start: () => ({
+          id: 'stock-execution',
+          result,
+          cancel() { /* rc8 */ },
+          dispose: async () => undefined,
+        }),
+      },
+      on: bus.on.bind(bus),
+      emit: bus.emit.bind(bus),
+      logger: { warn: () => undefined },
+      workflows: { save: async () => ({ path: '/tmp/unused' }) },
+      workflowStorage: { layout: scratchLayout() },
+    }, { defaultAgentBudget: 8, maxAgentBudget: 8, maxMembersPerRun: 8 }, store)
+    await supervisor.initialize()
+    const agent = parent()
+    try {
+      const launched = await supervisor.start({
+        script: 'return 1', meta: { name: 'stock-engine', description: 'rc8' }, parent: agent, agentBudget: 2,
+      })
+      expect(launched.displayName).toBe('stock-engine')
+      expect((await store.readSession('session-start'))[0]?.status).toBe('running')
+      settle({ value: { ok: true }, stopReason: 'completed', agentsStarted: 1 })
+      await supervisor.whenOwnerQuiescent(agent)
+      expect((await store.readSession('session-start'))[0]?.status).toBe('completed')
     } finally {
       await supervisor.dispose()
     }

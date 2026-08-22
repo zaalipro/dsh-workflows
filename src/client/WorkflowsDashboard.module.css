@@ -4,13 +4,13 @@
 }
 
 :global([data-shell-overlay]:has([data-workflows-dashboard])) {
-  z-index: 1000;
+  z-index: 2000;
 }
 
 .dashboard {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 2000;
   display: flex;
   width: 100%;
   max-width: 100%;
@@ -215,6 +215,37 @@
 
 .runRow[data-selected='true'] {
   box-shadow: inset .25rem 0 0 var(--dsw-alias-state-business-primary);
+}
+
+.runRow[data-status='running'] .runTitle span,
+.memberGroup button[data-status='running'] span:nth-child(2) {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.runRow[data-status='running'] .runTitle span::before,
+.memberGroup button[data-status='running'] span:nth-child(2)::before {
+  display: inline-block;
+  width: .45rem;
+  height: .45rem;
+  margin-right: .35rem;
+  border-radius: 999px;
+  background: currentColor;
+  animation: workflowPulse 1.2s ease-in-out infinite;
+  content: '';
+}
+
+.runRow[data-status='failed'] .runTitle span,
+.memberGroup button[data-status='failed'] span:nth-child(2) {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.runRow[data-status='completed'] .runTitle span,
+.memberGroup button[data-status='completed'] span:nth-child(2) {
+  color: var(--dsw-alias-label-secondary);
+}
+
+@keyframes workflowPulse {
+  50% { opacity: .35 }
 }
 
 .runRow > span {

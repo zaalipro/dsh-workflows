@@ -135,6 +135,16 @@ describe('Client /workflows action (RC21-RC22)', () => {
     expect(registered[0].description).not.toMatch(/[0-9a-f]{32}/u)
     registered[0].ui.run()
     expect(actions.opened).toBe(true)
+    actions.opened = false
+    await expect(registered[0].ui.options({ sessionId: 's1' }, new AbortController().signal)).resolves.toEqual([{
+      id: 'open',
+      label: workflowLocales.zh.commandDescription,
+      detail: 'Live runs and subagent traces',
+    }])
+    expect(actions.opened).toBe(true)
+    actions.opened = false
+    await registered[0].ui.onSelect({ id: 'open' }, { sessionId: 's1' })
+    expect(actions.opened).toBe(true)
 
     expect(decorated[0]).toMatchObject({ name: 'workflow', ui: { kind: 'popupSelect' } })
     const options = await decorated[0].ui.options({ sessionId: 's1' }, new AbortController().signal)
@@ -230,6 +240,50 @@ describe('Client /workflows action (RC21-RC22)', () => {
     apply(ctx)
     await Promise.all(pending)
     expect(() => registered[0].ui.run()).toThrow(/workflow dashboard overlay is not mounted/u)
+    await expect(registered[0].ui.options({ sessionId: 's1' }, new AbortController().signal)).resolves.toEqual([{
+      id: 'open',
+      label: workflowLocales.en.commandDescription,
+      detail: 'Live runs and subagent traces',
+    }])
+  })
+
+  it('opens a pending dashboard after a late overlay inject', async () => {
+    const pending: Promise<unknown>[] = []
+    const registered: any[] = []
+    let storedFactory: (() => unknown) | undefined
+    const actions = {
+      open() { this.opened = true },
+      opened: false,
+    }
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined, $on: () => () => undefined },
+      sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
+      slots: {
+        inject(_name: string, factory: () => unknown) {
+          storedFactory = factory
+          return () => undefined
+        },
+        register(entry: any) {
+          entry.inject?.(actions)
+          return () => undefined
+        },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: actionCommandUi({
+        register(contribution: any) { registered.push(contribution); return () => undefined },
+        decorate: () => () => undefined,
+      }),
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    await registered[0].ui.options({ sessionId: 's1' }, new AbortController().signal)
+    expect(actions.opened).toBe(false)
+    storedFactory?.()
+    expect(actions.opened).toBe(true)
   })
 
   it('fails loud when the definition picker Remote is missing and keeps argued /workflows in the command plane', async () => {

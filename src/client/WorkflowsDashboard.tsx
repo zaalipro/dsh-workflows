@@ -1077,7 +1077,7 @@ export function WorkflowsDashboard({
                       <section key={group.key} className={css.memberGroup} aria-label={groupLabel}>
                         <h3>{groupLabel}</h3>
                         {group.members.map(member => (
-                          <button key={member.memberId} type="button" data-workflow-member-id={member.memberId} aria-pressed={selectedMemberId === member.memberId} onClick={() => selectMember(member.memberId)}>
+                          <button key={member.memberId} type="button" data-workflow-member-id={member.memberId} data-status={member.status} aria-pressed={selectedMemberId === member.memberId} onClick={() => selectMember(member.memberId)}>
                             <span>{member.label === '' ? 'Unnamed member' : member.label}</span>
                             <span>{labels.memberStatus[member.status]}</span>
                             <span>{labels.outcome[member.outcome]}</span>
@@ -1121,6 +1121,7 @@ function RunRow({ run, selected, onSelect, labels, now }: {
       type="button"
       className={css.runRow}
       data-selected={selected ? 'true' : 'false'}
+      data-status={run.status}
       data-workflow-run-id={run.runId}
       aria-pressed={selected}
       onClick={onSelect}
