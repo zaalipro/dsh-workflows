@@ -1,4 +1,5 @@
 import { createElement, useSyncExternalStore, type ReactElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 import TYPERT_REMOTE from '@zaalipro/dsh-workflows/remote'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
@@ -8,6 +9,7 @@ import { workflowRunDefinition } from './workflow-definition.js'
 import { workflowMessageDefinition } from './chat-renderer.js'
 import { createWorkflowsStore, type WorkflowsStoreInstance } from './store.js'
 import { WorkflowsDashboardSlot, WorkflowRunChatSlot } from './slot-components.js'
+import { WorkflowsDashboard } from './WorkflowsDashboard.js'
 import {
   NS,
   dashboardLabelsFromLocale,
@@ -191,6 +193,10 @@ export function apply(ctx: ClientContext): void {
     let dashboardActions: WorkflowsStoreInstance['actions'] | undefined
     let overlayMounted = false
     let pendingOpen = false
+    let liveAdapter: DashboardWorkflowRunsAdapter | undefined
+    let fallbackRoot: Root | undefined
+    let fallbackHost: HTMLElement | undefined
+    let fallbackOpen = false
     let remoteDisposer: unknown
     let overlayState: { readonly invoker: HTMLElement | null } = { invoker: null }
     const overlayListeners = new Set<() => void>()
@@ -204,18 +210,51 @@ export function apply(ctx: ClientContext): void {
         : null
       publishOverlay({ invoker: element ?? active })
     }
-    const openDashboard = (): boolean => {
-      if (dashboardActions === undefined || typeof dashboardActions.open !== 'function') {
-        pendingOpen = true
-        return false
+    const currentSessionId = (): string | undefined => {
+      const id = (root.sessions as any)?.list?.getSnapshot?.()?.current
+      return typeof id === 'string' && id.length > 0 ? id : undefined
+    }
+    const renderFallbackDashboard = (): void => {
+      if (typeof document === 'undefined' || liveAdapter === undefined) return
+      if (fallbackHost === undefined) {
+        fallbackHost = document.createElement('div')
+        fallbackHost.id = 'dsh-workflows-overlay'
+        document.body.appendChild(fallbackHost)
       }
-      const active = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null
-      captureInvoker(active)
-      dashboardActions.open()
-      pendingOpen = false
-      return true
+      fallbackRoot ??= createRoot(fallbackHost)
+      const sessionId = currentSessionId()
+      if (fallbackOpen) liveAdapter.observe(sessionId)
+      else liveAdapter.observe(undefined)
+      fallbackRoot.render(fallbackOpen
+        ? createElement(WorkflowsDashboard, {
+          operations: liveAdapter,
+          sessionId,
+          open: true,
+          onClose: () => {
+            fallbackOpen = false
+            renderFallbackDashboard()
+          },
+          labels: dashboardLabelsFromLocale(workflowLocaleFromBind(
+            typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined,
+          )),
+        })
+        : createElement('div'))
+    }
+    const openDashboard = (): boolean => {
+      if (dashboardActions !== undefined && typeof dashboardActions.open === 'function') {
+        const active = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null
+        captureInvoker(active)
+        dashboardActions.open()
+        pendingOpen = false
+        return true
+      }
+      pendingOpen = true
+      if (liveAdapter === undefined || typeof document === 'undefined') return false
+      fallbackOpen = true
+      renderFallbackDashboard()
+      return fallbackHost !== undefined
     }
     addCleanup(root.locale?.register?.(NS, workflowLocales))
     const commandUi = requireCommandUi(root.commandUi)
@@ -230,10 +269,9 @@ export function apply(ctx: ClientContext): void {
       ui: {
         kind: 'action' as const,
         run: () => {
-          if (!overlayMounted || dashboardActions === undefined || typeof dashboardActions.open !== 'function') {
+          if (!openDashboard()) {
             throw new Error('workflow dashboard overlay is not mounted')
           }
-          openDashboard()
         },
         options: async () => {
           openDashboard()
@@ -253,9 +291,11 @@ export function apply(ctx: ClientContext): void {
 
     const sessions = root.sessions as any
     const liveController = new WorkflowRunsController(remote, sessions)
-    const liveAdapter = new DashboardWorkflowRunsAdapter(liveController)
+    const adapterInstance = new DashboardWorkflowRunsAdapter(liveController)
+    liveAdapter = adapterInstance
     controller = liveController
-    adapter = liveAdapter
+    adapter = adapterInstance
+    if (pendingOpen) openDashboard()
 
     root.workflowRunsController = liveController
     root.workflowRunsAdapter = liveAdapter
@@ -273,7 +313,7 @@ export function apply(ctx: ClientContext): void {
       const dict = workflowLocaleFromBind(typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined)
       return createElement(WorkflowRunChatSlot, {
         ...props,
-        operations: liveAdapter,
+        operations: adapterInstance,
         useSessions: props.useSessions,
         labels: workflowChatLabelsFromLocale(dict),
         childAvailable: (parent: string, child: string) => directChildAvailable(sessions, parent, child),
@@ -284,7 +324,7 @@ export function apply(ctx: ClientContext): void {
       key: 'workflow-run',
       locale: NS,
       inject: () => ({
-        operations: liveAdapter,
+        operations: adapterInstance,
         childAvailable: (parent: string, child: string) => directChildAvailable(sessions, parent, child),
       }),
     }, runChatComponent))
@@ -305,9 +345,9 @@ export function apply(ctx: ClientContext): void {
         () => overlayState,
       )
       const source = useSyncExternalStore(
-        liveAdapter.source.subscribe,
-        liveAdapter.source.getSnapshot,
-        liveAdapter.source.getSnapshot,
+        adapterInstance.source.subscribe,
+        adapterInstance.source.getSnapshot,
+        adapterInstance.source.getSnapshot,
       )
       const dict = workflowLocaleFromBind(typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined)
       const close = (): void => {
@@ -338,7 +378,7 @@ export function apply(ctx: ClientContext): void {
           showExecution: () => undefined,
           showRun: () => undefined,
         },
-        operations: liveAdapter,
+        operations: adapterInstance,
         invoker: overlay.invoker,
         onClose: close,
         labels: dashboardLabelsFromLocale(dict),
@@ -359,7 +399,7 @@ export function apply(ctx: ClientContext): void {
             actions.open()
           }
         }
-        return { operations: liveAdapter, hooks: { workflowRuns: liveAdapter.source } }
+        return { operations: adapterInstance, hooks: { workflowRuns: adapterInstance.source } }
       },
     }, DashboardContribution))
     addCleanup(overlayInjection)
@@ -428,6 +468,11 @@ export function apply(ctx: ClientContext): void {
     return async () => {
       dashboardActions = undefined
       overlayListeners.clear()
+      fallbackOpen = false
+      try { fallbackRoot?.unmount() } catch { /* contained */ }
+      fallbackRoot = undefined
+      fallbackHost?.remove()
+      fallbackHost = undefined
       // Reverse registration order: listeners/slots/consumers stop before
       // the generated Remote namespace is unmounted.
       for (const dispose of cleanup.reverse()) {
