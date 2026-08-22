@@ -142,6 +142,7 @@ export declare class WorkflowSupervisor {
     private readDetailValue;
     private readAllMembers;
     private memberHead;
+    private memberHeadWithTranscript;
     private authorizedHead;
     /** List the authorized Session's retained logical runs. */
     list(agent: any, request?: WorkflowRunListRequest, signal?: AbortSignal): Promise<WorkflowRunListPage>;

@@ -235,4 +235,88 @@ describe('workflow supervisor settlement', () => {
       await supervisor.dispose()
     }
   })
+
+  it('recovers a stock child transcript from ctx.sessions after agent-end', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-transcript-'))
+    roots.push(root)
+    let settle!: (value: any) => void
+    const result = new Promise(resolve => { settle = resolve })
+    const handle = {
+      id: 'execution-transcript',
+      result,
+      release: () => undefined,
+      resume: () => undefined,
+      cancel: () => undefined,
+      dispose: async () => undefined,
+      checkpoint: () => ({ journal: [], agentSpend: 1, agentSeq: 1 }),
+    }
+    const bus = new EventBus()
+    const store = new MemoryStore(root)
+    const supervisor = new WorkflowSupervisor({
+      workflowEngine: { start: () => handle },
+      on: bus.on.bind(bus),
+      emit: bus.emit.bind(bus),
+      logger: { warn: () => undefined },
+      workflows: { save: async () => ({ path: '/tmp/unused' }) },
+      workflowStorage: { layout: scratchLayout() },
+      sessions: {
+        get(id: string) {
+          if (id !== 'child-alpha') return undefined
+          return {
+            events: [
+              { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'alpha-ready' }] } } },
+            ],
+          }
+        },
+      },
+    }, { defaultAgentBudget: 8, maxAgentBudget: 8, maxMembersPerRun: 8 }, store)
+    await supervisor.initialize()
+    const agent = { session: { id: 'session-transcript', header: { cwd: '/tmp' } }, followup: async () => undefined }
+    try {
+      const launched = await supervisor.start({
+        script: 'return 1', meta: { name: 'trace-check', description: 'transcript' }, parent: agent, agentBudget: 2,
+      })
+      const started = new Promise<void>(resolve => {
+        const off = bus.on('workflows/member-start', () => { off(); resolve() })
+      })
+      bus.emit('workflow/agent-start', { id: 'execution-transcript' }, {
+        seq: 1, label: 'alpha', phase: 'Fanout', childId: 'child-alpha',
+      })
+      await started
+      const ended = new Promise<void>(resolve => {
+        const off = bus.on('workflows/member-end', () => { off(); resolve() })
+      })
+      bus.emit('workflow/agent-end', { id: 'execution-transcript' }, { seq: 1, outcome: 'completed' })
+      await ended
+      settle({ value: { ok: true }, stopReason: 'completed', agentsStarted: 1 })
+      await supervisor.whenOwnerQuiescent(agent)
+      const page = await supervisor.members(agent, { runId: launched.runId as never, limit: 10 })
+      expect(page.items).toEqual([expect.objectContaining({
+        label: 'alpha', status: 'completed', outcome: 'available', childSessionId: 'child-alpha',
+      })])
+      const detail = await supervisor.memberDetail(agent, {
+        runId: launched.runId as never, memberId: page.items[0]!.memberId as never,
+      })
+      expect(detail.outcome).toMatchObject({
+        state: 'available',
+        content: { kind: 'value', value: 'alpha-ready' },
+      })
+      const stored = store.entries.get(launched.runId)!.detail.members![0]!
+      store.entries.get(launched.runId)!.detail.members = [{
+        ...stored, outcome: 'not-produced',
+      }]
+      delete (store.entries.get(launched.runId)!.detail.members![0] as { value?: unknown }).value
+      const recoveredPage = await supervisor.members(agent, { runId: launched.runId as never, limit: 10 })
+      expect(recoveredPage.items[0]?.outcome).toBe('available')
+      const recovered = await supervisor.memberDetail(agent, {
+        runId: launched.runId as never, memberId: recoveredPage.items[0]!.memberId as never,
+      })
+      expect(recovered.outcome).toMatchObject({
+        state: 'available',
+        content: { kind: 'value', value: 'alpha-ready' },
+      })
+    } finally {
+      await supervisor.dispose()
+    }
+  })
 })

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   childTranscriptValue,
   lastAssistantText,
+  memberOutcomeWithTranscript,
   snapshotWorkflowJsonValue,
   workflowRunValueView,
 } from '../src/supervisor/value-view.js'
@@ -121,6 +122,31 @@ describe('lastAssistantText', () => {
       { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'beta' }] } } },
     ])).toBe('beta')
   })
+
+  it('reads string content and a top-level text field', () => {
+    expect(lastAssistantText([
+      { type: 'assistant/message', data: { message: { content: 'plain' } } },
+    ])).toBe('plain')
+    expect(lastAssistantText([
+      { type: 'assistant/message', data: { message: { text: 'legacy' } } },
+    ])).toBe('legacy')
+    expect(lastAssistantText([
+      { type: 'assistant/message', data: { content: [{ type: 'text', text: 'direct' }] } },
+    ])).toBe('direct')
+  })
+
+  it('skips non-message events and unusable content blocks', () => {
+    expect(lastAssistantText(undefined)).toBeUndefined()
+    expect(lastAssistantText([
+      null,
+      'nope',
+      { type: 'user/message', data: { content: [{ type: 'text', text: 'hi' }] } },
+      { type: 'assistant/message', data: { message: { content: [null, { type: 'image' }, { type: 'text', text: 1 }, { type: 'text', text: '  ' }, { type: 'text', text: 'kept' }] } } },
+    ])).toBe('kept')
+    expect(lastAssistantText([
+      { type: 'assistant/message', data: { message: { content: 1 } } },
+    ])).toBeUndefined()
+  })
 })
 
 describe('childTranscriptValue', () => {
@@ -142,5 +168,99 @@ describe('childTranscriptValue', () => {
     expect(childTranscriptValue(ctx, 'child-1')).toBe('alpha')
     expect(childTranscriptValue(ctx, 'missing')).toBeUndefined()
     expect(childTranscriptValue({}, 'child-1')).toBeUndefined()
+    expect(childTranscriptValue(ctx, '')).toBeUndefined()
+  })
+
+  it('falls back to ctx.sessions.get after the child agent has left memory', () => {
+    const ctx = {
+      sessions: {
+        get(id: string) {
+          if (id !== 'child-2') return undefined
+          return {
+            events: [
+              { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'persisted' }] } } },
+            ],
+          }
+        },
+      },
+    }
+    expect(childTranscriptValue(ctx, 'child-2')).toBe('persisted')
+    expect(childTranscriptValue(ctx, 'missing')).toBeUndefined()
+  })
+
+  it('resolves agents and sessions through ctx.get', () => {
+    const sessionsCtx = {
+      get(name: string) {
+        if (name === 'sessions') {
+          return {
+            get(id: string) {
+              if (id !== 'via-get') return undefined
+              return { events: [{ type: 'assistant/message', data: { message: { text: 'from-get' } } }] }
+            },
+          }
+        }
+        return undefined
+      },
+    }
+    const agentsCtx = {
+      agents: null,
+      get(name: string) {
+        if (name !== 'agents') return undefined
+        return {
+          get(id: string) {
+            if (id !== 'via-agents') return undefined
+            return {
+              session: { events: [{ type: 'assistant/message', data: { message: { text: 'agent-get' } } }] },
+            }
+          },
+        }
+      },
+    }
+    expect(childTranscriptValue(sessionsCtx, 'via-get')).toBe('from-get')
+    expect(childTranscriptValue(agentsCtx, 'via-agents')).toBe('agent-get')
+    expect(childTranscriptValue({ get: 1 }, 'x')).toBeUndefined()
+  })
+
+  it('swallows lookup failures', () => {
+    const ctx = {
+      agents: {
+        get() { throw new Error('gone') },
+      },
+    }
+    expect(childTranscriptValue(ctx, 'child-1')).toBeUndefined()
+  })
+})
+
+describe('memberOutcomeWithTranscript', () => {
+  const sessionCtx = {
+    sessions: {
+      get(id: string) {
+        if (id !== 'child-1') return undefined
+        return { events: [{ type: 'assistant/message', data: { message: { text: 'ready' } } }] }
+      },
+    },
+  }
+
+  it('keeps available and evicted outcomes', () => {
+    expect(memberOutcomeWithTranscript({}, { outcome: 'available', status: 'completed' })).toBe('available')
+    expect(memberOutcomeWithTranscript(sessionCtx, { outcome: 'evicted', status: 'completed', childSessionId: 'child-1' })).toBe('evicted')
+  })
+
+  it('keeps a still-running pending member', () => {
+    expect(memberOutcomeWithTranscript(sessionCtx, {
+      outcome: 'pending', status: 'running', childSessionId: 'child-1',
+    })).toBe('pending')
+  })
+
+  it('promotes not-produced and settled-pending members when a transcript exists', () => {
+    expect(memberOutcomeWithTranscript(sessionCtx, {
+      outcome: 'not-produced', status: 'completed', childSessionId: 'child-1',
+    })).toBe('available')
+    expect(memberOutcomeWithTranscript(sessionCtx, {
+      outcome: 'pending', status: 'completed', childSessionId: 'child-1',
+    })).toBe('available')
+    expect(memberOutcomeWithTranscript({}, {
+      outcome: 'not-produced', status: 'completed', childSessionId: 'child-1',
+    })).toBe('not-produced')
   })
 })

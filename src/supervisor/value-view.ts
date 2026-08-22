@@ -104,6 +104,7 @@ export function snapshotWorkflowJsonValue(value: unknown): JsonValue {
 
 function assistantTextBlocks(message: unknown): string {
   const content = (message as { content?: unknown } | undefined)?.content
+  if (typeof content === 'string') return content.trim()
   if (!Array.isArray(content)) {
     return typeof (message as { text?: unknown } | undefined)?.text === 'string'
       ? String((message as { text: string }).text).trim()
@@ -135,18 +136,43 @@ export function lastAssistantText(events: unknown): string | undefined {
   return last
 }
 
+function serviceGet(ctx: unknown, name: string): unknown {
+  const record = ctx as { [key: string]: unknown; get?: (id: string) => unknown }
+  if (record?.[name] != null) return record[name]
+  if (typeof record?.get === 'function') return record.get(name)
+  return undefined
+}
+
+function eventsFromAgent(record: unknown): unknown {
+  return (record as { session?: { events?: unknown } } | undefined)?.session?.events
+}
+
+function eventsFromSession(record: unknown): unknown {
+  return (record as { events?: unknown } | undefined)?.events
+}
+
 /** Recover a stock child agent's reply when journal-commit never fired. */
 export function childTranscriptValue(ctx: unknown, childId: unknown): JsonValue | undefined {
   if (typeof childId !== 'string' || childId.length === 0) return undefined
   try {
-    const record = ctx as { agents?: { get?: (id: string) => unknown }; get?: (name: string) => unknown }
-    const agents = record?.agents ?? (typeof record?.get === 'function' ? record.get('agents') : undefined)
-    const child = (agents as { get?: (id: string) => unknown } | undefined)?.get?.(childId) as
-      { session?: { events?: unknown } } | undefined
-    const text = lastAssistantText(child?.session?.events)
+    const agents = serviceGet(ctx, 'agents') as { get?: (id: string) => unknown } | undefined
+    const sessions = serviceGet(ctx, 'sessions') as { get?: (id: string) => unknown } | undefined
+    const text = lastAssistantText(eventsFromAgent(agents?.get?.(childId)))
+      ?? lastAssistantText(eventsFromSession(sessions?.get?.(childId)))
     if (text === undefined) return undefined
     return snapshotWorkflowJsonValue(text)
   } catch {
     return undefined
   }
+}
+
+/** Promote a stored not-produced/pending member when a child transcript is still reachable. */
+export function memberOutcomeWithTranscript(
+  ctx: unknown,
+  member: { readonly outcome: 'pending' | 'available' | 'not-produced' | 'evicted'; readonly status: string; readonly childSessionId?: string },
+): 'pending' | 'available' | 'not-produced' | 'evicted' {
+  if (member.outcome === 'available' || member.outcome === 'evicted') return member.outcome
+  if (member.outcome === 'pending' && member.status === 'running') return 'pending'
+  if (childTranscriptValue(ctx, member.childSessionId) !== undefined) return 'available'
+  return member.outcome
 }

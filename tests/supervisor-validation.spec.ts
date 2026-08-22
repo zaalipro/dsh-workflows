@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { VALIDATION_NOTE, WorkflowSupervisor } from '../src/supervisor/index.js'
-import { PARALLEL_JOB_MAP_PRELUDE } from '../src/supervisor/parallel-compat.js'
+import { STOCK_SCRIPT_MARKER } from '../src/supervisor/parallel-compat.js'
 import type {
   DetailReadRequest,
   DetailReadResult,
@@ -128,7 +128,8 @@ describe('workflow supervisor validation', () => {
         status: 'error',
         error: '/tmp/review-changes.workflow.json:4\nUnexpected token',
       })
-      expect(requests[0].script.startsWith(PARALLEL_JOB_MAP_PRELUDE)).toBe(true)
+      expect(requests[0].script.startsWith(STOCK_SCRIPT_MARKER)).toBe(true)
+      expect(requests[0].script).toContain('if (false) { ??? } return 1')
       expect(requests[0]).toMatchObject({
         maxTotalAgents: 8,
         args: { unused: true },

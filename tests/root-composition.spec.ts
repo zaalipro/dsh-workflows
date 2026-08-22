@@ -311,7 +311,7 @@ describe('Host aggregate lifecycle', () => {
     expect(headless.get('workflows')).toBeDefined()
     expect(headless.get('workflowSupervisor')).toBeDefined()
     expect(headless.get('workflowRunRecorder')).toBeDefined()
-    expect(headlessFaces.commands.names).toEqual(['workflow', 'create-workflow'])
+    expect(headlessFaces.commands.names).toEqual(['workflow', 'workflows', 'create-workflow'])
     expect(headlessFaces.skills.names).toEqual(['create-workflow'])
     expect(headlessFaces.events.registered).toEqual([])
     await headlessFiber.dispose()

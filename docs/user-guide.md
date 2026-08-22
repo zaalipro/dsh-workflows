@@ -213,7 +213,7 @@ After Host process death, startup recovery changes any retained active run to **
 
 ## 10. Author replay-safe JavaScript
 
-The worker exposes `args`; `agent`; thunk or declarative `parallel`; `pipeline`; `phase`; `log`; `complete`; `budget`; `pause`; `await_user`; `read_scratch_file`; and `write_scratch_file`. `agent(prompt, opts)` accepts exactly `label`, `phase`, `schema`, `provider`, and `model`. Unsupported options such as `fork_context`, unsupported schemas, invalid calls, and infrastructure failures are fatal; ordinary child failures return `null`.
+The worker exposes `args`; `agent`; thunk or declarative `parallel`; `pipeline`; `phase`; `log`; `complete`; `budget`; `pause`; `await_user`; `read_scratch_file`; and `write_scratch_file`. `agent(prompt, opts)` accepts exactly `label`, `phase`, `schema`, `provider`, and `model`. Stock workers have no native `complete` and reject `minItems`/`maxItems`; this package injects `complete()` and strips those keywords before schema validation. Unsupported options such as `fork_context`, unsupported schemas, invalid calls, and infrastructure failures are fatal; ordinary child failures return `null`. Bound array length in the prompt and in JavaScript.
 
 This complete body guards nullable outputs, keeps verification fail-closed, sorts and filters deterministically, bounds a log preview explicitly, synchronizes phase titles, and publishes a report:
 
@@ -231,13 +231,12 @@ phase('Review')
 const reviews = await parallel(targets.map(target => ({
   label: `review-${target}`,
   phase: 'Review',
-  prompt: `Review ${target}. Inspect the workspace; return only evidence-backed findings.`,
+  prompt: `Review ${target}. Inspect the workspace; return at most 20 evidence-backed findings.`,
   schema: {
     type: 'object',
     properties: {
       findings: {
         type: 'array',
-        maxItems: 20,
         items: {
           type: 'object',
           properties: {
@@ -300,7 +299,7 @@ await write_scratch_file('report.md', report)
 complete({ ok: true, findings, report: 'report.md' })
 ```
 
-`complete(value)` accepts the first lossless JSON value and makes every later hook ineffective even if script code catches its internal sentinel. Scratch names are one component matching `^[A-Za-z0-9][A-Za-z0-9._-]*$`; defaults allow 4,096 operations, 64 pending, 64 files, 1 MiB per file, and 8 MiB total. `phase`/`log` events are each bounded to 64 KiB UTF-8.
+`complete(value)` accepts the first lossless JSON value and makes every later hook ineffective even if script code catches its internal sentinel. `return value` also settles the run. Scratch names are one component matching `^[A-Za-z0-9][A-Za-z0-9._-]*$`; defaults allow 4,096 operations, 64 pending, 64 files, 1 MiB per file, and 8 MiB total. `phase`/`log` events are each bounded to 64 KiB UTF-8.
 
 Replay-capable runs remove `Date`, `Math.random`, `Atomics`, `SharedArrayBuffer`, `WeakRef`, and `FinalizationRegistry`. Deterministic Math functions remain. Every effectful agent prompt must be safely repeatable because an effect whose result was not committed can run again. A script has no `workflow()` hook: nested workflows are unsupported; express orchestration with agents, `parallel`, and `pipeline` inside one run.
 

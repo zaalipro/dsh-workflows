@@ -213,7 +213,7 @@ Host process exit 后，startup recovery 把所有 retained active run 改为 **
 
 ## 10. 编写 replay-safe JavaScript
 
-Worker 提供 `args`、`agent`、thunk/declarative `parallel`、`pipeline`、`phase`、`log`、`complete`、`budget`、`pause`、`await_user`、`read_scratch_file` 和 `write_scratch_file`。`agent(prompt, opts)` 准确接受 `label`、`phase`、`schema`、`provider` 和 `model`。`fork_context` 等 unsupported option、unsupported schema、invalid call 与 infrastructure failure 都是 fatal；普通 child failure 返回 `null`。
+Worker 提供 `args`、`agent`、thunk/declarative `parallel`、`pipeline`、`phase`、`log`、`complete`、`budget`、`pause`、`await_user`、`read_scratch_file` 和 `write_scratch_file`。`agent(prompt, opts)` 准确接受 `label`、`phase`、`schema`、`provider` 和 `model`。Stock worker 没有原生 `complete`，并且拒绝 `minItems`/`maxItems`；本包会注入 `complete()`，并在 schema validation 前剥掉这些 keyword。`fork_context` 等 unsupported option、unsupported schema、invalid call 与 infrastructure failure 都是 fatal；普通 child failure 返回 `null`。Array 长度在 prompt 与 JavaScript 中限制。
 
 以下完整 body guard nullable output，使 verification fail-closed，确定性 sort/filter，显式限制 log preview，同步 phase title，并发布 report：
 
@@ -231,13 +231,12 @@ phase('Review')
 const reviews = await parallel(targets.map(target => ({
   label: `review-${target}`,
   phase: 'Review',
-  prompt: `Review ${target}. Inspect the workspace; return only evidence-backed findings.`,
+  prompt: `Review ${target}. Inspect the workspace; return at most 20 evidence-backed findings.`,
   schema: {
     type: 'object',
     properties: {
       findings: {
         type: 'array',
-        maxItems: 20,
         items: {
           type: 'object',
           properties: {
@@ -300,7 +299,7 @@ await write_scratch_file('report.md', report)
 complete({ ok: true, findings, report: 'report.md' })
 ```
 
-`complete(value)` 接受第一个 lossless JSON value，并使之后每个 hook ineffective，即使 script code catch 其 internal sentinel。Scratch name 是匹配 `^[A-Za-z0-9][A-Za-z0-9._-]*$` 的单 component；default 最多允许 4,096 次 operation、64 个 pending、64 个 file、每个 1 MiB、总计 8 MiB。每个 `phase`/`log` event 上限为 64 KiB UTF-8。
+`complete(value)` 接受第一个 lossless JSON value，并使之后每个 hook ineffective，即使 script code catch 其 internal sentinel。`return value` 同样可以 settle run。Scratch name 是匹配 `^[A-Za-z0-9][A-Za-z0-9._-]*$` 的单 component；default 最多允许 4,096 次 operation、64 个 pending、64 个 file、每个 1 MiB、总计 8 MiB。每个 `phase`/`log` event 上限为 64 KiB UTF-8。
 
 Replay-capable run 移除 `Date`、`Math.random`、`Atomics`、`SharedArrayBuffer`、`WeakRef` 与 `FinalizationRegistry`。Deterministic Math function 保留。每个 effectful agent prompt 都必须可安全重复，因为 result 未提交的 effect 可能再次运行。Script 不提供 `workflow()` hook：nested workflow 不受支持；应在一个 run 内通过 agent、`parallel` 与 `pipeline` 表达 orchestration。
 

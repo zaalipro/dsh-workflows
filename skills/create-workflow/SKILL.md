@@ -36,7 +36,7 @@ A flat `<name>.workflow.json` file contains exactly `meta` and `script`. Metadat
       { "title": "Verify", "detail": "one skeptic per finding" }
     ]
   },
-  "script": "// plain JS body, top-level await, complete(value) or return"
+  "script": "// plain JS body, top-level await, complete(value) or return value"
 }
 ```
 
@@ -46,12 +46,12 @@ A flat `<name>.workflow.json` file contains exactly `meta` and `script`. Metadat
 - `parallel(thunksOrJobs)` is a barrier and preserves slot order. Items are zero-arg functions or job maps `{ prompt, label?, phase?, schema?, provider?, model? }`. Declarative job panels preflight the unreplayed panel atomically; arbitrary thunks use per-call admission. Failed slots resolve `null`.
 - `pipeline(items, ...stages)` advances items independently and preserves input order.
 - `phase(title)` and `log(message)` publish bounded progress.
-- `complete(jsonValue)` settles the first valid JSON result. Prefer `complete()` over `return`.
+- `complete(jsonValue)` settles the first valid JSON result and stops later hooks. Prefer `complete()` over falling through. Stock workers have no native `complete`; this package injects one. `return jsonValue` also settles the run.
 - `await await_user(kind, message)` commits an acknowledged gate; `await pause(kind, message)` repeats after resume while its condition is unchanged. Both hooks are asynchronous and must be awaited.
 - `budget()` returns `{ total, spent, reserved: 0, remaining }`.
 - `write_scratch_file(name, content)` and `read_scratch_file(name)` use one safe filename.
 
-Supported schemas use `type`, `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `enum`, `const`, and `oneOf`. Array bounds are inclusive non-negative integers and cannot sit beside `oneOf`.
+Supported schemas use `type`, `properties`, `required`, `additionalProperties`, `items`, `enum`, `const`, and `oneOf`. Do not use `minItems` or `maxItems` — stock schema validation rejects those keywords (this package strips them if a saved script still has them). Bound array length in the prompt and in JavaScript after the child returns.
 
 Replay uses immutable script, args, and a committed checkpoint. Replayed and schema-correction calls spend zero, but an external effect whose result was not committed can repeat. Keep prompts and external operations idempotent. Replay-capable scripts cannot use `Date`, `Math.random`, `Atomics`, `SharedArrayBuffer`, `WeakRef`, or `FinalizationRegistry`. There is no nested workflow hook.
 
@@ -76,6 +76,7 @@ Default scratch quotas are 4,096 operations, 64 pending operations, 64 files, 1 
 - `pause()` in a result-derived branch re-fires forever; use `await_user` for resumable human gates.
 - Silent truncation is not coverage; `log()` whatever a `MAX_*` cap dropped.
 - Agents do not enforce invariants — the script does. Filter and assert in JavaScript.
+- Do not put `minItems`/`maxItems` on schemas; bound counts in the prompt and clip in JavaScript.
 - Do not put `meta` in JavaScript, use TypeScript/export syntax, add unsupported agent options such as `fork_context`, mix thunk and declarative parallel forms in one call, assume `null` is success, omit verification, hide truncation, use nondeterministic globals, use nested workflows, or claim validate-only exhaustively proves the workflow.
 
 ## Example (review-changes)
@@ -96,7 +97,7 @@ Meta is JSON data beside this body in the `{ "meta", "script" }` envelope:
 
 ```js
 const findingsSchema = { type: "object", required: ["findings"],
-  properties: { findings: { type: "array", maxItems: 8,
+  properties: { findings: { type: "array",
     items: { type: "object", required: ["file", "issue"],
       properties: { file: { type: "string" }, issue: { type: "string" } } } } } };
 const verdictSchema = { type: "object", required: ["real", "reason", "evidence"],

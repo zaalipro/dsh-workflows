@@ -10,4 +10,10 @@ export declare function snapshotWorkflowJsonValue(value: unknown): JsonValue;
 export declare function lastAssistantText(events: unknown): string | undefined;
 /** Recover a stock child agent's reply when journal-commit never fired. */
 export declare function childTranscriptValue(ctx: unknown, childId: unknown): JsonValue | undefined;
+/** Promote a stored not-produced/pending member when a child transcript is still reachable. */
+export declare function memberOutcomeWithTranscript(ctx: unknown, member: {
+    readonly outcome: 'pending' | 'available' | 'not-produced' | 'evicted';
+    readonly status: string;
+    readonly childSessionId?: string;
+}): 'pending' | 'available' | 'not-produced' | 'evicted';
 //# sourceMappingURL=value-view.d.ts.map

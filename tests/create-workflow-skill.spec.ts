@@ -52,6 +52,8 @@ describe('create-workflow skill asset (SH18)', () => {
     expect(text).toContain('verdictSchema')
     expect(text).toContain('await pause')
     expect(text).toContain('complete(')
+    expect(text).toContain('Do not use `minItems` or `maxItems`')
+    expect(text).toContain('Stock workers have no native `complete`')
     expect(text).toContain('Do not write Rhai')
   })
 
@@ -172,6 +174,8 @@ describe('create-workflow skill asset (SH18)', () => {
     expect(script).toContain('await pause("verification"')
     expect(script).toContain('Array.isArray(r.findings)')
     expect(script).toContain('v != null && v.real === true && v.evidence')
+    expect(script).not.toMatch(/\bmaxItems\b/u)
+    expect(script).not.toMatch(/\bminItems\b/u)
     const engine = {
       async validate(request: {
         readonly script: string

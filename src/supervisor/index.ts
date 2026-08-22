@@ -16,7 +16,12 @@ import type {
 import { openPrivateDirectory } from './storage/private-root.js'
 import { openRunScratch, type ScratchStoreOptions, type WorkflowScratchStore } from './storage/run-files.js'
 import { WorkflowCompletionNotifier } from './completion-notice.js'
-import { childTranscriptValue, snapshotWorkflowJsonValue, workflowRunValueView } from './value-view.js'
+import {
+  childTranscriptValue,
+  memberOutcomeWithTranscript,
+  snapshotWorkflowJsonValue,
+  workflowRunValueView,
+} from './value-view.js'
 import {
   VALIDATION_NOTE,
   type SupervisedWorkflowRunId,
@@ -1527,6 +1532,11 @@ export class WorkflowSupervisor {
     }
   }
 
+  private memberHeadWithTranscript(member: StoredMember): WorkflowRunMemberHead {
+    const head = this.memberHead(member)
+    return { ...head, outcome: memberOutcomeWithTranscript(this.ctx, member) }
+  }
+
   private async authorizedHead(agent: any, runId: SupervisedWorkflowRunId, signal?: AbortSignal): Promise<{ readonly head: WorkflowRunHeadRecord; readonly live?: InternalRun }> {
     const live = this.runs.get(String(runId))
     if (live !== undefined) {
@@ -1620,7 +1630,7 @@ export class WorkflowSupervisor {
       cursor: String(offset), limit,
     }, signal)
     const rows = Array.isArray(value.value) ? value.value as StoredMember[] : []
-    const items = rows.map(member => this.memberHead(member))
+    const items = rows.map(member => this.memberHeadWithTranscript(member))
     const total = value.total
     const cursor = nextCursor(offset, items.length, total)
     return {
@@ -1643,7 +1653,7 @@ export class WorkflowSupervisor {
       }
     }
     return {
-      member: this.memberHead(member),
+      member: this.memberHeadWithTranscript(member),
       ...(member.childSessionId === undefined ? {} : { childSessionId: member.childSessionId }),
       outcome,
     }
