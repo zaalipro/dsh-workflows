@@ -298,6 +298,37 @@ describe('on-demand reads, controls, and child navigation (RC10)', () => {
       probe.settleAll()
     }
   })
+
+  it('falls back to connection.rpc.call when the typed workflowRuns stub is missing', async () => {
+    const calls: Array<{ channel: string; endpoint: string; payload: any }> = []
+    const connection = {
+      rpc: {
+        async call(channel: string, endpoint: string, payload: unknown) {
+          calls.push({ channel, endpoint, payload })
+          return {
+            ok: true,
+            value: { ok: true, value: page([row('run-rpc', 3)], 3) },
+          }
+        },
+      },
+    }
+    const controller = new WorkflowRunsController({}, undefined, connection)
+    try {
+      await controller.refresh(SESSION)
+      expect(calls).toEqual([expect.objectContaining({
+        channel: '/api',
+        endpoint: 'workflowRuns/list',
+        payload: { args: { agentId: SESSION, request: { limit: 50 } } },
+      })])
+      expect(controller.get(SESSION)).toMatchObject({
+        phase: 'ready',
+        total: 1,
+        runs: [expect.objectContaining({ runId: 'run-rpc' })],
+      })
+    } finally {
+      controller.dispose()
+    }
+  })
 })
 
 describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () => {

@@ -156,7 +156,11 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
   private observed?: string
   private disposed = false
 
-  constructor(remote: WorkflowRemoteClient, agents?: ClientAgentCatalog) {
+  constructor(
+    remote: WorkflowRemoteClient,
+    agents?: ClientAgentCatalog,
+    private readonly connection?: { readonly rpc?: { call(channel: string, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<unknown> } },
+  ) {
     this.parentRemote = remote
     this.agents = agents
   }
@@ -262,14 +266,22 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
 
   private async call<T>(method: string, sessionId: string, request: unknown, signal: AbortSignal): Promise<T> {
     const fn = this.remote?.[method]
-    if (typeof fn !== 'function') {
-      throw new WorkflowRunsRemoteError('storage-unavailable', `workflow Remote method ${method} is unavailable`)
-    }
-    // H's direct-Agent generated face always carries the Session wire identity
-    // explicitly; never fall back to an ambient/scoped invocation.
-    const raw = await fn.call(this.remote, sessionId, request, signal)
+    const raw = typeof fn === 'function'
+      ? await fn.call(this.remote, sessionId, request, signal)
+      : await this.callRpc(method, sessionId, request, signal)
     signal.throwIfAborted()
     return unwrapWorkflowRemoteResult<T>(raw)
+  }
+
+  /** Stock may leave the typed stub unmounted; the Host still serves namespace/method over /api. */
+  private async callRpc(method: string, sessionId: string, request: unknown, signal: AbortSignal): Promise<unknown> {
+    const rpc = this.connection?.rpc?.call
+    if (typeof rpc !== 'function') {
+      throw new WorkflowRunsRemoteError('storage-unavailable', `workflow Remote method ${method} is unavailable`)
+    }
+    return rpc.call(this.connection!.rpc, '/api', `workflowRuns/${method}`, {
+      args: { agentId: sessionId, request },
+    }, signal)
   }
 
   async refresh(sessionId: string, supplied?: AbortSignal): Promise<WorkflowRunsSourceSnapshot> {

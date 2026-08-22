@@ -8,14 +8,21 @@ type Change = {
 };
 /** Lazy, revision-fenced browser source for retained workflow runs. */
 export declare class WorkflowRunsController implements WorkflowRunsOperations {
+    private readonly connection?;
     private readonly states;
-    private readonly remote;
+    private readonly parentRemote;
     private readonly agents?;
     private connectionGeneration;
     private connected;
     private observed?;
     private disposed;
-    constructor(remote: WorkflowRemoteClient, agents?: ClientAgentCatalog);
+    constructor(remote: WorkflowRemoteClient, agents?: ClientAgentCatalog, connection?: {
+        readonly rpc?: {
+            call(channel: string, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<unknown>;
+        };
+    } | undefined);
+    /** Resolve after typert $mount; construction may run before the namespace exists. */
+    private get remote();
     private state;
     get(sessionId: string): WorkflowRunsSourceSnapshot;
     source(sessionId: string): WorkflowRunsSource;
@@ -25,6 +32,8 @@ export declare class WorkflowRunsController implements WorkflowRunsOperations {
     private request;
     private retire;
     private call;
+    /** Stock may leave the typed stub unmounted; the Host still serves namespace/method over /api. */
+    private callRpc;
     refresh(sessionId: string, supplied?: AbortSignal): Promise<WorkflowRunsSourceSnapshot>;
     loadMore(sessionId: string, supplied?: AbortSignal): Promise<WorkflowRunsSourceSnapshot>;
     private read;

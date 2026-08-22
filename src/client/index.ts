@@ -418,7 +418,7 @@ export function apply(ctx: ClientContext): void {
     try {
     const remote = root.remote as TypertClientRemote & Record<string, any>
     const sessions = root.sessions as any
-    const liveController = new WorkflowRunsController(remote, sessions)
+    const liveController = new WorkflowRunsController(remote, sessions, root.connection)
     const adapterInstance = new DashboardWorkflowRunsAdapter(liveController)
     liveAdapter = adapterInstance
     controller = liveController

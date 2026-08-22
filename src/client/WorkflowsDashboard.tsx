@@ -961,7 +961,7 @@ export function WorkflowsDashboard({
         <p className={css.notice} role="status">{labels.loading}</p>
       )}
       {source.phase === 'error' && rows.length === 0 && (
-        <ErrorRetry message={GENERIC_LOAD_ERROR} onRetry={() => { if (sessionId !== undefined) void operations.refresh(sessionId).catch(() => undefined) }} />
+        <ErrorRetry message={source.error ?? GENERIC_LOAD_ERROR} onRetry={() => { if (sessionId !== undefined) void operations.refresh(sessionId).catch(() => undefined) }} />
       )}
       {source.phase === 'reconnecting' && rows.length === 0 && (
         <p className={css.notice} role="status">{labels.reconnecting}</p>
