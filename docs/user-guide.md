@@ -305,7 +305,7 @@ Replay-capable runs remove `Date`, `Math.random`, `Atomics`, `SharedArrayBuffer`
 
 ## 11. Keyboard, mobile, and accessibility
 
-Opening `/workflows` moves focus into a labelled modal, makes the background inert, contains Tab and Shift+Tab, recovers escaped focus, and restores the invoking composer on close when it still exists. Escape closes. Status always uses text in addition to color, progress and updates use semantic status/live regions, and member rows are real controls with visible `:focus-visible` treatment.
+Opening `/workflows` moves focus into a labelled modal card over the conversation (not a full-page takeover). The chrome around the card is dimmed and inert; click that chrome, Close, or Escape to dismiss. Tab and Shift+Tab stay inside the card, escaped focus is recovered, and the invoking composer is restored on close when it still exists. Status always uses text in addition to color, progress and updates use semantic status/live regions, and member rows are real controls with visible `:focus-visible` treatment.
 
 P/R/X/S activate Pause/Resume/Stop/Save only when the dialog owns focus, no modifier or key repeat is present, the target is not editable, and the selected run currently allows that action. Hidden or unavailable actions never fire. Narrow-screen controls are at least 44 px in both dimensions, long labels and results wrap, and reduced-motion preference removes nonessential transitions.
 

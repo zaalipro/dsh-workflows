@@ -970,7 +970,11 @@ export function WorkflowsDashboard({
       tabIndex={-1}
       data-workflows-dashboard
       data-mobile-view={mobileView}
+      onMouseDown={event => {
+        if (event.target === event.currentTarget) onCloseRef.current?.()
+      }}
     >
+      <div className={css.frame} data-workflows-frame>
       <header className={clsx(css.header)}>
         <div className={css.headerCopy}>
           <p className={css.eyebrow}>Background orchestration</p>
@@ -1129,6 +1133,7 @@ export function WorkflowsDashboard({
           </aside>
         </div>
       )}
+      </div>
     </div>
   )
 }

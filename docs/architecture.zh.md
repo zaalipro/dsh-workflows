@@ -98,7 +98,7 @@ Supervisor 发出 package-local `workflows/run-start`、`workflows/member-start`
 
 - **Generated Remote mount** 在任何 Remote consumer 前安装 `lib/typert.remote-client.js`，并在 read 和 controller abort 后卸载。
 - **WorkflowRunsController** 为每个 observed Session 保存一个 lazy revisioned source，处理 paging 与 reconnect generation，绝不让 late response 重建已移除状态。
-- **Dashboard navigator** 作为 client-owned full-screen dialog 打开，拥有宽屏、双 pane 和 mobile drill-down navigation。
+- **Dashboard navigator** 作为 client-owned 居中 overlay modal 打开（conversation 在 dimmed chrome 后仍可见），拥有宽屏、双 pane 和 mobile drill-down navigation。
 - **Member inspector** 区分 pending、JSON（包括 `null`）、text、primitive、truncated、not-produced、evicted、unavailable-transcript 和 request-error 状态。
 - **Durable Chat renderer** 只 fold 四个官方 Session event，绝不观察 package-private run head。
 

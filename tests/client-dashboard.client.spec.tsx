@@ -455,12 +455,31 @@ describe('WorkflowsDashboard (RC14-RC18)', () => {
     expect(css).toContain('z-index: 2000')
     expect(css).toContain(':has([data-workflows-dashboard])')
     expect(css).not.toContain(':has(> [data-workflows-dashboard])')
+    expect(css).toContain('.frame')
+    expect(css).toContain('color-mix')
     expect(css).not.toContain('100vw')
     expect(css).not.toContain('--dsw-alias-bg-transparent')
     expect(css).not.toMatch(/#[0-9a-fA-F]{3,8}\b/u)
     expect(css).not.toMatch(/rgba?\(/u)
     const panel = readFileSync(resolve(import.meta.dirname, '../src/client/WorkflowRunPanel.module.css'), 'utf8')
     expect(panel).not.toContain('--dsw-alias-bg-transparent')
+  })
+
+  it('frames the dashboard as a modal card and closes on chrome mousedown', async () => {
+    const b = bench(source([]))
+    await settle()
+    const dialog = b.node.querySelector<HTMLElement>('[data-workflows-dashboard]')!
+    const frame = dialog.querySelector<HTMLElement>('[data-workflows-frame]')!
+    expect(frame).toBeTruthy()
+    expect(dialog.contains(frame)).toBe(true)
+    act(() => {
+      frame.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    expect(b.store.getSnapshot().open).toBe(true)
+    act(() => {
+      dialog.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    expect(b.store.getSnapshot().open).toBe(false)
   })
 
   it('throws without operations and formats elapsed durations', async () => {

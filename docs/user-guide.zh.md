@@ -305,7 +305,7 @@ Replay-capable run 移除 `Date`、`Math.random`、`Atomics`、`SharedArrayBuffe
 
 ## 11. Keyboard、mobile 与 accessibility
 
-打开 `/workflows` 会把 focus 移入 labelled modal，使 background inert，包含 Tab 与 Shift+Tab，恢复逃逸 focus，并在关闭时于 invoking composer 仍存在的情况下恢复它。Escape 关闭。Status 除 color 外始终使用 text，progress 与 update 使用 semantic status/live region，member row 是带 visible `:focus-visible` treatment 的真实 control。
+打开 `/workflows` 会把 focus 移入 conversation 上的 labelled modal card（不是 full-page takeover）。Card 周围的 chrome 会 dim 并 inert；点击该 chrome、Close 或 Escape 即可关闭。Tab 与 Shift+Tab 留在 card 内，逃逸 focus 会被收回，关闭时若 invoking composer 仍存在则恢复它。Status 除 color 外始终使用 text，progress 与 update 使用 semantic status/live region，member row 是带 visible `:focus-visible` treatment 的真实 control。
 
 P/R/X/S 只有在 dialog 拥有 focus、没有 modifier 或 key repeat、target 不可编辑，并且 selected run 当前允许 action 时，才触发 Pause/Resume/Stop/Save。Hidden 或 unavailable action 永不触发。窄屏 control 两个维度都至少 44 px，长 label 与 result 会换行，reduced-motion preference 移除非必要 transition。
 

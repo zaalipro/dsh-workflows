@@ -98,7 +98,7 @@ The supervisor emits package-local `workflows/run-start`, `workflows/member-star
 
 - **Generated Remote mount** installs `lib/typert.remote-client.js` before any Remote consumer and unmounts it after reads and controllers abort.
 - **WorkflowRunsController** keeps one lazy revisioned source per observed Session, handles paging and reconnect generations, and never recreates removed state from a late response.
-- **Dashboard navigator** opens as a client-owned full-screen dialog and owns wide, two-pane, and mobile drill-down navigation.
+- **Dashboard navigator** opens as a client-owned centered overlay modal (conversation remains visible behind dimmed chrome) and owns wide, two-pane, and mobile drill-down navigation.
 - **Member inspector** distinguishes pending, JSON (including `null`), text, primitive, truncated, not-produced, evicted, unavailable-transcript, and request-error states.
 - **Durable Chat renderer** folds only the four official Session events and never observes package-private run heads.
 
