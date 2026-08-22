@@ -569,7 +569,10 @@ export function apply(ctx: ClientContext): void {
       )
       : Promise.resolve()
     addCleanup(() => remoteMount)
-    void remoteMount.then(() => { if (pendingOpen) openDashboard() })
+    void remoteMount.then(() => {
+      if (pendingOpen) openDashboard()
+      else liveAdapter?.observe(currentSessionId())
+    })
 
     if (typeof remote?.workflowDefinitions?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',

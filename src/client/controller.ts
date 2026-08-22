@@ -149,7 +149,7 @@ function renderThrown(error: unknown): string {
 /** Lazy, revision-fenced browser source for retained workflow runs. */
 export class WorkflowRunsController implements WorkflowRunsOperations {
   private readonly states = new Map<string, SessionState>()
-  private readonly remote: any
+  private readonly parentRemote: any
   private readonly agents?: ClientAgentCatalog
   private connectionGeneration = 0
   private connected = true
@@ -157,8 +157,13 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
   private disposed = false
 
   constructor(remote: WorkflowRemoteClient, agents?: ClientAgentCatalog) {
-    this.remote = (remote as any)?.workflowRuns ?? remote
+    this.parentRemote = remote
     this.agents = agents
+  }
+
+  /** Resolve after typert $mount; construction may run before the namespace exists. */
+  private get remote(): any {
+    return this.parentRemote?.workflowRuns ?? this.parentRemote
   }
 
   private state(sessionId: string): SessionState {
@@ -213,7 +218,10 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
   }
 
   observe(sessionId: string | undefined): void {
-    if (this.observed === sessionId) return
+    if (this.observed === sessionId) {
+      if (sessionId !== undefined && !this.disposed) void this.refresh(sessionId).catch(() => undefined)
+      return
+    }
     if (this.observed !== undefined) {
       const previous = this.states.get(this.observed)
       if (previous !== undefined && previous.listeners.size === 0) this.removeSession(this.observed)
