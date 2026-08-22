@@ -1382,7 +1382,12 @@ export class FileWorkflowRunStore implements WorkflowRunStore {
       for (const manifest of this.sessions.values()) { const head = manifest.heads.find(item => item.runId === runId); if (head) { found = { head, sessionId: manifest.sessionId }; break } }
       if (!found) throw new BoundedFileError('workflow run details not found', 'WORKFLOW_RUN_NOT_FOUND')
       const snapshot = await this.readDetail(found.head, found.sessionId); const payload = snapshot.payload as any
-      const raw = request.kind === 'members' ? payload.members ?? [] : request.kind === 'logs' ? payload.logs ?? [] : request.kind === 'result' ? payload.result ?? { state: 'not-produced' } : request.kind === 'artifacts' ? payload.artifacts ?? [] : (payload.artifacts ?? []).find((item: any) => item.name === request.name) ?? null
+      const raw = request.kind === 'members' ? payload.members ?? []
+        : request.kind === 'logs' ? payload.logs ?? []
+        : request.kind === 'result' ? payload.result ?? { state: 'not-produced' }
+        : request.kind === 'phases' ? payload.phases ?? []
+        : request.kind === 'artifacts' ? payload.artifacts ?? []
+        : (payload.artifacts ?? []).find((item: any) => item.name === request.name) ?? null
       const collection = Array.isArray(raw)
       let start = 0
       if (request.cursor !== undefined) {

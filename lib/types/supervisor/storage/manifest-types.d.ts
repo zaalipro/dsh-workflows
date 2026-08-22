@@ -226,7 +226,7 @@ export interface WorkflowTerminalCommitRequest extends Omit<WorkflowRunCommitReq
     readonly detail?: WorkflowRunDetailPayloadV2;
 }
 export interface DetailReadRequest {
-    readonly kind: 'members' | 'logs' | 'result' | 'artifacts' | 'artifact';
+    readonly kind: 'members' | 'logs' | 'result' | 'artifacts' | 'artifact' | 'phases';
     readonly cursor?: string;
     readonly name?: string;
     readonly limit?: number;

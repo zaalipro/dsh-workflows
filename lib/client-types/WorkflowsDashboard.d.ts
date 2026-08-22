@@ -1,5 +1,5 @@
 import { type ReactElement } from 'react';
-import type { ClientRunHead, WorkflowRunArtifactChunk, WorkflowRunsOperations, WorkflowRunsSourceSnapshot } from './contract.js';
+import type { ClientRunHead, WorkflowRunArtifactChunk, WorkflowRunDetail, WorkflowRunMemberHead, WorkflowRunsOperations, WorkflowRunsSourceSnapshot } from './contract.js';
 import type { DashboardWorkflowRunsAdapter } from './adapter.js';
 import type { WorkflowRunsController } from './controller.js';
 import { type DashboardLabels } from './locales.js';
@@ -34,6 +34,8 @@ export interface WorkflowsDashboardProps {
 }
 /** Stable active-oldest/history-newest ordering required by the dashboard. */
 export declare function orderWorkflowRuns(rows: readonly ClientRunHead[]): ClientRunHead[];
+/** Prefer Remote phases; otherwise recover titles from members or the live phase. */
+export declare function declaredWorkflowPhases(execution: WorkflowRunDetail | undefined, selectedRun: ClientRunHead, members: readonly WorkflowRunMemberHead[]): NonNullable<WorkflowRunDetail['phases']>;
 /**
  * Join only a same-revision chunk beginning at the exact prior UTF-8 byte end.
  * Returning undefined forces the UI to preserve the good prefix and retry.

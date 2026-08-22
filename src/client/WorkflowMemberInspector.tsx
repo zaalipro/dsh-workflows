@@ -228,6 +228,13 @@ export function WorkflowMemberInspector({
     )
   } else if (outcome === undefined) {
     body = <><h3>Pending</h3><p className={css.muted}>The member has not produced an outcome yet.</p></>
+  } else if (outcome.state === 'not-produced' && childId !== undefined && onOpenChild !== undefined) {
+    body = (
+      <>
+        <h3>{labels.childTranscript}</h3>
+        <p className={css.muted}>{labels.childTranscriptBody}</p>
+      </>
+    )
   } else {
     body = <OutcomeBody outcome={outcome} labels={labels} />
   }

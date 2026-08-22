@@ -76,7 +76,7 @@ export interface WorkflowRunArtifactRead {
 export interface WorkflowRunCommitRequest {readonly sessionId:string;readonly runId:string;readonly expectedRevision:number;readonly head:Omit<WorkflowRunHeadRecord,'detail'|'completionNotice'>;readonly detail?:WorkflowRunDetailPayloadV2}
 export interface WorkflowTerminalCommitRequest extends Omit<WorkflowRunCommitRequest,'head'>{readonly head:Omit<WorkflowRunHeadRecord,'detail'|'completionNotice'>;readonly detail?:WorkflowRunDetailPayloadV2}
 export interface DetailReadRequest {
-  readonly kind:'members'|'logs'|'result'|'artifacts'|'artifact'
+  readonly kind:'members'|'logs'|'result'|'artifacts'|'artifact'|'phases'
   readonly cursor?:string
   readonly name?:string
   readonly limit?:number

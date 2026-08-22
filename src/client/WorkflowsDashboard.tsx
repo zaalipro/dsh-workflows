@@ -150,6 +150,31 @@ function settledMembers(run: ClientRunHead): number {
   return run.memberCounts.completed + run.memberCounts.failed + run.memberCounts.cancelled
 }
 
+/** Prefer Remote phases; otherwise recover titles from members or the live phase. */
+export function declaredWorkflowPhases(
+  execution: WorkflowRunDetail | undefined,
+  selectedRun: ClientRunHead,
+  members: readonly WorkflowRunMemberHead[],
+): NonNullable<WorkflowRunDetail['phases']> {
+  if (execution?.phases !== undefined && execution.phases.length > 0) return execution.phases
+  const seen = new Set<string>()
+  const fromMembers: Array<{ title: string }> = []
+  for (const member of members) {
+    if (typeof member.phase !== 'string' || member.phase === '' || seen.has(member.phase)) continue
+    seen.add(member.phase)
+    fromMembers.push({ title: member.phase })
+  }
+  if (fromMembers.length > 0) return fromMembers
+  const live = execution?.run.phase ?? selectedRun.phase
+  if (typeof live === 'string' && live.length > 0) return [{ title: live }]
+  return execution?.phases ?? []
+}
+
+function memberOutcomeLabel(member: WorkflowRunMemberHead, labels: DashboardLabels): string {
+  if (member.childSessionId !== undefined && member.outcome === 'not-produced') return labels.outcomeChild
+  return labels.outcome[member.outcome]
+}
+
 function memberSummary(run: ClientRunHead, labels: DashboardLabels): string {
   return labels.agentsCompact(settledMembers(run), run.memberCounts.total)
 }
@@ -1041,22 +1066,25 @@ export function WorkflowsDashboard({
                 <section aria-labelledby="declared-phases-heading">
                   <h3 id="declared-phases-heading">Declared phases</h3>
                   <ol className={css.phaseRail}>
-                    {(execution?.phases ?? []).map((phase, index) => {
+                    {(() => {
+                      const declared = declaredWorkflowPhases(execution, selectedRun, memberRows)
                       const live = execution?.run.phase ?? selectedRun.phase
-                      const current = live !== undefined && phase.title === live
-                      const currentIndex = live === undefined ? -1 : (execution?.phases ?? []).findIndex(item => item.title === live)
-                      const reached = currentIndex >= 0 && index < currentIndex
-                      return (
-                        <li key={`${index}:${phase.title}`} data-current={current ? 'true' : 'false'} title={phase.title}>
-                          <strong>{phase.title}</strong>
-                          {phase.detail !== undefined && <span>{phase.detail}</span>}
-                          {(phase.provider !== undefined || phase.model !== undefined) && <small>{[phase.provider, phase.model].filter(Boolean).join(' · ')}</small>}
-                          <small>{current ? labels.livePhaseCurrent : reached ? labels.livePhaseReached : labels.livePhaseUpcoming}</small>
-                        </li>
-                      )
-                    })}
+                      const currentIndex = live === undefined ? -1 : declared.findIndex(item => item.title === live)
+                      return declared.map((phase, index) => {
+                        const current = live !== undefined && phase.title === live
+                        const reached = currentIndex >= 0 && index < currentIndex
+                        return (
+                          <li key={`${index}:${phase.title}`} data-current={current ? 'true' : 'false'} title={phase.title}>
+                            <strong>{phase.title}</strong>
+                            {phase.detail !== undefined && <span>{phase.detail}</span>}
+                            {(phase.provider !== undefined || phase.model !== undefined) && <small>{[phase.provider, phase.model].filter(Boolean).join(' · ')}</small>}
+                            <small>{current ? labels.livePhaseCurrent : reached ? labels.livePhaseReached : labels.livePhaseUpcoming}</small>
+                          </li>
+                        )
+                      })
+                    })()}
                   </ol>
-                  {execution !== undefined && (execution.phases?.length ?? 0) === 0 && <p>No declared phases.</p>}
+                  {declaredWorkflowPhases(execution, selectedRun, memberRows).length === 0 && execution !== undefined && <p>No declared phases.</p>}
                 </section>
                 {execution?.gate !== undefined && <p className={css.notice}>Waiting for input: {execution.gate.message}</p>}
                 {execution?.error !== undefined && <p className={css.errorText}>Retained error: {execution.error}</p>}
@@ -1080,7 +1108,7 @@ export function WorkflowsDashboard({
                           <button key={member.memberId} type="button" data-workflow-member-id={member.memberId} data-status={member.status} aria-pressed={selectedMemberId === member.memberId} onClick={() => selectMember(member.memberId)}>
                             <span>{member.label === '' ? 'Unnamed member' : member.label}</span>
                             <span>{labels.memberStatus[member.status]}</span>
-                            <span>{labels.outcome[member.outcome]}</span>
+                            <span>{memberOutcomeLabel(member, labels)}</span>
                           </button>
                         ))}
                       </section>

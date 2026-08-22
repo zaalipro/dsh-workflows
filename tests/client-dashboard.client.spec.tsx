@@ -11,6 +11,7 @@ import {
   GENERIC_LOAD_ERROR,
   STALE_CONTROL_ERROR,
   WorkflowsDashboard,
+  declaredWorkflowPhases,
 } from '../src/client/WorkflowsDashboard.js'
 import type {
   ClientRunHead,
@@ -227,6 +228,18 @@ afterEach(() => {
 })
 
 describe('WorkflowsDashboard (RC14-RC18)', () => {
+  it('recovers declared phases from members when Remote detail omitted them', () => {
+    const selected = run('completed')
+    expect(declaredWorkflowPhases({ run: selected, phases: [{ title: 'Review' }, { title: 'Verify' }] }, selected, [])).toEqual([
+      { title: 'Review' }, { title: 'Verify' },
+    ])
+    expect(declaredWorkflowPhases({ run: selected }, selected, [
+      { memberId: 'a', seq: 1, label: 'alpha', phase: 'Fanout', status: 'completed', outcome: 'not-produced' },
+      { memberId: 'b', seq: 2, label: 'beta', phase: 'Fanout', status: 'completed', outcome: 'not-produced' },
+    ])).toEqual([{ title: 'Fanout' }])
+    expect(declaredWorkflowPhases({ run: { ...selected, phase: 'Fanout' } }, selected, [])).toEqual([{ title: 'Fanout' }])
+  })
+
   it('keeps empty, loading, and error panes exclusive of 11.1 copy', () => {
     const empty = bench(source([], 'ready'))
     expect(empty.node.textContent).toContain('No workflow runs yet')

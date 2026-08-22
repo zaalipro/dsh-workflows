@@ -56,6 +56,9 @@ export const workflowLocales = {
     outcomeAvailable: 'Outcome ready',
     outcomeNotProduced: 'No outcome',
     outcomeEvicted: 'Outcome evicted',
+    outcomeChild: 'Child session',
+    childTranscript: 'Child transcript',
+    childTranscriptBody: 'This member finished without a retained return value. Open the child session to inspect its trace.',
     chatNoMembers: 'No members started',
     chatUnphased: 'Unphased',
     chatEmptyPhase: 'Empty phase name',
@@ -122,6 +125,9 @@ export const workflowLocales = {
     outcomeAvailable: '可查看',
     outcomeNotProduced: '未生成',
     outcomeEvicted: '已清理',
+    outcomeChild: '子会话',
+    childTranscript: '子会话记录',
+    childTranscriptBody: '该成员没有保留返回值。打开子会话即可查看它的轨迹。',
     chatNoMembers: '没有启动成员',
     chatUnphased: '未分阶段',
     chatEmptyPhase: '空阶段名',
@@ -235,6 +241,9 @@ export function dashboardLabelsFromLocale(locale: WorkflowsLocale) {
       'not-produced': locale.outcomeNotProduced,
       evicted: locale.outcomeEvicted,
     } as const,
+    outcomeChild: locale.outcomeChild,
+    childTranscript: locale.childTranscript,
+    childTranscriptBody: locale.childTranscriptBody,
   }
 }
 

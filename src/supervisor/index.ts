@@ -466,9 +466,18 @@ export class WorkflowSupervisor {
         if (index < 0 || members[index]!.status !== 'running') return
         const status = member?.outcome === 'completed' || member?.outcome === 'failed' || member?.outcome === 'cancelled'
           ? member.outcome : 'failed'
+        let captured: JsonValue | undefined
+        if (members[index]!.outcome === 'pending') {
+          const raw = (member as { result?: unknown; value?: unknown }).result ?? (member as { value?: unknown }).value
+          if (raw !== undefined) {
+            try { captured = snapshotWorkflowJsonValue(raw) } catch { captured = undefined }
+          }
+        }
         const stored = {
           ...members[index]!, status, settledAt: Date.now(),
-          ...(members[index]!.outcome === 'pending' ? { outcome: 'not-produced' as const } : {}),
+          ...(captured !== undefined
+            ? { outcome: 'available' as const, value: captured }
+            : members[index]!.outcome === 'pending' ? { outcome: 'not-produced' as const } : {}),
         }
         members[index] = stored
         run.detail = { ...run.detail, members }
@@ -1482,7 +1491,7 @@ export class WorkflowSupervisor {
 
   private async readDetailValue(
     runId: string,
-    kind: 'members'|'logs'|'result'|'artifacts'|'artifact',
+    kind: 'members'|'logs'|'result'|'artifacts'|'artifact'|'phases',
     request: { readonly cursor?: string; readonly name?: string; readonly limit?: number; readonly maxBytes?: number } = {},
     signal?: AbortSignal,
   ): Promise<{ readonly value: any; readonly revision: number; readonly total: number; readonly omitted?: number; readonly nextCursor?: string }> {
@@ -1571,12 +1580,25 @@ export class WorkflowSupervisor {
     const found = await this.authorizedHead(agent, runId, signal)
     signal?.throwIfAborted()
     const run = found.live
-    const phases = run?.meta.phases?.map(phase => ({
+    let phases = run?.meta.phases?.map(phase => ({
       title: utf8Prefix(phase.title, this.config.maxEventTextBytes),
       ...(phase.detail === undefined ? {} : { detail: utf8Prefix(phase.detail, this.config.maxEventTextBytes) }),
       ...(phase.provider === undefined ? {} : { provider: utf8Prefix(phase.provider, this.config.maxEventTextBytes) }),
       ...(phase.model === undefined ? {} : { model: utf8Prefix(phase.model, this.config.maxEventTextBytes) }),
     }))
+    if (phases === undefined || phases.length === 0) {
+      try {
+        const stored = await this.readDetailValue(String(found.head.runId), 'phases', { limit: 200 }, signal)
+        const rows = Array.isArray(stored.value) ? stored.value as Array<{ title?: unknown; detail?: unknown }> : []
+        const recovered = rows
+          .filter((phase): phase is { title: string; detail?: string } => typeof phase?.title === 'string' && phase.title.length > 0)
+          .map(phase => ({
+            title: utf8Prefix(phase.title, this.config.maxEventTextBytes),
+            ...(typeof phase.detail === 'string' ? { detail: utf8Prefix(phase.detail, this.config.maxEventTextBytes) } : {}),
+          }))
+        if (recovered.length > 0) phases = recovered
+      } catch { /* completed runs without a phases sidecar stay phase-less */ }
+    }
     const gate = run?.gate?.gate
     const error = found.head.error
     return {

@@ -54,6 +54,9 @@ export declare const workflowLocales: {
         readonly outcomeAvailable: "Outcome ready";
         readonly outcomeNotProduced: "No outcome";
         readonly outcomeEvicted: "Outcome evicted";
+        readonly outcomeChild: "Child session";
+        readonly childTranscript: "Child transcript";
+        readonly childTranscriptBody: "This member finished without a retained return value. Open the child session to inspect its trace.";
         readonly chatNoMembers: "No members started";
         readonly chatUnphased: "Unphased";
         readonly chatEmptyPhase: "Empty phase name";
@@ -120,6 +123,9 @@ export declare const workflowLocales: {
         readonly outcomeAvailable: "可查看";
         readonly outcomeNotProduced: "未生成";
         readonly outcomeEvicted: "已清理";
+        readonly outcomeChild: "子会话";
+        readonly childTranscript: "子会话记录";
+        readonly childTranscriptBody: "该成员没有保留返回值。打开子会话即可查看它的轨迹。";
         readonly chatNoMembers: "没有启动成员";
         readonly chatUnphased: "未分阶段";
         readonly chatEmptyPhase: "空阶段名";
@@ -213,6 +219,9 @@ export declare function dashboardLabelsFromLocale(locale: WorkflowsLocale): {
         readonly 'not-produced': "No outcome" | "未生成";
         readonly evicted: "Outcome evicted" | "已清理";
     };
+    outcomeChild: "Child session" | "子会话";
+    childTranscript: "Child transcript" | "子会话记录";
+    childTranscriptBody: "This member finished without a retained return value. Open the child session to inspect its trace." | "该成员没有保留返回值。打开子会话即可查看它的轨迹。";
 };
 export type DashboardLabels = ReturnType<typeof dashboardLabelsFromLocale>;
 //# sourceMappingURL=locales.d.ts.map

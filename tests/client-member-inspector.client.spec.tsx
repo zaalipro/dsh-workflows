@@ -191,6 +191,23 @@ describe('WorkflowMemberInspector (RC15)', () => {
     expect(failed.textContent).toContain('kept text')
   })
 
+  it('points not-produced members with a child session at the child transcript', () => {
+    const node = mount(
+      <WorkflowMemberInspector
+        member={member({ outcome: 'not-produced' })}
+        detail={{
+          member: member({ outcome: 'not-produced' }),
+          childSessionId: 'child-1',
+          outcome: { state: 'not-produced' },
+        }}
+        onOpenChild={() => true}
+      />,
+    )
+    expect(node.textContent).toContain('Child transcript')
+    expect(node.textContent).toContain('Open the child session to inspect its trace')
+    expect(node.textContent).not.toContain('No outcome produced')
+  })
+
   it('shows exact Retry copy, loading, close, and empty phase labels', async () => {
     const retry = vi.fn()
     const close = vi.fn()
