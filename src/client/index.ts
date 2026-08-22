@@ -417,10 +417,6 @@ export function apply(ctx: ClientContext): void {
     let adapter: DashboardWorkflowRunsAdapter | undefined
     try {
     const remote = root.remote as TypertClientRemote & Record<string, any>
-    if (typeof remote?.$mount === 'function') {
-      try { remoteDisposer = await remote.$mount(TYPERT_REMOTE) } catch { remoteDisposer = undefined }
-    }
-
     const sessions = root.sessions as any
     const liveController = new WorkflowRunsController(remote, sessions)
     const adapterInstance = new DashboardWorkflowRunsAdapter(liveController)
@@ -563,6 +559,17 @@ export function apply(ctx: ClientContext): void {
       key: 'workflows',
       locale: NS,
     }, WorkflowsCommandRow))))
+
+    // Do not block overlay/command-row registration on typert $mount. Stock
+    // hosts may leave that promise pending; /workflows must still open.
+    const remoteMount = typeof remote?.$mount === 'function'
+      ? Promise.resolve().then(() => remote.$mount(TYPERT_REMOTE)).then(
+        disposer => { remoteDisposer = disposer },
+        () => { remoteDisposer = undefined },
+      )
+      : Promise.resolve()
+    addCleanup(() => remoteMount)
+    void remoteMount.then(() => { if (pendingOpen) openDashboard() })
 
     if (typeof remote?.workflowDefinitions?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',
