@@ -132,6 +132,91 @@ function commandUiDispatchesActions(commandUi: object): boolean {
   return false
 }
 
+function conversationCommandNodes(snapshot: unknown): readonly { readonly seq: number; readonly name: string | null }[] {
+  const nodes = (snapshot as { nodes?: unknown } | undefined)?.nodes
+  if (!Array.isArray(nodes)) return []
+  const out: Array<{ seq: number; name: string | null }> = []
+  for (const node of nodes) {
+    if (typeof node !== 'object' || node === null) continue
+    const record = node as { kind?: unknown; seq?: unknown; name?: unknown }
+    if (record.kind !== 'command' || typeof record.seq !== 'number') continue
+    out.push({
+      seq: record.seq,
+      name: typeof record.name === 'string' ? record.name : null,
+    })
+  }
+  return out
+}
+
+/** Stock ui-commands emit command/executed; isolate-safe listeners also watch conversation nodes. */
+function listenCommandExecuted(root: AnyContext, onWorkflows: () => void): Disposer {
+  const handler = (_sessionId: unknown, name: unknown): void => {
+    if (name === 'workflows') onWorkflows()
+  }
+  const targets: object[] = [root]
+  const parent = (root as { root?: unknown }).root
+  if (typeof parent === 'object' && parent !== null && parent !== root) targets.push(parent)
+  const disposers: Array<() => unknown> = []
+  for (const target of targets) {
+    const on = (target as { on?: unknown }).on
+    if (typeof on !== 'function') continue
+    try {
+      const registered = (on as (
+        this: object,
+        event: string,
+        listener: (...args: unknown[]) => void,
+        options?: { readonly global?: boolean },
+      ) => unknown).call(target, 'command/executed', handler, { global: true })
+      const dispose = asDisposer(registered)
+      if (dispose !== undefined) disposers.push(dispose)
+    } catch { /* some Client contexts reject undeclared events */ }
+  }
+  if (disposers.length === 0) return undefined
+  return () => { for (const dispose of disposers) void dispose() }
+}
+
+function watchWorkflowsCommands(sessions: any, onWorkflows: () => void): () => void {
+  let stopSession: (() => void) | undefined
+  let attachedId: string | undefined
+  let attachedSession: unknown
+  const attach = (sessionId: unknown): void => {
+    const id = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : undefined
+    const session = id === undefined ? undefined : sessions?.binding?.(id)?.session
+    if (id === attachedId && session === attachedSession && (session === undefined || stopSession !== undefined)) return
+    stopSession?.()
+    stopSession = undefined
+    attachedId = id
+    attachedSession = session
+    if (session === undefined
+      || typeof session.subscribe !== 'function'
+      || typeof session.getSnapshot !== 'function') return
+    let baseline = 0
+    for (const node of conversationCommandNodes(session.getSnapshot())) {
+      if (node.seq > baseline) baseline = node.seq
+    }
+    const unsubscribe = session.subscribe(() => {
+      for (const node of conversationCommandNodes(session.getSnapshot())) {
+        if (node.seq <= baseline) continue
+        baseline = node.seq
+        if (node.name === 'workflows') onWorkflows()
+      }
+    })
+    stopSession = asDisposer(unsubscribe)
+  }
+  attach(sessions?.list?.getSnapshot?.()?.current)
+  const stopList = typeof sessions?.list?.subscribe === 'function'
+    ? asDisposer(sessions.list.subscribe(() => { attach(sessions.list.getSnapshot()?.current) }))
+    : undefined
+  const stopProvide = typeof sessions?.currentProvideInfo?.subscribe === 'function'
+    ? asDisposer(sessions.currentProvideInfo.subscribe(() => { attach(sessions.list?.getSnapshot?.()?.current) }))
+    : undefined
+  return () => {
+    stopSession?.()
+    stopList?.()
+    stopProvide?.()
+  }
+}
+
 const PICKER_PAGE_LIMIT = 32
 const PICKER_TIMEOUT_MS = 2_500
 
@@ -251,6 +336,7 @@ export function apply(ctx: ClientContext): void {
         })
         : createElement('div'))
     }
+    let dispatchesActions = false
     const openDashboard = (): boolean => {
       if (dashboardActions !== undefined && typeof dashboardActions.open === 'function') {
         const active = typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
@@ -258,6 +344,10 @@ export function apply(ctx: ClientContext): void {
           : null
         captureInvoker(active)
         dashboardActions.open()
+      }
+      // H: the overlay slot store actually mounts the dashboard.
+      // Stock: shell.overlay is an empty list occupant; portal immediately.
+      if (dispatchesActions && dashboardActions !== undefined && typeof dashboardActions.open === 'function') {
         pendingOpen = false
         if (typeof document !== 'undefined' && liveAdapter !== undefined) {
           queueMicrotask(() => {
@@ -270,10 +360,17 @@ export function apply(ctx: ClientContext): void {
         return true
       }
       pendingOpen = true
-      if (liveAdapter === undefined || typeof document === 'undefined') return false
+      if (liveAdapter === undefined || typeof document === 'undefined') {
+        return dashboardActions !== undefined && typeof dashboardActions.open === 'function'
+      }
       fallbackOpen = true
       renderFallbackDashboard()
+      pendingOpen = false
       return fallbackHost !== undefined
+        || (dashboardActions !== undefined && typeof dashboardActions.open === 'function')
+    }
+    const requestOpen = (): void => {
+      try { openDashboard() } catch { /* presentation is best-effort */ }
     }
     addCleanup(root.locale?.register?.(NS, workflowLocales))
     const commandUi = requireCommandUi(root.commandUi)
@@ -282,10 +379,10 @@ export function apply(ctx: ClientContext): void {
       ? String(translate('commandDescription'))
       : workflowLocales.en.commandDescription
     // Stock dsh always opens popupSelect for client contributions, including
-    // kind:'action'. A Host /workflows command plus command/executed opens the
-    // overlay without colliding with that picker. Keep a contribution only when
-    // the runtime actually dispatches actions.
-    const dispatchesActions = commandUiDispatchesActions(commandUi)
+    // kind:'action'. A Host /workflows command plus command/executed (and the
+    // durable command node) opens the overlay without colliding with that picker.
+    // Keep a contribution only when the runtime actually dispatches actions.
+    dispatchesActions = commandUiDispatchesActions(commandUi)
     if (dispatchesActions) {
       addCleanup(asDisposer(commandUi.register({
         name: 'workflows',
@@ -301,15 +398,7 @@ export function apply(ctx: ClientContext): void {
         },
       })))
     }
-    if (typeof root.on === 'function') {
-      const executed = (root.on as (event: string, listener: (...args: unknown[]) => void) => unknown)(
-        'command/executed',
-        (_sessionId: unknown, name: unknown) => {
-          if (name === 'workflows') openDashboard()
-        },
-      )
-      if (typeof executed === 'function') addCleanup(asDisposer(executed))
-    }
+    addCleanup(listenCommandExecuted(root, requestOpen))
 
     let controller: WorkflowRunsController | undefined
     let adapter: DashboardWorkflowRunsAdapter | undefined
@@ -325,6 +414,7 @@ export function apply(ctx: ClientContext): void {
     liveAdapter = adapterInstance
     controller = liveController
     adapter = adapterInstance
+    addCleanup(watchWorkflowsCommands(sessions, requestOpen))
     if (pendingOpen) openDashboard()
 
     root.workflowRunsController = liveController

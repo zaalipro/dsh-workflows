@@ -308,6 +308,55 @@ describe('Client /workflows action (RC21-RC22)', () => {
     expect(actions.opened).toBe(true)
   })
 
+  it('opens the dashboard when a Host /workflows command node appears in conversation', async () => {
+    const pending: Promise<unknown>[] = []
+    const actions = { open() { this.opened = true }, opened: false }
+    let snapshot: { nodes: Array<{ kind: string; seq: number; name: string | null }> } = { nodes: [] }
+    const sessionListeners = new Set<() => void>()
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined, $on: () => () => undefined },
+      sessions: {
+        list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined },
+        binding() {
+          return {
+            session: {
+              getSnapshot: () => snapshot,
+              subscribe(listener: () => void) {
+                sessionListeners.add(listener)
+                return () => { sessionListeners.delete(listener) }
+              },
+            },
+          }
+        },
+      },
+      slots: {
+        inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
+        register(entry: any) { entry.inject?.(actions); return () => undefined },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        register: () => () => undefined,
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    expect(actions.opened).toBe(false)
+    snapshot = { nodes: [{ kind: 'command', seq: 4, name: 'workflow' }] }
+    for (const listener of sessionListeners) listener()
+    expect(actions.opened).toBe(false)
+    snapshot = { nodes: [
+      { kind: 'command', seq: 4, name: 'workflow' },
+      { kind: 'command', seq: 5, name: 'workflows' },
+    ] }
+    for (const listener of sessionListeners) listener()
+    expect(actions.opened).toBe(true)
+  })
+
   it('fails loud when the definition picker Remote is missing and keeps argued /workflows in the command plane', async () => {
     const pending: Promise<unknown>[] = []
     const decorated: any[] = []
