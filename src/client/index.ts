@@ -560,19 +560,15 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
     }, WorkflowsCommandRow))))
 
-    // Do not block overlay/command-row registration on typert $mount. Stock
-    // hosts may leave that promise pending; /workflows must still open.
-    const remoteMount = typeof remote?.$mount === 'function'
-      ? Promise.resolve().then(() => remote.$mount(TYPERT_REMOTE)).then(
-        disposer => { remoteDisposer = disposer },
-        () => { remoteDisposer = undefined },
-      )
-      : Promise.resolve()
-    addCleanup(() => remoteMount)
-    void remoteMount.then(() => {
-      if (pendingOpen) openDashboard()
-      else liveAdapter?.observe(currentSessionId())
-    })
+    // Overlay and command-row registration must complete before this await.
+    // $mount has to run on this fiber (not a detached then) so the generated
+    // workflowRuns namespace actually installs.
+    if (typeof remote?.$mount === 'function') {
+      try { remoteDisposer = await remote.$mount(TYPERT_REMOTE) }
+      catch { remoteDisposer = undefined }
+    }
+    liveAdapter.observe(currentSessionId())
+    if (pendingOpen) openDashboard()
 
     if (typeof remote?.workflowDefinitions?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',
