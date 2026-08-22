@@ -168,7 +168,7 @@ async function provideHost(ctx: Context, options: { readonly remoteEvents?: bool
 describe('package identity and Host inject', () => {
   it('exports the package row identity without blocking boot on optional Remote events', () => {
     expect(name).toBe('dsh-workflows')
-    expect(version).toBe('0.1.0-rc.1')
+    expect(version).toBe('0.1.0-rc.2')
     expect([...inject]).toEqual([
       'agents', 'commands', 'fs', 'skills', 'userQuestions', 'workflowEngine',
     ])

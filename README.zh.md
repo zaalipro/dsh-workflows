@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-`@zaalipro/dsh-workflows@0.1.0-rc.1` 是一个可安装的 DeepSeek Harness bundle，提供已保存的 JavaScript workflow、受监督的后台运行、保留记录检查、斜杠命令和 Web 仪表盘。它复用 Harness 官方 workflow engine；它不包含任何 Grok CLI 代码、账户、配额、二进制文件、源码、协议或运行时依赖，也不包含 Rhai 解析器或求值器。
+`@zaalipro/dsh-workflows@0.1.0-rc.2` 是一个可安装的 DeepSeek Harness bundle，提供已保存的 JavaScript workflow、受监督的后台运行、保留记录检查、斜杠命令和 Web 仪表盘。它复用 Harness 官方 workflow engine；它不包含任何 Grok CLI 代码、账户、配额、二进制文件、源码、协议或运行时依赖，也不包含 Rhai 解析器或求值器。
 
 ## 兼容性
 

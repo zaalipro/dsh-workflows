@@ -151,7 +151,7 @@ function makeManifest() {
     '@deepseek-ai/dsh-workflow': '>=0.1.0-rc.8', '@deepseek-ai/dsh-workflow-worker-thread': '>=0.1.0-rc.8', react: '>=18',
   }
   return {
-    name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.1', type: 'module', license: 'MIT',
+    name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.2', type: 'module', license: 'MIT',
     engines: { node: '^22.19.0 || >=24.0.0' }, packageManager: 'pnpm@11.7.0', publishConfig: { access: 'public' },
     main: './lib/types/index.js', types: './lib/types/index.d.ts',
     files: [

@@ -26,7 +26,7 @@ import { registerWorkflowRemoteEvents } from './remote-events.js'
 export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvariant }
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode }
 export const name = 'dsh-workflows'
-export const version = '0.1.0-rc.1'
+export const version = '0.1.0-rc.2'
 
 /** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export const inject = [

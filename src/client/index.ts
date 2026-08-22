@@ -346,9 +346,13 @@ function bindDashboardCatalog(remote: any, sessions: any, connection?: any): {
       }
       const result = await live.command(`/workflow ${name}`)
       if (result?.ok === false) {
-        throw new Error(typeof result.error === 'string' && result.error.length > 0
-          ? result.error
-          : 'the host rejected /workflow')
+        const raw = result.error
+        const message = typeof raw === 'string' && raw.length > 0
+          ? raw
+          : typeof raw === 'object' && raw !== null && typeof (raw as any).message === 'string' && (raw as any).message.length > 0
+            ? (raw as any).message
+            : 'the host rejected /workflow'
+        throw new Error(message)
       }
       if (result?.value?.matched === false) throw new Error('the host offers no /workflow command')
     },

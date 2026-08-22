@@ -451,8 +451,9 @@ export function WorkflowsDashboard({
         .sort((left, right) => right.startedAt - left.startedAt)[0]
       if (newest !== undefined) selectRun(newest.runId)
       setLaunchFeedback({ kind: 'notice', message: labels.started(name) })
-    } catch {
-      setLaunchFeedback({ kind: 'error', message: labels.launchFailed })
+    } catch (error) {
+      const reason = error instanceof Error && error.message.length > 0 ? error.message : labels.launchFailed
+      setLaunchFeedback({ kind: 'error', message: reason })
     } finally {
       setStartingName(undefined)
     }
