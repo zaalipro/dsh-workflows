@@ -101,8 +101,11 @@ export function adaptEngineHandle(raw: unknown): EngineHandle | undefined {
     resume: () => { resume() },
     release: () => { release() },
     async dispose() {
-      await disposeRaw()
-      disposed = true
+      try {
+        await disposeRaw()
+      } finally {
+        disposed = true
+      }
     },
     checkpoint() {
       if (nativeCheckpoint !== undefined) return nativeCheckpoint()
