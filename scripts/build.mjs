@@ -165,22 +165,7 @@ export async function generateTypert(stagingRoot) {
  * never reaches the source tree or the packed package.
  */
 async function prepareTypertSourceOverlay(packageRoot) {
-  // The Host root permanently exports both decorated Remote services.  Do not
-  // append a hand-maintained analysis overlay: the copied workspace must see
-  // exactly the same public face as the package source.
-  for (const path of ['src/registry/remote.ts', 'src/supervisor/remote.ts']) {
-    const file = resolve(packageRoot, path)
-    await writeFile(
-      file,
-      replaceExactly(
-        await readFile(file, 'utf8'),
-        'details?: Readonly<Record<string, unknown>>',
-        'details?: any',
-        file,
-      ),
-      'utf8',
-    )
-  }
+  void packageRoot
 }
 
 /**

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { apply } from '../src/client/index.js'
 import { workflowLocales } from '../src/client/locales.js'
@@ -146,6 +146,70 @@ describe('Client /workflows action (RC21-RC22)', () => {
     await decorated[0].ui.onSelect({ id: 'review-changes' }, { sessionId: 's1' })
   })
 
+  it('settles an empty picker when the definitions RPC hangs or uses the two-arg face', async () => {
+    const pending: Promise<unknown>[] = []
+    const decorated: any[] = []
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: {
+        $mount: async () => () => undefined,
+        $on: () => () => undefined,
+        workflowDefinitions: {
+          list: async (sessionId: string, second: unknown) => {
+            if (second && typeof second === 'object' && second !== null && 'limit' in second) {
+              throw new Error('use two-arg list')
+            }
+            return { items: [{ name: 'audit', description: 'Audit', scope: 'user' }] }
+          },
+        },
+      },
+      sessions: {
+        list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined },
+        binding: () => ({ session: { command: async () => ({ ok: true, value: { matched: true } }) } }),
+      },
+      slots: { inject: () => () => undefined, register: () => undefined },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: actionCommandUi({
+        register: () => () => undefined,
+        decorate(contribution: any) { decorated.push(contribution); return () => undefined },
+      }),
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on: () => () => undefined,
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    await expect(decorated[0].ui.options({ sessionId: 's1' }, new AbortController().signal)).resolves.toEqual([
+      { id: 'audit', label: 'audit', detail: 'Audit · user' },
+    ])
+
+    const hungPending: Promise<unknown>[] = []
+    const hung: any[] = []
+    const hungCtx: any = {
+      ...ctx,
+      effect(fn: () => unknown) { hungPending.push(Promise.resolve().then(() => fn())) },
+      remote: {
+        $mount: async () => () => undefined,
+        $on: () => () => undefined,
+        workflowDefinitions: { list: () => new Promise(() => undefined) },
+      },
+      commandUi: actionCommandUi({
+        register: () => () => undefined,
+        decorate(contribution: any) { hung.push(contribution); return () => undefined },
+      }),
+    }
+    vi.useFakeTimers()
+    try {
+      apply(hungCtx)
+      await Promise.all(hungPending)
+      const options = hung[0].ui.options({ sessionId: 's1' }, new AbortController().signal)
+      await vi.advanceTimersByTimeAsync(2_500)
+      await expect(options).resolves.toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('fails loud when the overlay is not mounted', async () => {
     const pending: Promise<unknown>[] = []
     const registered: any[] = []
@@ -193,8 +257,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
     }
     apply(ctx)
     await Promise.all(pending)
-    await expect(decorated[0].ui.options({ sessionId: 's1' }, new AbortController().signal))
-      .rejects.toThrow(/workflow definition picker is unavailable/u)
+    expect(decorated).toEqual([])
     expect(ctx.commandUi).toBeDefined()
   })
 })

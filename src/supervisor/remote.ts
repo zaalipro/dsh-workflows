@@ -16,6 +16,7 @@ import type {
   WorkflowRunControlResult,
   WorkflowRunCursor,
   WorkflowRunDetail,
+  WorkflowRunHead,
   WorkflowRunListPage,
   WorkflowRunListRequest,
   WorkflowRunLogPage,
@@ -51,7 +52,7 @@ function sessionIdOf(agent: Agent): string {
   return typeof value === 'string' ? value : ''
 }
 
-function failure(code: WorkflowRemoteFailure['code'], message: string, details?: Readonly<Record<string, unknown>>): { readonly ok: false; readonly error: WorkflowRemoteFailure } {
+function failure(code: WorkflowRemoteFailure['code'], message: string, details?: { readonly min?: number; readonly max?: number; readonly revision?: number; readonly reason?: 'budget-limited' | 'invalid-state' | 'save-ineligible'; readonly run?: WorkflowRunHead }): { readonly ok: false; readonly error: WorkflowRemoteFailure } {
   if (code === 'revision-conflict') {
     return { ok: false, error: { code, message: 'workflow run changed; refresh it before applying a control', details: details as { readonly run: any } } }
   }

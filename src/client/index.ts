@@ -112,35 +112,60 @@ function requireCommandUi(commandUi: unknown): WorkflowCommandUi {
   return commandUi as WorkflowCommandUi
 }
 
-/** Load the complete picker catalog through the generated direct Agent face. */
+const PICKER_PAGE_LIMIT = 32
+const PICKER_TIMEOUT_MS = 2_500
+
+async function callDefinitionList(list: (...args: never[]) => Promise<unknown>, sessionId: string, request: object, signal: AbortSignal): Promise<unknown> {
+  try {
+    return await (list as (sessionId: string, request: object, signal: AbortSignal) => Promise<unknown>)(sessionId, request, signal)
+  } catch {
+    return await (list as (sessionId: string, signal: AbortSignal) => Promise<unknown>)(sessionId, signal)
+  }
+}
+
+/** Load the picker catalog; an absent or hung Remote must settle, never spin. */
 async function loadPickerDefinitions(
   remote: any,
   session: any,
   signal: AbortSignal,
 ): Promise<readonly any[]> {
-  const definitions = remote?.workflowDefinitions
-  if (typeof definitions?.list !== 'function') {
-    throw new Error('workflow definition picker is unavailable')
-  }
-  const items: any[] = []
-  const seen = new Set<string>()
-  let cursor: string | undefined
-  for (;;) {
-    const request = cursor === undefined ? { limit: 200 } : { limit: 200, cursor }
-    // H's generated direct face is always (sessionId, request, signal).  Do
-    // not infer the arity: minifiers/proxies are free to expose any length.
-    const raw = await definitions.list(session.sessionId, request, signal)
-    const page = unwrapWorkflowRemoteResult<any>(raw)
-    const pageItems = Array.isArray(page) ? page : Array.isArray(page?.items) ? page.items : []
-    items.push(...pageItems)
-    if (items.length > MAX_PICKER_DEFINITIONS) {
-      throw new Error('workflow definition picker exceeds 4096 definitions')
+  const list = remote?.workflowDefinitions?.list
+  if (typeof list !== 'function') return []
+  const sessionId = String(session?.sessionId ?? '')
+  const work = (async () => {
+    const items: any[] = []
+    const seen = new Set<string>()
+    let cursor: string | undefined
+    for (let pageNo = 0; pageNo < PICKER_PAGE_LIMIT; pageNo += 1) {
+      signal.throwIfAborted()
+      const request = cursor === undefined ? { limit: 200 } : { limit: 200, cursor }
+      const raw = await callDefinitionList(list, sessionId, request, signal)
+      const page = unwrapWorkflowRemoteResult<any>(raw)
+      const pageItems = Array.isArray(page) ? page : Array.isArray(page?.items) ? page.items : []
+      items.push(...pageItems)
+      if (items.length > MAX_PICKER_DEFINITIONS) return items.slice(0, MAX_PICKER_DEFINITIONS)
+      const next = page?.nextCursor === undefined || page?.nextCursor === '' ? undefined : String(page.nextCursor)
+      if (next === undefined) return items
+      if (seen.has(next) || next === cursor) return items
+      seen.add(next)
+      cursor = next
     }
-    const next = page?.nextCursor === undefined ? undefined : String(page.nextCursor)
-    if (next === undefined) return items
-    if (seen.has(next) || next === cursor) throw new Error('workflow definition picker received a repeated cursor')
-    seen.add(next)
-    cursor = next
+    return items
+  })()
+  const timeout = new Promise<never>((_, reject) => {
+    const timer = setTimeout(() => reject(new Error('workflow definition picker timed out')), PICKER_TIMEOUT_MS)
+    const abort = (): void => {
+      clearTimeout(timer)
+      reject(signal.reason ?? new Error('workflow definition picker aborted'))
+    }
+    if (signal.aborted) abort()
+    else signal.addEventListener('abort', abort, { once: true })
+    void work.finally(() => clearTimeout(timer))
+  })
+  try {
+    return await Promise.race([work, timeout])
+  } catch {
+    return []
   }
 }
 
@@ -312,7 +337,7 @@ export function apply(ctx: ClientContext): void {
     addCleanup(overlayInjection)
     overlayMounted = overlayInjection !== undefined
 
-    addCleanup(asDisposer(commandUi.decorate({
+    if (typeof remote?.workflowDefinitions?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',
       available: () => true,
       ui: {

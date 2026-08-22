@@ -70,7 +70,7 @@ export type WorkflowRemoteFailureCode=
   |'artifact-not-found'|'artifact-changed'|'revision-conflict'
   |'action-unavailable'|'storage-unavailable'
 export type WorkflowRemoteFailure =
-  | { readonly code: Exclude<WorkflowRemoteFailureCode, 'revision-conflict'|'action-unavailable'>; readonly message: string; readonly details?: Readonly<Record<string, unknown>> }
+  | { readonly code: Exclude<WorkflowRemoteFailureCode, 'revision-conflict'|'action-unavailable'>; readonly message: string; readonly details?: { readonly min?: number; readonly max?: number; readonly revision?: number } }
   | { readonly code: 'revision-conflict'; readonly message: 'workflow run changed; refresh it before applying a control'; readonly details: { readonly run: WorkflowRunHead } }
   | { readonly code: 'action-unavailable'; readonly message: string; readonly details: { readonly reason: 'budget-limited'|'invalid-state'|'save-ineligible'; readonly run?: WorkflowRunHead } }
 

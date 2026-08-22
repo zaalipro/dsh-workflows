@@ -24,7 +24,7 @@ function sessionIdOf(agent: Agent): string {
 function failure(
   code: Exclude<WorkflowRemoteFailure['code'], 'revision-conflict' | 'action-unavailable'>,
   message: string,
-  details?: Readonly<Record<string, unknown>>,
+  details?: { readonly min?: number; readonly max?: number },
 ): { readonly ok: false; readonly error: WorkflowRemoteFailure } {
   return { ok: false, error: { code, message, ...(details === undefined ? {} : { details }) } as WorkflowRemoteFailure }
 }

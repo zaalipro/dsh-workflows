@@ -231,7 +231,11 @@ export type WorkflowRemoteFailureCode = 'invalid-page-limit' | 'invalid-artifact
 export type WorkflowRemoteFailure = {
     readonly code: Exclude<WorkflowRemoteFailureCode, 'revision-conflict' | 'action-unavailable'>;
     readonly message: string;
-    readonly details?: Readonly<Record<string, unknown>>;
+    readonly details?: {
+        readonly min?: number;
+        readonly max?: number;
+        readonly revision?: number;
+    };
 } | {
     readonly code: 'revision-conflict';
     readonly message: 'workflow run changed; refresh it before applying a control';
