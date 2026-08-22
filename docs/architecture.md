@@ -88,7 +88,7 @@ The headless bundle has no import path to `./client`; commands, saved aliases, t
 - **Completion notifier** owns the `none -> claimed -> delivered|abandoned` outbox and bounded owner wake cohorts.
 - **Run recorder (`ctx.workflowRunRecorder`)** projects explicitly attributed top-level runs into the official Session vocabulary.
 - **Question bridge** maps an exact fenced `workflows/gate-request` to `ctx.userQuestions` and acknowledges only the current Agent/run/execution/gate tuple.
-- **Commands and trusted skill** own `/workflow`, `/create-workflow`, dynamic aliases, and the protected packaged `create-workflow` definition. `/workflows` is not a Host command.
+- **Commands and trusted skill** own `/workflow`, `/workflows`, `/create-workflow`, dynamic aliases, and the protected packaged `create-workflow` definition. The Client owns the `/workflows` overlay.
 - **Tool adapter** temporarily replaces the official `workflow` tool and `tool:workflow` prompt section only in the exact Agent context where both official identities match.
 - **Remote services** expose definition lists and paged run detail, members, logs, result, artifacts, chunks, and revision-checked controls.
 

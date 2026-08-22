@@ -312,6 +312,7 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         ActionCommandUiSpec: { kind: 'action' },
+        runAction() { /* H dispatch face */ },
         register(contribution: any) { registered.push(contribution); return () => undefined },
         decorate: () => () => undefined,
       },

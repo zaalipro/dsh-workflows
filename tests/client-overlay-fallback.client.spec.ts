@@ -41,6 +41,7 @@ describe('stock overlay fallback portal', () => {
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         ActionCommandUiSpec: { kind: 'action' },
+        runAction() { /* H dispatch face */ },
         register(contribution: any) { registered.push(contribution); return () => undefined },
         decorate: () => () => undefined,
       },
@@ -54,7 +55,7 @@ describe('stock overlay fallback portal', () => {
     const host = document.getElementById('dsh-workflows-overlay')
     expect(host).toBeTruthy()
     expect(host?.querySelector('[data-workflows-dashboard], [role="dialog"]')).toBeTruthy()
-    await act(async () => { await registered[0].ui.onSelect({ id: 'open' }, { sessionId: 's1' }) })
+    await act(async () => { registered[0].ui.run() })
     host?.querySelector('button[aria-label="Close workflows"], button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
 
@@ -86,6 +87,7 @@ describe('stock overlay fallback portal', () => {
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         ActionCommandUiSpec: { kind: 'action' },
+        runAction() { /* H dispatch face */ },
         register(contribution: any) { registered.push(contribution); return () => undefined },
         decorate: () => () => undefined,
       },

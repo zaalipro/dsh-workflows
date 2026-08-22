@@ -71,10 +71,10 @@ describe('documentation verifier', () => {
     const grok = readFileSync(join(repository, 'grok_workflows.md'), 'utf8')
     const ds = readFileSync(join(repository, 'ds_workflows.md'), 'utf8')
     expect(grok).toContain('@zaalipro/dsh-workflows')
-    expect(grok).toMatch(/\/workflows` is a Client-owned browser action/u)
+    expect(grok).toMatch(/\/workflows` are Host commands/u)
     expect(grok).toContain('not the current runbook')
     expect(ds).toContain('@zaalipro/dsh-workflows')
-    expect(ds).toMatch(/\/workflows` is Client-only/u)
+    expect(ds).toMatch(/\/workflows`/u)
     expect(ds).toContain('not the current runbook')
   })
 

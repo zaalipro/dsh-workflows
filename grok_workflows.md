@@ -1,6 +1,6 @@
 # Workflows
 
-> **Current package identity.** This note is the original product-idea source, not the current runbook. The installable product is `@zaalipro/dsh-workflows`. `/workflow` and `/create-workflow` are Host commands; **`/workflows` is a Client-owned browser action** and is never a Host command. See `README.md` and `docs/user-guide.md`.
+> **Current package identity.** This note is the original product-idea source, not the current runbook. The installable product is `@zaalipro/dsh-workflows`. `/workflow`, `/create-workflow`, and **`/workflows` are Host commands**; the Client owns the dashboard overlay opened from `/workflows`. See `README.md` and `docs/user-guide.md`.
 
 This is how workflows should work in SwarmCode. It is the same idea as Grok Build: a host-run, deterministic pipeline of agents. It is not an implementation plan, not a UI spec, and not a scripting-language reference.
 

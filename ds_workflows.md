@@ -1,6 +1,6 @@
 # Task: Add Grok-Build-parity workflows to DeepSeek Harness Web UI
 
-> **Historical donor-task note — not the current runbook.** The installable product is `@zaalipro/dsh-workflows`. Host registers only `/workflow` and `/create-workflow`. **`/workflows` is Client-only** (a browser `kind: action`); do not register it as a Host command. Donor commit `391c829` is behavioral reference only. Follow `docs/user-guide.md` and `docs/architecture.md`.
+> **Historical donor-task note — not the current runbook.** The installable product is `@zaalipro/dsh-workflows`. Host registers `/workflow`, `/create-workflow`, and **`/workflows`**. The Client owns the dashboard overlay. Donor commit `391c829` is behavioral reference only. Follow `docs/user-guide.md` and `docs/architecture.md`.
 
 You are working in the existing DeepSeek Harness checkout (github.com/zaalipro/deepseek-harness). Do **not** clone Grok, do **not** add a second workflow engine, do **not** switch the dialect to Rhai.
 

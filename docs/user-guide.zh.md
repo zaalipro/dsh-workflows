@@ -127,7 +127,7 @@ Argument 必须是一个 JSON object。Array 与 scalar 会在 launch 前失败�
 /workflows
 ```
 
-该 browser-owned action 打开 label 为 `Workflows` 的 dialog。它不发出 Host `command/run` 或 `command/done` record，也不产生 `workflows · Completed` Chat row。带 argument 或 attachment 的 `/workflows` 不会打开任何内容；它会保留在 composer command plane 中，draft 不变。Dashboard chrome 与 Chat label 跟随 host locale：本包注册 English 与 Chinese dictionary，English 为 fallback，关闭控件的可见文字与 accessible name 都是 `Close workflows`（中文 locale 下为 `关闭工作流`）。Inspector heading（`Pending`、`JSON outcome` 以及 criterion 11.4 的其余 heading）和 criterion 11.4/11.11 的精确 error string 保持英文。
+该 Host command 打开 label 为 `Workflows` 的 dialog。Client 拥有 overlay。带 argument 或 attachment 的 `/workflows` 不会打开 overlay；它会保留在 composer command plane 中，draft 不变。Dashboard chrome 与 Chat label 跟随 host locale：本包注册 English 与 Chinese dictionary，English 为 fallback，关闭控件的可见文字与 accessible name 都是 `Close workflows`（中文 locale 下为 `关闭工作流`）。Inspector heading（`Pending`、`JSON outcome` 以及 criterion 11.4 的其余 heading）和 criterion 11.4/11.11 的精确 error string 保持英文。
 
 Run navigator 显示 display name、status、current phase、agent spent/total、running 与 settled member count、bounded terminal summary，以及 retained-run loaded/total disclosure。Active run 按最早优先排序，history 按最新 settlement 排序。`Load more` 获取下一个 authorized bounded page；只有 terminal row 可按确定性 oldest-first retention evict，active row 与 display ordinal history 永不 evict。
 

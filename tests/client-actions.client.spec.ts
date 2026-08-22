@@ -7,6 +7,7 @@ function actionCommandUi(overrides: Record<string, unknown> = {}) {
   return {
     ActionCommandUiSpec: { kind: 'action' as const },
     uiKinds: ['action', 'popupSelect'],
+    runAction() { /* H dispatch face */ },
     ...overrides,
   }
 }
@@ -53,6 +54,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       slots: { inject: () => () => undefined, register: () => undefined },
       conversationEvents: { register: () => () => undefined },
       commandUi: {
+        runAction() { /* H dispatch face */ },
         register(contribution: any) { registered.push(contribution); return () => undefined },
         decorate: () => () => undefined,
       },
@@ -134,16 +136,6 @@ describe('Client /workflows action (RC21-RC22)', () => {
     })
     expect(registered[0].description).not.toMatch(/[0-9a-f]{32}/u)
     registered[0].ui.run()
-    expect(actions.opened).toBe(true)
-    actions.opened = false
-    await expect(registered[0].ui.options({ sessionId: 's1' }, new AbortController().signal)).resolves.toEqual([{
-      id: 'open',
-      label: workflowLocales.zh.commandDescription,
-      detail: 'Live runs and subagent traces',
-    }])
-    expect(actions.opened).toBe(true)
-    actions.opened = false
-    await registered[0].ui.onSelect({ id: 'open' }, { sessionId: 's1' })
     expect(actions.opened).toBe(true)
 
     expect(decorated[0]).toMatchObject({ name: 'workflow', ui: { kind: 'popupSelect' } })
@@ -240,11 +232,6 @@ describe('Client /workflows action (RC21-RC22)', () => {
     apply(ctx)
     await Promise.all(pending)
     expect(() => registered[0].ui.run()).toThrow(/workflow dashboard overlay is not mounted/u)
-    await expect(registered[0].ui.options({ sessionId: 's1' }, new AbortController().signal)).resolves.toEqual([{
-      id: 'open',
-      label: workflowLocales.en.commandDescription,
-      detail: 'Live runs and subagent traces',
-    }])
   })
 
   it('opens a pending dashboard after a late overlay inject', async () => {
@@ -280,9 +267,44 @@ describe('Client /workflows action (RC21-RC22)', () => {
     }
     apply(ctx)
     await Promise.all(pending)
-    await registered[0].ui.options({ sessionId: 's1' }, new AbortController().signal)
+    expect(() => registered[0].ui.run()).toThrow(/workflow dashboard overlay is not mounted/u)
     expect(actions.opened).toBe(false)
     storedFactory?.()
+    expect(actions.opened).toBe(true)
+  })
+
+  it('opens the dashboard from Host command/executed on stock commandUi', async () => {
+    const pending: Promise<unknown>[] = []
+    const registered: any[] = []
+    const executed: Array<(sessionId: string, name: string) => void> = []
+    const actions = { open() { this.opened = true }, opened: false }
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: { $mount: async () => () => undefined, $on: () => () => undefined },
+      sessions: { list: { getSnapshot: () => ({ ids: ['s1'], current: 's1', phase: 'ready' }), subscribe: () => () => undefined } },
+      slots: {
+        inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
+        register(entry: any) { entry.inject?.(actions); return () => undefined },
+      },
+      conversationEvents: { register: () => () => undefined },
+      commandUi: {
+        register(contribution: any) { registered.push(contribution); return () => undefined },
+        decorate: () => () => undefined,
+      },
+      locale: { register: () => () => undefined },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      on(event: string, listener: (sessionId: string, name: string) => void) {
+        if (event === 'command/executed') executed.push(listener)
+        return () => undefined
+      },
+    }
+    apply(ctx)
+    await Promise.all(pending)
+    expect(registered).toEqual([])
+    expect(executed).toHaveLength(1)
+    executed[0]!('s1', 'workflows')
+    expect(actions.opened).toBe(true)
+    executed[0]!('s1', 'workflow')
     expect(actions.opened).toBe(true)
   })
 

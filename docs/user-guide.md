@@ -127,7 +127,7 @@ In Web, submit exact bare:
 /workflows
 ```
 
-This browser-owned action opens the dialog labelled `Workflows`. It emits no Host `command/run` or `command/done` record and produces no `workflows · Completed` Chat row. `/workflows` with arguments or attachments does not open anything; it remains unresolved in the composer command plane with its draft intact. Dashboard chrome and Chat labels follow the host locale: the package registers English and Chinese dictionaries, English is the fallback, and the close control uses the same `Close workflows` accessible name as the visible label. Inspector headings (`Pending`, `JSON outcome`, and the rest of criterion 11.4) and the exact criterion 11.4/11.11 error strings stay English.
+This Host command opens the dialog labelled `Workflows`. The Client owns the overlay. `/workflows` with arguments or attachments does not open the overlay; it remains unresolved in the composer command plane with its draft intact. Dashboard chrome and Chat labels follow the host locale: the package registers English and Chinese dictionaries, English is the fallback, and the close control uses the same `Close workflows` accessible name as the visible label. Inspector headings (`Pending`, `JSON outcome`, and the rest of criterion 11.4) and the exact criterion 11.4/11.11 error strings stay English.
 
 The run navigator shows display name, status, current phase, agents spent/total, running and settled member counts, a bounded terminal summary, and retained-run loaded/total disclosure. Active runs sort oldest-first and history sorts by newest settlement. `Load more` fetches the next authorized bounded page; only terminal rows are eligible for deterministic oldest-first retention eviction, never active rows or display ordinal history.
 

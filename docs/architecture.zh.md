@@ -88,7 +88,7 @@ headless bundle 没有通往 `./client` 的 import path；命令、保存的 ali
 - **Completion notifier** 拥有 `none -> claimed -> delivered|abandoned` outbox 和 bounded owner wake cohort。
 - **Run recorder (`ctx.workflowRunRecorder`)** 把明确归属的 top-level run 投影到官方 Session vocabulary。
 - **Question bridge** 把 exact fenced `workflows/gate-request` 映射到 `ctx.userQuestions`，只确认当前 Agent/run/execution/gate tuple。
-- **命令与 trusted skill** 拥有 `/workflow`、`/create-workflow`、dynamic alias 以及受保护的 packaged `create-workflow` definition。`/workflows` 不是 Host command。
+- **命令与 trusted skill** 拥有 `/workflow`、`/workflows`、`/create-workflow`、dynamic alias 以及受保护的 packaged `create-workflow` definition。Client 拥有 `/workflows` overlay。
 - **Tool adapter** 只在两个官方 identity 都匹配的 exact Agent context 中临时替换官方 `workflow` tool 和 `tool:workflow` prompt section。
 - **Remote service** 提供 definition list 以及分页的 run detail、member、log、result、artifact、chunk 和 revision-checked control。
 

@@ -121,6 +121,17 @@ function requireCommandUi(commandUi: unknown): WorkflowCommandUi {
   return commandUi as WorkflowCommandUi
 }
 
+/** H dispatches kind:action via runAction; stock always openPopup. */
+function commandUiDispatchesActions(commandUi: object): boolean {
+  let current: object | null = commandUi
+  while (current !== null) {
+    if (typeof (current as { runAction?: unknown }).runAction === 'function') return true
+    current = Object.getPrototypeOf(current)
+    if (current === Object.prototype) break
+  }
+  return false
+}
+
 const PICKER_PAGE_LIMIT = 32
 const PICKER_TIMEOUT_MS = 2_500
 
@@ -270,24 +281,35 @@ export function apply(ctx: ClientContext): void {
     const workflowsDescription = typeof translate === 'function'
       ? String(translate('commandDescription'))
       : workflowLocales.en.commandDescription
-    addCleanup(asDisposer(commandUi.register({
-      name: 'workflows',
-      description: workflowsDescription,
-      available: () => true,
-      ui: {
-        kind: 'action' as const,
-        run: () => {
-          if (!openDashboard()) {
-            throw new Error('workflow dashboard overlay is not mounted')
-          }
+    // Stock dsh always opens popupSelect for client contributions, including
+    // kind:'action'. A Host /workflows command plus command/executed opens the
+    // overlay without colliding with that picker. Keep a contribution only when
+    // the runtime actually dispatches actions.
+    const dispatchesActions = commandUiDispatchesActions(commandUi)
+    if (dispatchesActions) {
+      addCleanup(asDisposer(commandUi.register({
+        name: 'workflows',
+        description: workflowsDescription,
+        available: () => true,
+        ui: {
+          kind: 'action' as const,
+          run: () => {
+            if (!openDashboard()) {
+              throw new Error('workflow dashboard overlay is not mounted')
+            }
+          },
         },
-        options: async () => {
-          openDashboard()
-          return [{ id: 'open', label: workflowsDescription, detail: 'Live runs and subagent traces' }]
+      })))
+    }
+    if (typeof root.on === 'function') {
+      const executed = (root.on as (event: string, listener: (...args: unknown[]) => void) => unknown)(
+        'command/executed',
+        (_sessionId: unknown, name: unknown) => {
+          if (name === 'workflows') openDashboard()
         },
-        onSelect: async () => { openDashboard() },
-      },
-    })))
+      )
+      if (typeof executed === 'function') addCleanup(asDisposer(executed))
+    }
 
     let controller: WorkflowRunsController | undefined
     let adapter: DashboardWorkflowRunsAdapter | undefined

@@ -24,6 +24,8 @@ export const COMMAND_SUCCESS = {
 }
 export const CREATE_WORKFLOW_COMMAND_DESCRIPTION =
   'Author, smoke-check, and save a new workflow (create-workflow skill)'
+export const WORKFLOWS_COMMAND_DESCRIPTION = 'Open the live workflow run dashboard'
+export const WORKFLOWS_COMMAND_SUCCESS = 'Opened the workflow dashboard.'
 const DEFAULT_SKILL_DESCRIPTION =
   'Author, smoke-check, and save a new saved workflow (invoke via /create-workflow).'
 type OfficialCommandResult = { readonly kind: 'success'|'error'; readonly text?: string }
@@ -394,6 +396,17 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
     },
   })
   cleanup.push(asDisposer(workflowCommand))
+  const workflowsCommand = commands.register({
+    name: 'workflows',
+    description: WORKFLOWS_COMMAND_DESCRIPTION,
+    handler: async (invocation: any): Promise<OfficialCommandResult> => {
+      try {
+        invocation.signal?.throwIfAborted()
+        return commandSuccess(WORKFLOWS_COMMAND_SUCCESS)
+      } catch (error) { return commandError(error) }
+    },
+  })
+  cleanup.push(asDisposer(workflowsCommand))
   const createCommand = commands.register({
     name: 'create-workflow',
     description: CREATE_WORKFLOW_COMMAND_DESCRIPTION,

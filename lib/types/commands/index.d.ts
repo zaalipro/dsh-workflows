@@ -22,6 +22,8 @@ export declare const COMMAND_SUCCESS: {
     stop: (display: string) => string;
 };
 export declare const CREATE_WORKFLOW_COMMAND_DESCRIPTION = "Author, smoke-check, and save a new workflow (create-workflow skill)";
+export declare const WORKFLOWS_COMMAND_DESCRIPTION = "Open the live workflow run dashboard";
+export declare const WORKFLOWS_COMMAND_SUCCESS = "Opened the workflow dashboard.";
 export interface WorkflowCommandServices {
     readonly registry: Pick<WorkflowRegistry, 'get'>;
     readonly supervisor: Pick<WorkflowSupervisor, 'start' | 'pause' | 'resume' | 'stop' | 'save'>;
