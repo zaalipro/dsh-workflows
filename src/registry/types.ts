@@ -12,7 +12,8 @@ export interface WorkflowDefinition extends WorkflowDefinitionSummary { readonly
 export interface WorkflowLookupOptions { readonly cwd?: string; readonly signal?: AbortSignal }
 export interface WorkflowSaveOptions extends WorkflowLookupOptions { readonly scope: WorkflowSaveScope }
 export interface WorkflowCatalogSnapshot { readonly definitions: readonly WorkflowDefinitionSummary[]; readonly complete: boolean; readonly revision?: number }
-export type WorkflowDefinitionCursor = string & { readonly __brand: 'WorkflowDefinitionCursor' };
+/** Plain string on the wire: Typert strict codecs reject TypeScript `__brand` intersections. */
+export type WorkflowDefinitionCursor = string
 export interface WorkflowDefinitionListRequest { readonly cursor?: WorkflowDefinitionCursor; readonly limit?: number }
 export interface WorkflowDefinitionListPage { readonly items: readonly WorkflowDefinitionSummaryView[]; readonly nextCursor?: WorkflowDefinitionCursor; readonly total: number; readonly revision: number }
 export interface RegistryConfig {

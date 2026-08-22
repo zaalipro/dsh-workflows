@@ -1,21 +1,12 @@
 import type { JsonValue, WorkflowRunStatus, WorkflowRunOutcomeState } from './storage/manifest-types.js';
 import type { WorkflowScope } from '../registry/types.js';
 export type { WorkflowRunStatus, WorkflowRunOutcomeState };
-export type SupervisedWorkflowRunId = string & {
-    readonly __brand: 'SupervisedWorkflowRunId';
-};
-export type WorkflowMemberId = string & {
-    readonly __brand: 'WorkflowMemberId';
-};
-export type WorkflowGateId = string & {
-    readonly __brand: 'WorkflowGateId';
-};
-export type WorkflowRunCursor = string & {
-    readonly __brand: 'WorkflowRunCursor';
-};
-export type WorkflowRunFeedEpoch = string & {
-    readonly __brand: 'WorkflowRunFeedEpoch';
-};
+/** Plain string on the wire: Typert strict codecs reject TypeScript `__brand` intersections. */
+export type SupervisedWorkflowRunId = string;
+export type WorkflowMemberId = string;
+export type WorkflowGateId = string;
+export type WorkflowRunCursor = string;
+export type WorkflowRunFeedEpoch = string;
 export interface WorkflowPhase {
     readonly title: string;
     readonly detail?: string;
