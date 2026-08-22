@@ -83,6 +83,16 @@ describe('scriptWithJobMapParallel', () => {
     expect(calls).toEqual([])
   })
 
+  it('omits undefined job-map option keys so stock JSON materialize succeeds', async () => {
+    const result = await runWrapped(
+      `return parallel([{ prompt: 'hunt', label: 'a' }]);`,
+      { agent: (prompt, opts) => ({ prompt, opts }) },
+    )
+    expect(result).toEqual([{ prompt: 'hunt', opts: { label: 'a' } }])
+    expect(Object.prototype.hasOwnProperty.call((result as any)[0].opts, 'provider')).toBe(false)
+    expect(Object.prototype.hasOwnProperty.call((result as any)[0].opts, 'schema')).toBe(false)
+  })
+
   it('turns job maps into thunks that call agent() and leaves functions alone', async () => {
     const result = await runWrapped(
       `return parallel([
