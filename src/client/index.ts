@@ -258,15 +258,24 @@ async function callDefinitionList(list: (...args: never[]) => Promise<unknown>, 
   }
 }
 
+async function callDefinitionListRpc(connection: any, sessionId: string, request: object, signal: AbortSignal): Promise<unknown> {
+  const rpc = connection?.rpc?.call
+  if (typeof rpc !== 'function') return { items: [] }
+  return rpc.call(connection.rpc, '/api', 'workflowDefinitions/list', {
+    args: { agentId: sessionId, request },
+  }, signal)
+}
+
 /** Load the picker catalog; an absent or hung Remote must settle, never spin. */
 async function loadPickerDefinitions(
   remote: any,
   session: any,
   signal: AbortSignal,
+  connection?: any,
 ): Promise<readonly any[]> {
-  const list = remote?.workflowDefinitions?.list
-  if (typeof list !== 'function') return []
+  const list = remote?.workflowDefinitions?.list ?? remote?.['workflowDefinitions/list']
   const sessionId = String(session?.sessionId ?? '')
+  if (typeof list !== 'function' && typeof connection?.rpc?.call !== 'function') return []
   const work = (async () => {
     const items: any[] = []
     const seen = new Set<string>()
@@ -274,7 +283,9 @@ async function loadPickerDefinitions(
     for (let pageNo = 0; pageNo < PICKER_PAGE_LIMIT; pageNo += 1) {
       signal.throwIfAborted()
       const request = cursor === undefined ? { limit: 200 } : { limit: 200, cursor }
-      const raw = await callDefinitionList(list, sessionId, request, signal)
+      const raw = typeof list === 'function'
+        ? await callDefinitionList(list, sessionId, request, signal)
+        : await callDefinitionListRpc(connection, sessionId, request, signal)
       const page = unwrapWorkflowRemoteResult<any>(raw)
       const pageItems = Array.isArray(page) ? page : Array.isArray(page?.items) ? page.items : []
       items.push(...pageItems)
@@ -304,13 +315,13 @@ async function loadPickerDefinitions(
   }
 }
 
-function bindDashboardCatalog(remote: any, sessions: any): {
+function bindDashboardCatalog(remote: any, sessions: any, connection?: any): {
   listDefinitions: (sessionId: string, signal?: AbortSignal) => Promise<readonly WorkflowDefinitionCard[]>
   launchDefinition: (sessionId: string, name: string, signal?: AbortSignal) => Promise<void>
 } {
   return {
     async listDefinitions(sessionId, signal) {
-      const items = await loadPickerDefinitions(remote, { sessionId }, signal ?? new AbortController().signal)
+      const items = await loadPickerDefinitions(remote, { sessionId }, signal ?? new AbortController().signal, connection)
       const cards: WorkflowDefinitionCard[] = []
       for (const item of items) {
         const name = typeof item?.name === 'string' ? item.name : ''
@@ -477,7 +488,7 @@ export function apply(ctx: ClientContext): void {
     const sessions = root.sessions as any
     const liveController = new WorkflowRunsController(remote, sessions, root.connection)
     const adapterInstance = new DashboardWorkflowRunsAdapter(liveController)
-    const catalog = bindDashboardCatalog(remote, sessions)
+    const catalog = bindDashboardCatalog(remote, sessions, root.connection)
     adapterInstance.listDefinitions = catalog.listDefinitions
     adapterInstance.launchDefinition = catalog.launchDefinition
     liveAdapter = adapterInstance
@@ -630,7 +641,7 @@ export function apply(ctx: ClientContext): void {
       ui: {
         kind: 'popupSelect',
         options: async (session: any, signal: AbortSignal) => {
-          const definitions = await loadPickerDefinitions(remote, session, signal)
+          const definitions = await loadPickerDefinitions(remote, session, signal, root.connection)
           return definitions.map((definition: any) => ({
             id: String(definition.name),
             label: String(definition.name),
