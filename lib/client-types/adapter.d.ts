@@ -1,5 +1,5 @@
 /** Stable observable adapter for the dashboard slot. */
-import type { WorkflowRunArtifactChunk, WorkflowRunArtifactPage, WorkflowRunControlResult, WorkflowRunDetail, WorkflowRunLogPage, WorkflowRunMemberDetail, WorkflowRunMemberPage, WorkflowRunResultView, WorkflowRunsOperations, WorkflowRunsSource, WorkflowRunsSourceSnapshot } from './contract.js';
+import type { WorkflowCatalogOperations, WorkflowRunArtifactChunk, WorkflowRunArtifactPage, WorkflowRunControlResult, WorkflowRunDetail, WorkflowRunLogPage, WorkflowRunMemberDetail, WorkflowRunMemberPage, WorkflowRunResultView, WorkflowRunsOperations, WorkflowRunsSource, WorkflowRunsSourceSnapshot } from './contract.js';
 import type { WorkflowRunsController } from './controller.js';
 export interface WorkflowRunsControllerFace extends WorkflowRunsOperations {
     get(sessionId: string): WorkflowRunsSourceSnapshot;
@@ -19,6 +19,8 @@ export declare class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOp
     private observedSource;
     private unsubscribe;
     private disposed;
+    listDefinitions?: WorkflowCatalogOperations['listDefinitions'];
+    launchDefinition?: WorkflowCatalogOperations['launchDefinition'];
     readonly source: DashboardSource;
     constructor(controller: WorkflowRunsControllerFace | WorkflowRunsController);
     get(sessionId: string): WorkflowRunsSourceSnapshot;

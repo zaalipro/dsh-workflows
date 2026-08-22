@@ -22,7 +22,7 @@ export declare const COMMAND_SUCCESS: {
     stop: (display: string) => string;
 };
 export declare const CREATE_WORKFLOW_COMMAND_DESCRIPTION = "Author, smoke-check, and save a new workflow (create-workflow skill)";
-export declare const WORKFLOWS_COMMAND_DESCRIPTION = "Open the live workflow run dashboard";
+export declare const WORKFLOWS_COMMAND_DESCRIPTION = "Open saved workflows and live runs";
 export declare const WORKFLOWS_COMMAND_SUCCESS = "Opened the workflow dashboard.";
 /** Steered into the model so /create-workflow cannot stall on an interview or a live fan-out. */
 export declare const CREATE_WORKFLOW_STEER_RULES = "Load the create-workflow skill and finish in this turn.\n\nHard rules:\n- Do not interview, walk the repo, or call ask_user_question.\n- Author plain JavaScript. Object and array literals use commas, never semicolons ({ a: 1, b: 2 } not { a: 1; b: 2 }).\n- Call the workflow tool with { script, meta } only. Do not pass validate_only: false. The host smokes with canned stubs (no live children) and writes .dsh/workflows/<name>.workflow.json.\n- Report the saved path and /workflow <name>. Do not start a live run unless the user asks.";

@@ -1,5 +1,5 @@
 import { type ReactElement } from 'react';
-import type { ClientRunHead, WorkflowRunArtifactChunk, WorkflowRunDetail, WorkflowRunMemberHead, WorkflowRunsOperations, WorkflowRunsSourceSnapshot } from './contract.js';
+import type { ClientRunHead, WorkflowRunArtifactChunk, WorkflowRunDetail, WorkflowRunMemberHead, WorkflowDefinitionCard, WorkflowRunsOperations, WorkflowRunsSourceSnapshot } from './contract.js';
 import type { DashboardWorkflowRunsAdapter } from './adapter.js';
 import type { WorkflowRunsController } from './controller.js';
 import { type DashboardLabels } from './locales.js';
@@ -10,6 +10,8 @@ export declare const STALE_CONTROL_ERROR = "workflow run changed; refresh it bef
 type DashboardOperations = WorkflowRunsOperations & Partial<{
     get(sessionId: string): WorkflowRunsSourceSnapshot;
     subscribe(sessionId: string, listener: (snapshot: WorkflowRunsSourceSnapshot) => void): () => void;
+    listDefinitions(sessionId: string, signal?: AbortSignal): Promise<readonly WorkflowDefinitionCard[]>;
+    launchDefinition(sessionId: string, name: string, signal?: AbortSignal): Promise<void>;
 }>;
 /** Business dependencies supplied by the browser plugin slot. */
 export interface WorkflowsDashboardInjected {

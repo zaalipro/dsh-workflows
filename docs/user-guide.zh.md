@@ -2,7 +2,7 @@
 
 [English](user-guide.md) | 中文
 
-本教程带领 Web 或 headless 用户完成安装、一个保存的 JavaScript definition、一次 validation smoke、一次 background run、详细检查、control 与 recovery。**Saved definition** 是磁盘上的 authoring input；**live 或 retained run** 是 immutable admitted execution record。`/workflows` 只展示 run——它绝不是 definition catalog。
+本教程带领 Web 或 headless 用户完成安装、一个保存的 JavaScript definition、一次 validation smoke、一次 background run、详细检查、control 与 recovery。**Saved definition** 是磁盘上的 authoring input；**live 或 retained run** 是 immutable admitted execution record。`/workflows` 列出已保存 definition（可 Start）以及 live 或 retained run。
 
 ## 1. 安装到兼容 Harness
 
@@ -129,7 +129,7 @@ Argument 必须是一个 JSON object。Array 与 scalar 会在 launch 前失败�
 
 该 Host command 打开 label 为 `Workflows` 的 dialog。Client 拥有 overlay。带 argument 或 attachment 的 `/workflows` 不会打开 overlay；它会保留在 composer command plane 中，draft 不变。Dashboard chrome 与 Chat label 跟随 host locale：本包注册 English 与 Chinese dictionary，English 为 fallback，关闭控件的可见文字与 accessible name 都是 `Close workflows`（中文 locale 下为 `关闭工作流`）。Inspector heading（`Pending`、`JSON outcome` 以及 criterion 11.4 的其余 heading）和 criterion 11.4/11.11 的精确 error string 保持英文。
 
-Run navigator 显示 display name、status、current phase、agent spent/total、running 与 settled member count、bounded terminal summary，以及 retained-run loaded/total disclosure。Active run 按最早优先排序，history 按最新 settlement 排序。`Load more` 获取下一个 authorized bounded page；只有 terminal row 可按确定性 oldest-first retention evict，active row 与 display ordinal history 永不 evict。
+Dashboard 先列出已保存 definition 并提供 Start，然后是 run navigator（display name、status、current phase、agent spent/total、running 与 settled member count、bounded terminal summary，以及 retained-run loaded/total disclosure）。Active run 按最早优先排序，history 按最新 settlement 排序。`Load more` 获取下一个 authorized bounded page；只有 terminal row 可按确定性 oldest-first retention evict，active row 与 display ordinal history 永不 evict。
 
 宽度至少 1,200 px 时，navigator、execution detail 和 inspector 是三个独立 scroll pane。低于 1,200 px 时保留 navigation 与一个 detail pane。低于 768 px 时使用明确的 **Runs -> Execution -> Inspector** drill-down；同一流程在 320 px 下也不会产生 page horizontal overflow。
 

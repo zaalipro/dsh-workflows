@@ -17,7 +17,7 @@ import {
   workflowLocaleFromBind,
   workflowLocales,
 } from './locales.js'
-import { unwrapWorkflowRemoteResult } from './contract.js'
+import { unwrapWorkflowRemoteResult, type WorkflowDefinitionCard } from './contract.js'
 
 export * from './contract.js'
 export * from './controller.js'
@@ -304,6 +304,46 @@ async function loadPickerDefinitions(
   }
 }
 
+function bindDashboardCatalog(remote: any, sessions: any): {
+  listDefinitions: (sessionId: string, signal?: AbortSignal) => Promise<readonly WorkflowDefinitionCard[]>
+  launchDefinition: (sessionId: string, name: string, signal?: AbortSignal) => Promise<void>
+} {
+  return {
+    async listDefinitions(sessionId, signal) {
+      const items = await loadPickerDefinitions(remote, { sessionId }, signal ?? new AbortController().signal)
+      const cards: WorkflowDefinitionCard[] = []
+      for (const item of items) {
+        const name = typeof item?.name === 'string' ? item.name : ''
+        if (name === '') continue
+        cards.push({
+          name,
+          description: typeof item.description === 'string' ? item.description : '',
+          ...(typeof item.whenToUse === 'string' ? { whenToUse: item.whenToUse } : {}),
+          ...(typeof item.scope === 'string' ? { scope: item.scope } : {}),
+        })
+      }
+      return cards
+    },
+    async launchDefinition(sessionId, name, signal) {
+      signal?.throwIfAborted()
+      if (!/^[a-z](?:[a-z0-9]*)(?:-[a-z0-9]+)*$/u.test(name)) {
+        throw new Error('workflow name is invalid')
+      }
+      const live = sessions.binding?.(sessionId)?.session
+      if (live === undefined || typeof live.command !== 'function') {
+        throw new Error('this session is not available')
+      }
+      const result = await live.command(`/workflow ${name}`)
+      if (result?.ok === false) {
+        throw new Error(typeof result.error === 'string' && result.error.length > 0
+          ? result.error
+          : 'the host rejected /workflow')
+      }
+      if (result?.value?.matched === false) throw new Error('the host offers no /workflow command')
+    },
+  }
+}
+
 /**
  * Register one complete browser aggregate.  The generated Remote is mounted
  * first; every consumer and listener is created in that mount's effect and
@@ -437,6 +477,9 @@ export function apply(ctx: ClientContext): void {
     const sessions = root.sessions as any
     const liveController = new WorkflowRunsController(remote, sessions, root.connection)
     const adapterInstance = new DashboardWorkflowRunsAdapter(liveController)
+    const catalog = bindDashboardCatalog(remote, sessions)
+    adapterInstance.listDefinitions = catalog.listDefinitions
+    adapterInstance.launchDefinition = catalog.launchDefinition
     liveAdapter = adapterInstance
     controller = liveController
     adapter = adapterInstance

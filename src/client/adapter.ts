@@ -1,6 +1,7 @@
 /** Stable observable adapter for the dashboard slot. */
 
 import type {
+  WorkflowCatalogOperations,
   WorkflowRunArtifactChunk,
   WorkflowRunArtifactPage,
   WorkflowRunControlResult,
@@ -39,6 +40,8 @@ export class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOperations
   private observedSource: WorkflowRunsSource | undefined
   private unsubscribe: (() => void) | undefined
   private disposed = false
+  listDefinitions?: WorkflowCatalogOperations['listDefinitions']
+  launchDefinition?: WorkflowCatalogOperations['launchDefinition']
 
   readonly source: DashboardSource
 

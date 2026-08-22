@@ -24,7 +24,7 @@ export const COMMAND_SUCCESS = {
 }
 export const CREATE_WORKFLOW_COMMAND_DESCRIPTION =
   'Author, smoke-check, and save a new workflow (create-workflow skill)'
-export const WORKFLOWS_COMMAND_DESCRIPTION = 'Open the live workflow run dashboard'
+export const WORKFLOWS_COMMAND_DESCRIPTION = 'Open saved workflows and live runs'
 export const WORKFLOWS_COMMAND_SUCCESS = 'Opened the workflow dashboard.'
 /** Steered into the model so /create-workflow cannot stall on an interview or a live fan-out. */
 export const CREATE_WORKFLOW_STEER_RULES = `Load the create-workflow skill and finish in this turn.

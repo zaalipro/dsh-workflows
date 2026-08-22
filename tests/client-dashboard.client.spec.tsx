@@ -84,7 +84,7 @@ function source(runs: readonly ClientRunHead[], phase: WorkflowRunsSourceSnapsho
   }
 }
 
-function operations(heads: readonly ClientRunHead[], overrides: Partial<WorkflowRunsOperations> = {}): WorkflowRunsOperations {
+function operations(heads: readonly ClientRunHead[], overrides: Partial<WorkflowRunsOperations> & Record<string, unknown> = {}): WorkflowRunsOperations {
   const fail = async (): Promise<never> => { throw new Error('not called') }
   const lookup = (runId: string): ClientRunHead => heads.find(row => row.runId === runId) ?? heads[0] ?? run('running')
   return {
@@ -264,6 +264,36 @@ describe('WorkflowsDashboard (RC14-RC18)', () => {
     const reconnecting = bench(source([], 'reconnecting'))
     expect(reconnecting.node.textContent).toContain('Reconnecting…')
     expect(reconnecting.node.textContent).not.toContain('No workflow runs yet')
+  })
+
+  it('shows saved definitions on an empty dashboard and starts them from Start', async () => {
+    const launched: string[] = []
+    const started = run('running', 'readonly', { name: 'readonly-codebase-review', displayName: 'readonly-codebase-review' })
+    const ops = operations([], {
+      listDefinitions: vi.fn(async () => [{
+        name: 'readonly-codebase-review',
+        description: 'Perform a read-only codebase review',
+        scope: 'project',
+      }]),
+      launchDefinition: vi.fn(async (_session: string, name: string) => { launched.push(name) }),
+      refresh: vi.fn(async () => source([started])),
+    })
+    const empty = bench(source([]), ops)
+    await settle()
+    expect(empty.node.textContent).toContain('Saved workflows')
+    expect(empty.node.textContent).toContain('readonly-codebase-review')
+    expect(empty.node.textContent).toContain('Start one to watch its progress here.')
+    expect(empty.node.textContent).not.toContain('No workflow runs yet')
+    const start = empty.node.querySelector('button[aria-label="Start readonly-codebase-review"]')
+    expect(start).not.toBeNull()
+    await act(async () => {
+      start?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(launched).toEqual(['readonly-codebase-review'])
+    expect(ops.launchDefinition).toHaveBeenCalledWith(SESSION, 'readonly-codebase-review')
+    release(empty)
   })
 
   it('renders compact status labels, Interrupted settlement, live phase, and budget explainer', async () => {

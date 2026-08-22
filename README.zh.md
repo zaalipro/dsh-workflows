@@ -66,7 +66,7 @@ dsh plugin --profile headless remove @zaalipro/dsh-workflows
 
 使用 `/workflow <name> [<json-args>]` 或生成的 `/<name> [<json-args>]` alias 启动已保存定义。普通命令会保留冲突的裸名称；workflow 会取得第一个可用的重复前缀 alias，例如 `/workflow-review-changes`，而 `/workflow review-changes` 始终可用。启动会立即返回 `Started workflow "<display-name>" in the background. Open /workflows to watch it.`；同一 metadata name 的后续运行使用 `review-changes-2` 等 display handle，不暴露内部 id。
 
-在 Web 中，裸 `/workflow` 打开已保存定义选择器，严格的裸 `/workflows` 打开 run dashboard（Host command 加上 Client overlay）。在 headless 中，裸 `/workflow` 输出 usage，`/workflows` 确认 dashboard command。仪表盘显示 live 与 retained run、phase、agent spend、member outcome、log、terminal result 和分块 scratch artifact。Pause、Resume、Stop 与符合条件的 Save action 都检查 revision；键盘操作和窄屏 drill-down 同样可用。`/workflows` 是 run inspector，绝不是 definition catalog。
+在 Web 中，裸 `/workflow` 打开已保存定义选择器，严格的裸 `/workflows` 打开 dashboard（Host command 加上 Client overlay）。在 headless 中，裸 `/workflow` 输出 usage，`/workflows` 确认 dashboard command。仪表盘列出已保存 definition（可 Start），以及 live 与 retained run、phase、agent spend、member outcome、log、terminal result 和分块 scratch artifact。Pause、Resume、Stop 与符合条件的 Save action 都检查 revision；键盘操作和窄屏 drill-down 同样可用。
 
 符合条件的 terminal run 最多尝试一次 owner-visible completion notice。它优先使用有界的 `scratch/report.md`，否则使用有界 result preview，并以 `Open /workflows to inspect the run.` 结尾。Notice delivery 是 at most once：进程故障可能导致 notice 缺失，但不会重试已 claimed、delivered 或 abandoned 的 notice。
 

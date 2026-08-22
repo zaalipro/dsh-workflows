@@ -160,6 +160,16 @@ export interface ClientAgentCatalog {
     };
     readonly sessions?: any;
 }
+export interface WorkflowDefinitionCard {
+    readonly name: string;
+    readonly description: string;
+    readonly whenToUse?: string;
+    readonly scope?: string;
+}
+export interface WorkflowCatalogOperations {
+    listDefinitions(sessionId: string, signal?: AbortSignal): Promise<readonly WorkflowDefinitionCard[]>;
+    launchDefinition(sessionId: string, name: string, signal?: AbortSignal): Promise<void>;
+}
 export interface WorkflowRunsOperations {
     observe(sessionId: string | undefined): void;
     source(sessionId: string): WorkflowRunsSource;

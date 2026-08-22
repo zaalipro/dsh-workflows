@@ -18,6 +18,7 @@ import type {
   WorkflowRunMemberDetail,
   WorkflowRunMemberHead,
   WorkflowRunMemberPage,
+  WorkflowDefinitionCard,
   WorkflowRunResultView,
   WorkflowRunsOperations,
   WorkflowRunsSourceSnapshot,
@@ -48,6 +49,8 @@ export const STALE_CONTROL_ERROR = 'workflow run changed; refresh it before appl
 type DashboardOperations = WorkflowRunsOperations & Partial<{
   get(sessionId: string): WorkflowRunsSourceSnapshot
   subscribe(sessionId: string, listener: (snapshot: WorkflowRunsSourceSnapshot) => void): () => void
+  listDefinitions(sessionId: string, signal?: AbortSignal): Promise<readonly WorkflowDefinitionCard[]>
+  launchDefinition(sessionId: string, name: string, signal?: AbortSignal): Promise<void>
 }>
 
 /** Business dependencies supplied by the browser plugin slot. */
@@ -365,6 +368,10 @@ export function WorkflowsDashboard({
   const [controlFeedback, setControlFeedback] = useState<ControlFeedback>()
   const [runPaging, setRunPaging] = useState(false)
   const [runPageError, setRunPageError] = useState<string>()
+  const [definitions, setDefinitions] = useState<readonly WorkflowDefinitionCard[]>([])
+  const [definitionsPhase, setDefinitionsPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle')
+  const [startingName, setStartingName] = useState<string>()
+  const [launchFeedback, setLaunchFeedback] = useState<ControlFeedback>()
 
   const readGeneration = useRef(0)
   const reads = useRef(new Set<AbortController>())
@@ -391,6 +398,28 @@ export function WorkflowsDashboard({
     return () => { operations.observe(undefined) }
   }, [open, operations, sessionId])
 
+  useEffect(() => {
+    if (!open || sessionId === undefined || typeof operations.listDefinitions !== 'function') {
+      if (typeof operations.listDefinitions !== 'function') {
+        setDefinitions([])
+        setDefinitionsPhase('idle')
+      }
+      return
+    }
+    const abort = new AbortController()
+    setDefinitionsPhase('loading')
+    void operations.listDefinitions(sessionId, abort.signal).then(items => {
+      if (abort.signal.aborted) return
+      setDefinitions(Array.isArray(items) ? items : [])
+      setDefinitionsPhase('ready')
+    }, error => {
+      if (abort.signal.aborted || isAbort(error)) return
+      setDefinitions([])
+      setDefinitionsPhase('error')
+    })
+    return () => { abort.abort() }
+  }, [open, operations, sessionId])
+
   const rows = useMemo(() => orderWorkflowRuns(source.runs), [source.runs])
   const activeRows = useMemo(() => rows.filter(run => isActive(run.status)), [rows])
   const historyRows = useMemo(() => rows.filter(run => !isActive(run.status)), [rows])
@@ -406,6 +435,26 @@ export function WorkflowsDashboard({
     else {
       setLocalRunId(runId)
       setLocalMobileView('execution')
+    }
+  }
+
+  async function startDefinition(name: string): Promise<void> {
+    if (sessionId === undefined || typeof operations.launchDefinition !== 'function' || startingName !== undefined) return
+    setStartingName(name)
+    setLaunchFeedback(undefined)
+    try {
+      await operations.launchDefinition(sessionId, name)
+      const snap = await operations.refresh(sessionId)
+      setSource(snap)
+      const newest = [...snap.runs]
+        .filter(run => run.name === name)
+        .sort((left, right) => right.startedAt - left.startedAt)[0]
+      if (newest !== undefined) selectRun(newest.runId)
+      setLaunchFeedback({ kind: 'notice', message: labels.started(name) })
+    } catch {
+      setLaunchFeedback({ kind: 'error', message: labels.launchFailed })
+    } finally {
+      setStartingName(undefined)
     }
   }
 
@@ -979,7 +1028,10 @@ export function WorkflowsDashboard({
         <div className={css.headerCopy}>
           <p className={css.eyebrow}>Background orchestration</p>
           <h1 id="workflow-dashboard-title">{labels.title}</h1>
-          <p className={css.topSummary}>{activeRows.length} active · {rows.length} loaded of {source.total} runs</p>
+          <p className={css.topSummary}>
+            {definitionsPhase === 'ready' || definitions.length > 0 ? `${labels.savedCount(definitions.length)} · ` : ''}
+            {activeRows.length} active · {rows.length} loaded of {source.total} runs
+          </p>
         </div>
         <p className={css.kbdHint}>{labels.kbdHint}</p>
         <button type="button" className={css.close} onClick={() => onCloseRef.current?.()} aria-label={labels.close}>Close</button>
@@ -998,15 +1050,76 @@ export function WorkflowsDashboard({
       {source.phase === 'error' && rows.length > 0 && runPageError === undefined && (
         <ErrorRetry message={GENERIC_LOAD_ERROR} onRetry={() => { if (sessionId !== undefined) void operations.refresh(sessionId).catch(() => undefined) }} />
       )}
+      {launchFeedback !== undefined && (
+        <div className={launchFeedback.kind === 'error' ? css.error : css.feedback} role={launchFeedback.kind === 'error' ? 'alert' : 'status'}>
+          <p>{launchFeedback.message}</p>
+        </div>
+      )}
 
       {rows.length === 0 && source.phase !== 'loading' && source.phase !== 'error' && source.phase !== 'reconnecting' ? (
-        <main className={css.empty}>
-          <h2>{labels.emptyTitle}</h2>
-          <p>{labels.emptyBody}</p>
-        </main>
+        typeof operations.listDefinitions === 'function' ? (
+          <main className={css.catalog} aria-label={labels.savedTitle}>
+            <div className={css.catalogHead}>
+              <h2>{labels.savedTitle}</h2>
+              <p>{labels.emptyRunsHint}</p>
+            </div>
+            {definitionsPhase === 'loading' && <p role="status">{labels.loadingSaved}</p>}
+            {definitionsPhase === 'error' && (
+              <ErrorRetry message={GENERIC_LOAD_ERROR} onRetry={() => {
+                if (sessionId === undefined || typeof operations.listDefinitions !== 'function') return
+                setDefinitionsPhase('loading')
+                void operations.listDefinitions(sessionId).then(items => {
+                  setDefinitions(Array.isArray(items) ? items : [])
+                  setDefinitionsPhase('ready')
+                }, () => { setDefinitionsPhase('error') })
+              }} />
+            )}
+            {definitionsPhase === 'ready' && definitions.length === 0 && <p>{labels.savedEmpty}</p>}
+            {definitions.length > 0 && (
+              <div className={css.savedGrid}>
+                {definitions.map(definition => (
+                  <SavedCard
+                    key={definition.name}
+                    definition={definition}
+                    starting={startingName}
+                    labels={labels}
+                    onStart={() => { void startDefinition(definition.name) }}
+                  />
+                ))}
+              </div>
+            )}
+          </main>
+        ) : (
+          <main className={css.empty}>
+            <h2>{labels.emptyTitle}</h2>
+            <p>{labels.emptyBody}</p>
+          </main>
+        )
       ) : rows.length === 0 ? null : (
-        <div className={css.layout}>
+        <div className={css.layout} data-inspector={selectedMemberId !== undefined ? 'open' : 'closed'}>
           <nav className={css.navigator} aria-label="Workflow runs" data-pane="navigator">
+            {definitions.length > 0 && (
+              <section className={css.runGroup} aria-labelledby="saved-workflows-heading">
+                <h2 id="saved-workflows-heading">{labels.savedTitle} · {definitions.length}</h2>
+                {definitions.map(definition => (
+                  <div key={definition.name} className={css.savedRow}>
+                    <div>
+                      <strong>{definition.name}</strong>
+                      <span>{definition.description}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className={css.start}
+                      disabled={startingName !== undefined}
+                      aria-label={`${labels.start} ${definition.name}`}
+                      onClick={() => { void startDefinition(definition.name) }}
+                    >
+                      {startingName === definition.name ? labels.starting : labels.start}
+                    </button>
+                  </div>
+                ))}
+              </section>
+            )}
             <section className={css.runGroup} aria-labelledby="active-workflows-heading">
               <h2 id="active-workflows-heading">Active · {activeRows.length}</h2>
               {activeRows.length === 0 && <p className={css.groupEmpty}>No active runs</p>}
@@ -1118,7 +1231,11 @@ export function WorkflowsDashboard({
                       </section>
                       )
                     })}
-                    {members.value !== undefined && memberRows.length === 0 && <p>No members started.</p>}
+                    {members.value !== undefined && memberRows.length === 0 && (
+                      <p className={css.activity}>
+                        {selectedRun.budget.spent > 0 ? labels.noMembersYet : 'No members started.'}
+                      </p>
+                    )}
                     {members.value !== undefined && <p className={css.retention}>Loaded {memberRows.length} of {members.value.total} members.</p>}
                     {members.value?.nextCursor !== undefined && <button type="button" disabled={members.paging} onClick={() => loadMembers(selectedRun.runId, members.value?.nextCursor)}>{members.paging ? 'Loading…' : 'Load more members'}</button>}
                     {renderPageError(members, () => members.value?.nextCursor !== undefined && loadMembers(selectedRun.runId, members.value.nextCursor))}
@@ -1135,6 +1252,34 @@ export function WorkflowsDashboard({
       )}
       </div>
     </div>
+  )
+}
+
+function SavedCard({ definition, starting, labels, onStart }: {
+  readonly definition: WorkflowDefinitionCard
+  readonly starting: string | undefined
+  readonly labels: DashboardLabels
+  readonly onStart: () => void
+}): ReactElement {
+  return (
+    <article className={css.savedCard}>
+      <div>
+        <strong>{definition.name}</strong>
+        {definition.description !== '' && <p>{definition.description}</p>}
+        <span className={css.muted}>
+          {[definition.scope, definition.whenToUse].filter(Boolean).join(' · ')}
+        </span>
+      </div>
+      <button
+        type="button"
+        className={css.start}
+        disabled={starting !== undefined}
+        aria-label={`${labels.start} ${definition.name}`}
+        onClick={onStart}
+      >
+        {starting === definition.name ? labels.starting : labels.start}
+      </button>
+    </article>
   )
 }
 

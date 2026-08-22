@@ -33,6 +33,16 @@ export interface WorkflowRunsSourceSnapshot {
 export interface WorkflowRunsSource {getSnapshot():WorkflowRunsSourceSnapshot;subscribe(listener:()=>void):()=>void}
 export interface WorkflowRemoteClient {readonly [method:string]:((...args:any[])=>Promise<unknown>)|unknown}
 export interface ClientAgentCatalog {readonly list?:{getSnapshot():any;subscribe?(listener:()=>void):()=>void};readonly sessions?:any}
+export interface WorkflowDefinitionCard {
+  readonly name: string
+  readonly description: string
+  readonly whenToUse?: string
+  readonly scope?: string
+}
+export interface WorkflowCatalogOperations {
+  listDefinitions(sessionId: string, signal?: AbortSignal): Promise<readonly WorkflowDefinitionCard[]>
+  launchDefinition(sessionId: string, name: string, signal?: AbortSignal): Promise<void>
+}
 export interface WorkflowRunsOperations {
   observe(sessionId:string|undefined):void
   source(sessionId:string):WorkflowRunsSource

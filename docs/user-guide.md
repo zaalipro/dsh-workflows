@@ -2,7 +2,7 @@
 
 English | [中文](user-guide.zh.md)
 
-This tutorial takes a Web or headless user from installation to one saved JavaScript definition, one validation smoke, a background run, detailed inspection, controls, and recovery. A **saved definition** is authoring input on disk; a **live or retained run** is an immutable admitted execution record. `/workflows` shows runs only—it is never a definition catalog.
+This tutorial takes a Web or headless user from installation to one saved JavaScript definition, one validation smoke, a background run, detailed inspection, controls, and recovery. A **saved definition** is authoring input on disk; a **live or retained run** is an immutable admitted execution record. `/workflows` lists saved definitions (Start) and live or retained runs.
 
 ## 1. Install on a compatible Harness
 
@@ -129,7 +129,7 @@ In Web, submit exact bare:
 
 This Host command opens the dialog labelled `Workflows`. The Client owns the overlay. `/workflows` with arguments or attachments does not open the overlay; it remains unresolved in the composer command plane with its draft intact. Dashboard chrome and Chat labels follow the host locale: the package registers English and Chinese dictionaries, English is the fallback, and the close control uses the same `Close workflows` accessible name as the visible label. Inspector headings (`Pending`, `JSON outcome`, and the rest of criterion 11.4) and the exact criterion 11.4/11.11 error strings stay English.
 
-The run navigator shows display name, status, current phase, agents spent/total, running and settled member counts, a bounded terminal summary, and retained-run loaded/total disclosure. Active runs sort oldest-first and history sorts by newest settlement. `Load more` fetches the next authorized bounded page; only terminal rows are eligible for deterministic oldest-first retention eviction, never active rows or display ordinal history.
+The dashboard lists saved definitions with a Start control, then the run navigator (display name, status, current phase, agents spent/total, running and settled member counts, a bounded terminal summary, and retained-run loaded/total disclosure). Active runs sort oldest-first and history sorts by newest settlement. `Load more` fetches the next authorized bounded page; only terminal rows are eligible for deterministic oldest-first retention eviction, never active rows or display ordinal history.
 
 At widths of at least 1,200 px, navigator, execution detail, and inspector are independently scrollable panes. Below 1,200 px, navigation and one detail pane remain. Below 768 px, use explicit **Runs -> Execution -> Inspector** drill-down; the same flow works without horizontal page overflow at 320 px.
 

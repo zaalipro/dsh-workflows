@@ -74,7 +74,9 @@ export const COMPLETE_PRELUDE =
   + 'log = function () { throw __dshWfComplete; };'
   + '}'
   + 'throw __dshWfComplete;'
-  + '}\n'
+  + '}'
+  + 'try { globalThis.complete = complete } catch (__dshWfCompleteBind) {}'
+  + '\n'
 
 const COMPLETE_TRY = 'try {\nvar __dshWfResult = await (async function () {\n'
 const COMPLETE_CATCH =
