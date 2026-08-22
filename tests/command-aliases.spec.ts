@@ -505,6 +505,22 @@ describe('saved-definition aliases (SH17)', () => {
     })
   })
 
+  it('does not fail the host when catalog listing throws', async () => {
+    const host = createHost({ fallback: false })
+    const warnings: string[] = []
+    host.ctx.logger = { warn: (message: string) => { warnings.push(String(message)) } }
+    host.workflows.listImpl = async () => { throw new Error('not valid JSON — boom') }
+    const agent: any = {
+      session: { header: { cwd: '/workspace' }, append() { /* unused */ } },
+      steer: vi.fn(),
+      ctx: {},
+    }
+    host.ctx.agents.register(agent)
+    await new Promise(resolve => setTimeout(resolve, 30))
+    expect(warnings.some(message => /alias catalog refresh failed/u.test(message))).toBe(true)
+    expect(host.commands.list(agent).map((item: { name: string }) => item.name)).not.toContain('ghost')
+  })
+
   it('treats a list AbortError as a cancelled refresh and ignores a missing find() hit', async () => {
     const host = createHost()
     const agent = createAgent(host)

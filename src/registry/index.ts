@@ -169,6 +169,24 @@ function asRegistryError(path: string, error: unknown): WorkflowRegistryError {
   return new WorkflowRegistryError(prefixed, code ?? 'WORKFLOW_DEFINITION_INVALID', { cause: error });
 }
 
+type InvalidDefinitionHandler = (error: WorkflowRegistryError) => void;
+
+/** One unreadable `.workflow.json` must not hide the rest of the catalog. */
+function skipInvalidDefinition(path: string, error: unknown, onInvalid?: InvalidDefinitionHandler): boolean {
+  if (error instanceof WorkflowRegistryError
+    && error.code !== 'WORKFLOW_DEFINITION_INVALID'
+    && error.code !== 'WORKFLOW_DEFINITION_MISSING') {
+    throw error;
+  }
+  const wrapped = asRegistryError(path, error);
+  if (errorCode(error) === 'FS_NOT_REGULAR_FILE') throw wrapped;
+  if (wrapped.code === 'WORKFLOW_DEFINITION_INVALID' || wrapped.code === 'WORKFLOW_DEFINITION_MISSING') {
+    onInvalid?.(wrapped);
+    return true;
+  }
+  throw wrapped;
+}
+
 async function localEntry(path: string): Promise<{ type: 'file' | 'directory' | 'symlink' | 'other'; size?: number; nlink?: number } | undefined> {
   try {
     const info = await localLstat(path);
@@ -258,6 +276,7 @@ async function discoverLocalRoot(
   maxDefinitions: number,
   maxBytes: number,
   signal?: AbortSignal,
+  onInvalid?: InvalidDefinitionHandler,
 ): Promise<WorkflowDefinition[]> {
   aborted(signal);
   await assertLocalRootSafe(root);
@@ -284,7 +303,7 @@ async function discoverLocalRoot(
     try {
       definitions.push(parseWorkflowDefinition(await readLocalNoFollow(path, maxBytes, signal), path, root.scope, name, maxBytes));
     } catch (error) {
-      throw asRegistryError(path, error);
+      if (skipInvalidDefinition(path, error, onInvalid)) continue;
     }
   }
   return definitions;
@@ -296,6 +315,7 @@ async function discoverHostRoot(
   maxDefinitions: number,
   maxBytes: number,
   signal?: AbortSignal,
+  onInvalid?: InvalidDefinitionHandler,
 ): Promise<WorkflowDefinition[]> {
   aborted(signal);
   let rootInfo: Awaited<ReturnType<HostFileSystem['lstat']>>;
@@ -355,7 +375,7 @@ async function discoverHostRoot(
         const bytes = await directory.readBytes(entry.name, signal, maxBytes);
         definitions.push(parseWorkflowDefinition(bytes, path, root.scope, name, maxBytes));
       } catch (error) {
-        throw asRegistryError(path, error);
+        if (skipInvalidDefinition(path, error, onInvalid)) continue;
       }
     }
     await directory.assertIdentity(signal);
@@ -449,9 +469,12 @@ export class WorkflowRegistry {
   }
 
   private async discoverRoot(root: WorkflowRoot, signal?: AbortSignal): Promise<WorkflowDefinition[]> {
+    const onInvalid: InvalidDefinitionHandler = error => {
+      this.ctx?.logger?.warn?.(error.message);
+    };
     return this.fs === undefined
-      ? discoverLocalRoot(root, this.config.maxDefinitionsPerRoot, this.config.definitionMaxBytes, signal)
-      : discoverHostRoot(this.fs, root, this.config.maxDefinitionsPerRoot, this.config.definitionMaxBytes, signal);
+      ? discoverLocalRoot(root, this.config.maxDefinitionsPerRoot, this.config.definitionMaxBytes, signal, onInvalid)
+      : discoverHostRoot(this.fs, root, this.config.maxDefinitionsPerRoot, this.config.definitionMaxBytes, signal, onInvalid);
   }
 
   private requireLookupCwd(options: WorkflowLookupOptions, action: 'listing' | 'save'): string {
@@ -474,7 +497,6 @@ export class WorkflowRegistry {
     const roots = await this.roots(options);
     await this.ensureWatchers(roots);
     const byName = new Map<string, WorkflowDefinition>();
-    // Discover every root before merging so a malformed shadowed entry fails loudly.
     for (const root of roots) {
       for (const definition of await this.discoverRoot(root, options.signal)) {
         if (!byName.has(definition.name)) byName.set(definition.name, definition);

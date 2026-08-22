@@ -269,7 +269,8 @@ async function refreshAliases(ctx: any, state: AliasState, supervisor: any): Pro
     definitions = await ctx.workflows.list({ ...cwdOf(state.agent), signal: abort.signal })
   } catch (error) {
     if (abort.signal.aborted || state.disposed || isAbortError(error, abort.signal)) return
-    throw error
+    ctx?.logger?.warn?.(`workflow alias catalog refresh failed: ${error instanceof Error ? error.message : String(error)}`)
+    return
   }
   if (abort.signal.aborted || state.disposed) return
   state.definitions.clear()

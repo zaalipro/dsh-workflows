@@ -119,22 +119,25 @@ function hostFs(overrides: Record<string, unknown> = {}) {
 
 function registry(config: Record<string, unknown> & { dshHome: string }, fs?: ReturnType<typeof hostFs>) {
   const events: string[] = []
+  const warnings: string[] = []
   const created = new WorkflowRegistry({
-    fs, emit: (name: string) => { events.push(name) }, logger: { warn() { /* silent */ } },
+    fs,
+    emit: (name: string) => { events.push(name) },
+    logger: { warn(...args: unknown[]) { warnings.push(args.map(String).join(' ')) } },
   }, { definitionWatch: false, ...config })
   registries.push(created)
-  return { registry: created, events }
+  return { registry: created, events, warnings }
 }
 
 describe('registry discovery (RS7)', () => {
-  it('merges bundled > project > user, sorts by UTF-16 name, and fails loud on a shadowed malformed file', async () => {
+  it('merges bundled > project > user, sorts by UTF-16 name, and skips a shadowed malformed file', async () => {
     const { home, project, bundled } = await layout()
     await writeFile(join(bundled, 'shared.workflow.json'), payload('shared', { description: 'bundled copy' }))
     await writeFile(join(project, '.dsh', 'workflows', 'shared.workflow.json'), payload('shared', { description: 'project copy' }))
     await writeFile(join(home, 'workflows', 'shared.workflow.json'), payload('shared', { description: 'user copy' }))
     await writeFile(join(home, 'workflows', 'user-only.workflow.json'), payload('user-only'))
     await writeFile(join(project, '.dsh', 'workflows', 'alpha.workflow.json'), payload('alpha'))
-    const { registry: workflows } = registry({
+    const { registry: workflows, warnings } = registry({
       dshHome: home, bundledDefinitionsDir: bundled, maxDefinitionsPerRoot: 16,
     }, hostFs())
     const listed = await workflows.list({ cwd: project })
@@ -144,7 +147,11 @@ describe('registry discovery (RS7)', () => {
     const winner = await workflows.get('shared', { cwd: project })
     expect(winner).toMatchObject({ scope: 'bundled', script: expect.stringContaining('shared') })
     await writeFile(join(home, 'workflows', 'shared.workflow.json'), '{')
-    await expect(workflows.list({ cwd: project })).rejects.toThrow(/not valid JSON — /u)
+    await expect(workflows.list({ cwd: project })).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'alpha' }),
+      expect.objectContaining({ name: 'shared', scope: 'bundled' }),
+    ]))
+    expect(warnings.some(message => /not valid JSON/u.test(message))).toBe(true)
   })
 
   it('treats an absent root as empty and rejects omitted cwd like Remote', async () => {
@@ -240,9 +247,13 @@ describe('registry discovery (RS7)', () => {
     await expect(e.registry.list({ cwd: fifth.project })).rejects.toThrow(/found 2 workflow definitions; maximum is 1/u)
 
     const sixth = await layout()
+    await writeFile(join(sixth.project, '.dsh', 'workflows', 'alpha.workflow.json'), payload('alpha'))
     await writeFile(join(sixth.project, '.dsh', 'workflows', 'bad.workflow.json'), Buffer.from([0xff]))
     const f = registry({ dshHome: sixth.home }, hostFs())
-    await expect(f.registry.list({ cwd: sixth.project })).rejects.toThrow(/definition is not valid UTF-8/u)
+    await expect(f.registry.list({ cwd: sixth.project })).resolves.toEqual([
+      expect.objectContaining({ name: 'alpha', scope: 'project' }),
+    ])
+    expect(f.warnings.some(message => /not valid UTF-8/u.test(message))).toBe(true)
   })
 
   it('maps Host not-regular and too-large reads onto spec suffixes', async () => {
@@ -257,7 +268,8 @@ describe('registry discovery (RS7)', () => {
         })
       },
     }))
-    await expect(tooLarge.registry.list({ cwd: project })).rejects.toThrow(/definition exceeds the configured-byte limit/u)
+    await expect(tooLarge.registry.list({ cwd: project })).resolves.toEqual([])
+    expect(tooLarge.warnings.some(message => /exceeds the configured-byte limit/u.test(message))).toBe(true)
     const linked = registry({ dshHome: home }, hostFs({
       async openPrivateDirectory(path: string) {
         return hostDirectory(path, {
@@ -268,6 +280,31 @@ describe('registry discovery (RS7)', () => {
       },
     }))
     await expect(linked.registry.list({ cwd: project })).rejects.toThrow(/symbolic-link definitions are not allowed/u)
+
+    const unsupported = registry({ dshHome: home }, hostFs({
+      async openPrivateDirectory(path: string) {
+        return hostDirectory(path, {
+          async readBytes() {
+            throw new WorkflowRegistryError('descriptor-rooted listing is unavailable', 'WORKFLOW_REGISTRY_UNSUPPORTED')
+          },
+        })
+      },
+    }))
+    await expect(unsupported.registry.list({ cwd: project })).rejects.toMatchObject({
+      code: 'WORKFLOW_REGISTRY_UNSUPPORTED',
+    })
+    const coded = registry({ dshHome: home }, hostFs({
+      async openPrivateDirectory(path: string) {
+        return hostDirectory(path, {
+          async readBytes() {
+            throw Object.assign(new Error('unavailable'), { code: 'WORKFLOW_STORAGE_UNSUPPORTED' })
+          },
+        })
+      },
+    }))
+    await expect(coded.registry.list({ cwd: project })).rejects.toMatchObject({
+      code: 'WORKFLOW_STORAGE_UNSUPPORTED',
+    })
   })
 
   it('rejects escaped Host roots, falls back without private-directory, and rejects unsafe filenames', async () => {
@@ -395,7 +432,7 @@ describe('registry discovery (RS7)', () => {
     })
   })
 
-  it.skipIf(!posixOnly)('rejects a file ancestor, a file root, and a local malformed matching file', async () => {
+  it.skipIf(!posixOnly)('rejects a file ancestor, a file root, and skips a local malformed matching file', async () => {
     const fileAncestor = await layout()
     await rm(join(fileAncestor.project, '.dsh'), { recursive: true })
     await writeFile(join(fileAncestor.project, '.dsh'), 'not a directory')
@@ -404,10 +441,13 @@ describe('registry discovery (RS7)', () => {
     await expect(localAncestor.list({ cwd: fileAncestor.project })).rejects.toThrow(/workflow root ancestor must be a directory/u)
 
     const malformed = await layout()
+    await writeFile(join(malformed.project, '.dsh', 'workflows', 'alpha.workflow.json'), payload('alpha'))
     await writeFile(join(malformed.project, '.dsh', 'workflows', 'bad.workflow.json'), '{')
     const localBad = new WorkflowRegistry({ dshHome: malformed.home, definitionWatch: false })
     registries.push(localBad)
-    await expect(localBad.list({ cwd: malformed.project })).rejects.toThrow(/not valid JSON — /u)
+    await expect(localBad.list({ cwd: malformed.project })).resolves.toEqual([
+      expect.objectContaining({ name: 'alpha', scope: 'project' }),
+    ])
 
     const linked = await layout()
     const original = join(linked.project, '.dsh', 'workflows', 'hard.workflow.json')
