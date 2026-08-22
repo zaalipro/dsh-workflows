@@ -40,6 +40,8 @@ describe('create-workflow skill asset (SH18)', () => {
     expect(text).toMatch(/^model-invocable:\s*true\s*$/mu)
     expect(text).toMatch(/^description:.*\/create-workflow/mu)
     expect(text).toContain('Do not write Rhai')
+    expect(text).toContain('## Fast path (default)')
+    expect(text).toContain('Do not call `ask_user_question`')
     expect(text).toContain('## Required seven-stage procedure')
     expect(text).toContain('validate_only')
     expect(text).toContain('one args-selected canned path')

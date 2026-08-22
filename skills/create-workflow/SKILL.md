@@ -9,13 +9,26 @@ model-invocable: true
 
 Author a saved workflow: a deterministic JavaScript orchestration script that fans out subagents. The script — not the model turn — holds the loop, the fan-out, the branching, and the intermediate results; child agents do the judgment, the script shards work and verifies. Do not write Rhai.
 
+## Fast path (default)
+
+If `/create-workflow` already states a usable objective (what to do, and optionally how many agents / what fans out), skip the interview. Do not call `ask_user_question`. Do not explore the workspace first — child agents inspect the code at run time.
+
+In this same turn after the skill is loaded:
+
+1. Infer a kebab `meta.name`, project save scope (`.dsh/workflows/`), and a simple fan-out. If they named an agent count, stay at or under it (default 8). Add adversarial verification only when it still fits that budget; otherwise skip it and say so.
+2. Author the `{ meta, script }` envelope. Prefer `complete(value)` (this package injects it on stock). Do not use `minItems`/`maxItems`.
+3. Run the workflow tool with `validate_only: true` and representative args.
+4. Save only after validation succeeds. Report path, smoke limits, and `/workflow <name>` / `/<name>`. Offer a real launch; do not force it.
+
+Ask in ordinary chat (not a picker) only when the objective is empty or contradictory. One short question max.
+
 ## Required seven-stage procedure
 
-Force these steps, in order. Do not skip ahead to authoring.
+Use this only when the fast path cannot run because the objective is missing. Do not interview a user who already gave a brief.
 
-1. **Gather intent conversationally.** Ask for the objective, expected inputs, what fans out, what is verified, the final artifact, and roughly how many agents the user will tolerate. Never guess scope.
+1. **Gather intent.** If the user already stated the objective, fan-out, and agent budget, skip this stage. Otherwise ask in chat for the missing piece only.
 2. **Design fan-out.** Identify independent agents, concurrency, labels, phase grouping, and maximum fan-out.
-3. **Design verification.** Add an adversarial or independent verification stage; missing, failed, or unusable verification is not a confirming vote. Require concrete evidence.
+3. **Design verification.** Add an adversarial or independent verification stage when the budget allows; missing, failed, or unusable verification is not a confirming vote. Require concrete evidence.
 4. **Choose the artifact and tolerance.** Decide whether results live inline or in scratch files and how `null` child failures affect the result. Optional advice may fail open; a proof gate fails closed.
 5. **Choose identity and scope.** Pick a lowercase kebab name (at most 64 UTF-16 code units, `^[a-z](?:[a-z0-9]*)(?:-[a-z0-9]+)*$`) and project (`.dsh/workflows/`, default, shareable) or user (`<dshHome>/workflows/`) save scope. Do not use `pause`, `resume`, `save`, `stop`, `workflow`, `workflows`, `create-workflow`, or a Windows device basename. When a name collides with another slash command, the existing command keeps `/<name>` and the saved workflow is advertised as `/workflow-<name>`; the host repeats the `workflow-` prefix if that name is also occupied. Canonical `/workflow <name>` always works.
 6. **Author and validate.** Write the strict envelope, then run `validate_only` with representative args. Validation parses the entire script, then executes one args-selected canned path; it does not exercise all branches, live tools, or every possible agent output. A gate ends the smoke as `would pause: <message>`.
@@ -76,6 +89,7 @@ Default scratch quotas are 4,096 operations, 64 pending operations, 64 files, 1 
 - `pause()` in a result-derived branch re-fires forever; use `await_user` for resumable human gates.
 - Silent truncation is not coverage; `log()` whatever a `MAX_*` cap dropped.
 - Agents do not enforce invariants — the script does. Filter and assert in JavaScript.
+- A complete `/create-workflow` brief is enough — do not stall on `ask_user_question` or a repo walk.
 - Do not put `minItems`/`maxItems` on schemas; bound counts in the prompt and clip in JavaScript.
 - Do not put `meta` in JavaScript, use TypeScript/export syntax, add unsupported agent options such as `fork_context`, mix thunk and declarative parallel forms in one call, assume `null` is success, omit verification, hide truncation, use nondeterministic globals, use nested workflows, or claim validate-only exhaustively proves the workflow.
 
