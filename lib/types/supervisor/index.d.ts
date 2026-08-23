@@ -15,7 +15,6 @@ export interface SupervisorConfig {
     readonly completionNoticeMaxBytes?: number;
     readonly completionCohortMaxItems?: number;
     readonly completionCohortMaxBytes?: number;
-    readonly maxConsecutiveCompletionWakes?: number;
     readonly memberOutcomeMaxBytes?: number;
     readonly maxRetainedRunsPerSession?: number;
     readonly maxWorkflowNamesPerSession?: number;
@@ -58,6 +57,7 @@ export interface WorkflowValidateSpec extends Omit<WorkflowLaunchSpec, 'definiti
 /** Durable logical-run supervisor backed only by the compatible official engine. */
 export declare class WorkflowSupervisor {
     private readonly ctx;
+    private readonly workflowEngine;
     static readonly inject: readonly ["workflowEngine", "workflows"];
     private readonly config;
     private readonly store;
@@ -83,7 +83,10 @@ export declare class WorkflowSupervisor {
     private admission;
     private disposed;
     private disposal?;
-    constructor(ctx: any, config?: SupervisorConfig, store?: WorkflowRunStore);
+    constructor(ctx: any, config?: SupervisorConfig, store?: WorkflowRunStore, workflowEngine?: {
+        start(request: any): unknown;
+        validate?(request: any): Promise<unknown>;
+    } | undefined);
     private listen;
     private attachEngineObservers;
     initialize(signal?: AbortSignal): Promise<void>;
@@ -172,7 +175,7 @@ export declare class WorkflowSupervisor {
     private disposeOwner;
     /** Idempotent global teardown with admission, attempts, publications, and notices drained. */
     dispose(): Promise<void>;
-    /** Side-effect-free one-path validation through H's dedicated API. */
+    /** Side-effect-free one-path validation through the configured evaluator API. */
     validate(spec: WorkflowValidateSpec): Promise<WorkflowValidation>;
     private presentValidation;
 }

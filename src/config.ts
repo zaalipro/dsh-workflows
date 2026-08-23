@@ -57,7 +57,6 @@ export interface Config {
   readonly completionNoticeMaxBytes?: number
   readonly completionCohortMaxItems?: number
   readonly completionCohortMaxBytes?: number
-  readonly maxConsecutiveCompletionWakes?: number
   readonly saveScope?: 'project' | 'user'
 }
 
@@ -87,7 +86,7 @@ export const Config: Schema<Config> = z.object({
   artifactChunkDefaultBytes: positive().default(32_768), artifactChunkMaxBytes: positive().default(131_072), remotePageDefault: positive().default(50),
   remotePageMax: positive().default(200), remoteQueueMaxSessions: positive().default(256), remoteHeadTextMaxBytes: positive().default(131_072),
   remoteDetailMaxPhases: positive().default(256), completionNoticeMaxBytes: positive().default(16_384), completionCohortMaxItems: positive().default(20),
-  completionCohortMaxBytes: positive().default(262_144), maxConsecutiveCompletionWakes: positive().default(3), saveScope: z.union(['project', 'user']).default('project'),
+  completionCohortMaxBytes: positive().default(262_144), saveScope: z.union(['project', 'user']).default('project'),
 })
 
 const DEFAULTS = {
@@ -100,7 +99,7 @@ const DEFAULTS = {
   scratchMaxOperations: 4_096, scratchMaxPendingOperations: 64, scratchMaxFiles: 64, scratchMaxFileBytes: 1_048_576, scratchMaxTotalBytes: 8_388_608,
   maxRetainedArtifactsPerRun: 256, maxArtifactNameBytes: 255, artifactChunkDefaultBytes: 32_768, artifactChunkMaxBytes: 131_072, remotePageDefault: 50,
   remotePageMax: 200, remoteQueueMaxSessions: 256, remoteHeadTextMaxBytes: 131_072, remoteDetailMaxPhases: 256, completionNoticeMaxBytes: 16_384,
-  completionCohortMaxItems: 20, completionCohortMaxBytes: 262_144, maxConsecutiveCompletionWakes: 3, saveScope: 'project' as const,
+  completionCohortMaxItems: 20, completionCohortMaxBytes: 262_144, saveScope: 'project' as const,
 }
 
 const BOOLEAN_FIELDS = ['enabled', 'definitionWatch', 'watchUsePolling'] as const

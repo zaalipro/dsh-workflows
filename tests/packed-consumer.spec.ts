@@ -2,9 +2,11 @@ import { createHash } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import {
   mkdtempSync,
+  existsSync,
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -89,11 +91,21 @@ describe('packed consumer release boundary', () => {
     expect(source).toContain("'--ignore-scripts'")
     expect(source).toContain('HOME: home')
     expect(source).toContain('PNPM_STORE_DIR: store')
-    expect(source).toContain('official-h-probe')
+    expect(source).toContain('official-host-probe')
+    expect(source).toContain('official-profile-cycle')
+    expect(source).toContain('optional-peer-isolation')
+    expect(source).toContain('autoInstallPeers:false')
+    expect(source).toContain('profile-local Host peer')
+    expect(source).toContain('dsh-scope split identity')
+    expect(source).toContain("['headless', 'web']")
+    expect(source).toContain("'remove', '@zaalipro/dsh-workflows'")
+    expect(source).toContain("'ESNext.Disposable'")
+    expect(source).toContain("resolve(workspace, 'node_modules/typescript/bin/tsc')")
     expect(source).not.toMatch(/\bpnpm\s+pack\b/u)
     expect(readFileSync(resolve(root, 'scripts/check-release.mjs'), 'utf8')).toContain('--config.ignore-scripts=true')
     expect(source).not.toMatch(/src[\\/]index\.ts/u)
     expect(source).not.toMatch(/deepseek-harness.*package\.json/u)
+    expect(source).not.toContain('--config.auto-install-peers=true')
 
     const malformed = command(packedRunner, ['--tarball', 'relative.tgz', '--official', '/tmp/official'])
     expect(malformed.status).toBe(2)
@@ -132,6 +144,28 @@ describe('packed consumer release boundary', () => {
     expect(digest(artifact.path)).toBe(artifact.sha256)
   })
 
+  it('does not materialize optional Host peers even when a consumer enables peer auto-install', { timeout: 120_000 }, () => {
+    const artifact = ensurePacked()
+    const profile = mkdtempSync(join(tmpdir(), 'dsh-workflows-optional-peer-test-'))
+    try {
+      writeFileSync(join(profile, 'package.json'), '{"name":"optional-peer-test","private":true}\n')
+      writeFileSync(join(profile, 'pnpm-workspace.yaml'), 'packages:\n  - .\n\nnodeLinker: hoisted\nautoInstallPeers: true\n')
+      execFileSync('pnpm', ['add', '--offline', '--ignore-scripts', artifact.path], {
+        cwd: profile,
+        encoding: 'utf8',
+        env: { ...process.env, npm_config_ignore_scripts: 'true', NPM_CONFIG_IGNORE_SCRIPTS: 'true' },
+      })
+      const manifest = JSON.parse(readFileSync(join(profile, 'node_modules/@zaalipro/dsh-workflows/package.json'), 'utf8'))
+      expect(Object.keys(manifest.peerDependenciesMeta)).toEqual(Object.keys(manifest.peerDependencies))
+      for (const [name, meta] of Object.entries(manifest.peerDependenciesMeta as Record<string, any>)) {
+        expect(meta).toEqual({ optional: true })
+        expect(existsSync(join(profile, 'node_modules', ...name.split('/'), 'package.json')), name).toBe(false)
+      }
+    } finally {
+      rmSync(profile, { recursive: true, force: true })
+    }
+  })
+
   it.skipIf(process.env.DSH_RUN_PACKED_CONSUMER !== '1')(
     'runs one unchanged artifact through the isolated external consumer',
     { timeout: 300_000 },
@@ -145,7 +179,8 @@ describe('packed consumer release boundary', () => {
         DSH_RUN_PACKED_CONSUMER: undefined,
       })
       expect(result.status, result.stderr).toBe(0)
-      expect(result.stdout).toContain('official-h-probe')
+      expect(result.stdout).toContain('official-host-probe')
+      expect(result.stdout).toContain('official-profile-cycle')
       expect(result.stdout.trim()).toContain('packed consumer passed')
       expect(digest(artifact.path)).toBe(before)
     },

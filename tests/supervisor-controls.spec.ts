@@ -138,6 +138,36 @@ function controlledEngine() {
   }
 }
 
+function receiverSensitiveStockEngine() {
+  return {
+    handles: [] as Array<{ cancelled: boolean }>,
+    start() {
+      let settle!: (value: any) => void
+      let settled = false
+      const result = new Promise(resolve => { settle = resolve })
+      const handle = {
+        settled: false,
+        cancelled: false,
+        result,
+        cancel(this: typeof handle, reason: string) {
+          // Mirrors stock WorkerRun class methods: extracting this method
+          // throws while reading instance state.
+          if (this.settled) return
+          this.cancelled = true
+          this.settled = true
+          settled = true
+          settle({ value: null, stopReason: 'cancelled', error: reason, agentsStarted: 0 })
+        },
+        async dispose(this: typeof handle) {
+          if (!settled) this.cancel('workflow disposed')
+        },
+      }
+      this.handles.push(handle)
+      return handle
+    },
+  }
+}
+
 async function boot() {
   const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-controls-'))
   roots.push(root)
@@ -158,6 +188,41 @@ async function boot() {
 }
 
 describe('workflow supervisor controls', () => {
+  it('stops a receiver-sensitive stock run and does not offer unsafe Pause', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-controls-stock-'))
+    roots.push(root)
+    const store = new MemoryStore(root)
+    const engine = receiverSensitiveStockEngine()
+    const supervisor = new WorkflowSupervisor({
+      workflowEngine: engine,
+      logger: { warn: () => undefined },
+      workflowStorage: { layout: scratchLayout() },
+    }, { defaultAgentBudget: 8, maxAgentBudget: 8, maxMembersPerRun: 8 }, store)
+    const agent = { session: { id: 'session-stock-controls', header: { cwd: '/tmp' } }, followup: async () => undefined }
+    try {
+      await supervisor.initialize()
+      const launched = await supervisor.start({
+        script: 'await agent({ task: "wait" })',
+        meta: { name: 'stock-stop', description: 'stock stop' },
+        parent: agent,
+        agentBudget: 2,
+      })
+      const listed = await supervisor.list(agent)
+      expect(listed.items[0]?.allowedActions).toEqual(['stop', 'save'])
+      await expect(supervisor.pause('stock-stop', agent)).rejects.toMatchObject({
+        message: 'workflow "stock-stop" cannot pause because replay checkpoints are unavailable',
+      })
+      expect((await store.readSession(agent.session.id))[0]?.status).toBe('running')
+
+      const stopped = await supervisor.stop('stock-stop', agent)
+      expect(stopped.status).toBe('cancelled')
+      expect(engine.handles[0]?.cancelled).toBe(true)
+      expect((await supervisor.detail(agent, launched.runId)).run.status).toBe('cancelled')
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+
   it('pauses only after cancel, dispose, and checkpoint, then stops to cancelled', async () => {
     const { supervisor, store, engine, agent } = await boot()
     try {

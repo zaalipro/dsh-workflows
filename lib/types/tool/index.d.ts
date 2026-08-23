@@ -7,13 +7,15 @@ import { parseWorkflowToolRequest } from './schema.js';
 export * from './schema.js';
 export { VALIDATION_NOTE };
 /**
- * Opaque H contribution identities.  Release H U36 re-exports/uses these exact
- * objects when it mounts the official workflow contribution.  Until that
- * export exists, identity matching uses this package freeze plus an explicit
- * official marker; a same-name custom tool is never treated as official.
+ * Opaque contribution identities for a Host that exposes atomic replacement.
+ * Until the Host exports these exact objects, identity matching uses this
+ * package freeze plus an explicit official marker; a same-name custom tool is
+ * never treated as official.
  */
 export declare const WORKFLOW_TOOL_DEFINITION: any;
 export declare const WORKFLOW_PROMPT_SECTION: any;
+/** Public-fingerprint check used only for stock's Agent-scoped shadow seam. */
+export declare function isStockOfficialWorkflowTool(value: unknown): boolean;
 type WorkflowToolOutput = {
     status: 'started';
     displayName: string;
@@ -40,15 +42,25 @@ export interface WorkflowToolServices {
     readonly maxResultChars?: number;
 }
 interface HostWorkflowFs {
-    readBytesNoFollow(path: string, options: {
+    readBytesNoFollow?(path: string, options: {
         cwd?: string;
     }, signal?: AbortSignal, maxBytes?: number): Promise<Uint8Array>;
+    resolve?(path: string, options?: {
+        cwd?: string;
+        signal?: AbortSignal;
+    }): Promise<unknown>;
+    lstat?(path: string, options?: {
+        cwd?: string;
+    }, signal?: AbortSignal): Promise<unknown>;
+    processPath?(target: unknown): string;
+    fileUrl?(target: unknown): string;
+    readBytes?(target: unknown, signal: AbortSignal | undefined, maxBytes: number): Promise<Uint8Array>;
 }
-/** Strict identity/marker predicate; a same-name custom tool is not official. */
+/** Verified identity/marker or stock fingerprint; custom same-name tools are not official. */
 export declare function isOfficialWorkflowTool(definition: unknown): boolean;
 /** Render the launch/validate outcome for the tool result. */
 export declare function renderLaunch(value: WorkflowToolOutput, maxChars?: number): string;
-/** Atomically shadow one exact Agent's official tool and prompt contribution. */
+/** Shadow one Agent via atomic CAS or rollback-safe scoped registrations. */
 export declare function installWorkflowShadow(agent: any, servicesOrTool: WorkflowToolServices | any): () => void;
 export interface ToolShadowConfig {
     readonly enabled?: boolean;

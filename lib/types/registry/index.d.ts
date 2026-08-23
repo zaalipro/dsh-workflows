@@ -87,8 +87,8 @@ export declare class WorkflowRegistry {
     get(name: string, options?: WorkflowLookupOptions): Promise<WorkflowDefinition | undefined>;
     /**
      * Save a canonical definition through the Host descriptor capability. The
-     * local fallback is retained for standalone unit use; Host contexts fail
-     * closed when the compatible no-follow capability is unavailable.
+     * guarded local path is also the stock RC2 compatibility seam when its Host
+     * filesystem does not expose retained private-directory descriptors.
      */
     save(envelope: WorkflowDefinitionEnvelope, options: WorkflowSaveOptions): Promise<WorkflowDefinition>;
     private saveHost;

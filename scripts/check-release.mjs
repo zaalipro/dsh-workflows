@@ -8,16 +8,17 @@
  * session; those are release-acceptance responsibilities documented in
  * docs/testing.md.
  */
-import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
+const OFFICIAL_COMMIT = 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e'
 const DEFAULT_OFFICIALS = [
   process.env.DSH_HARNESS_CHECKOUT,
   resolve(ROOT, '../research/deepseek-harness'),
@@ -36,9 +37,10 @@ for (const signal of ['SIGINT', 'SIGTERM']) {
     if (interrupted) return
     interrupted = true
     signalExitCode = signal === 'SIGINT' ? 130 : 143
-    for (const child of children) {
-      try { child.kill(signal) } catch { /* the child may have exited */ }
-    }
+    for (const child of children) terminate(child, signal)
+    setTimeout(() => {
+      for (const child of children) terminate(child, 'SIGKILL')
+    }, 2_000).unref()
   })
 }
 
@@ -70,7 +72,7 @@ async function main() {
     await verifyTag(options.source, options.tag, manifest.version)
   }
 
-  await runPrePackGates(options)
+  await runPrePackGates(options, manifest)
   stage = 'pack'
   const artifact = await packOnce(options.source, options.artifactDir)
   options.tarball = artifact.path
@@ -163,9 +165,20 @@ async function verifyTag(source, tag, version) {
   if (tag !== `v${version}`) throw new Error(`tag ${tag} does not match v${version}`)
   const kind = await capture('git', ['cat-file', '-t', tag], { cwd: source })
   if (kind.trim() !== 'tag') throw new Error(`tag ${tag} must be an annotated git tag`)
+  const [tagCommit, headCommit, trackedChanges] = await Promise.all([
+    capture('git', ['rev-parse', `${tag}^{}`], { cwd: source }),
+    capture('git', ['rev-parse', 'HEAD'], { cwd: source }),
+    capture('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: source }),
+  ])
+  if (tagCommit.trim() !== headCommit.trim()) {
+    throw new Error(`tag ${tag} does not resolve to HEAD`)
+  }
+  if (trackedChanges.trim()) {
+    throw new Error('tracked worktree must be clean for a tagged release')
+  }
 }
 
-async function runPrePackGates(opts) {
+async function runPrePackGates(opts, manifest) {
   stage = 'release-inputs'
   await Promise.all([
     'scripts/build.mjs',
@@ -194,6 +207,10 @@ async function runPrePackGates(opts) {
 
   stage = 'build'
   await runPnpm(['run', 'build'], opts.source)
+  if (opts.tag) {
+    stage = 'tagged-generated-files'
+    await verifyPackagedGeneratedFilesTracked(opts.source, manifest)
+  }
   stage = 'typecheck'
   await runPnpm(['run', 'typecheck'], opts.source)
   stage = 'lint'
@@ -206,6 +223,43 @@ async function runPrePackGates(opts) {
   await runPnpm(['run', 'doc-sync'], opts.source)
   stage = 'package-source'
   await runNode(join(opts.source, 'scripts/verify-package.mjs'), ['--source', opts.source], opts.source)
+  // Git-hosted installs do not build at install time: their tagged commit must
+  // already contain the exact generated lib/ tree. The release build may not
+  // silently repair stale tracked artifacts only for the npm tarball.
+  if (opts.tag) {
+    stage = 'tagged-generated-tree'
+    const generatedChanges = await capture('git', ['status', '--porcelain', '--untracked-files=no'], { cwd: opts.source })
+    if (generatedChanges.trim()) {
+      throw new Error('release build changed tracked files; commit every generated package artifact before tagging')
+    }
+  }
+}
+
+async function verifyPackagedGeneratedFilesTracked(source, manifest) {
+  const packaged = new Set()
+  for (const entry of manifest.files ?? []) {
+    if (typeof entry !== 'string' || (entry !== 'lib' && !entry.startsWith('lib/'))) continue
+    await collectFiles(join(source, entry), source, packaged)
+  }
+  if (packaged.size === 0) throw new Error('package.json files must contain generated lib artifacts')
+
+  const paths = [...packaged].sort()
+  const output = await capture('git', ['ls-files', '-z', '--', ...paths], { cwd: source })
+  const tracked = new Set(output.split('\0').filter(Boolean))
+  const missing = paths.filter(path => !tracked.has(path))
+  if (missing.length > 0) {
+    throw new Error(`generated package artifacts must be tracked by git: ${missing.join(', ')}`)
+  }
+}
+
+async function collectFiles(path, root, files) {
+  const info = await stat(path)
+  if (info.isFile()) {
+    files.add(relative(root, path).replaceAll('\\', '/'))
+    return
+  }
+  if (!info.isDirectory()) throw new Error(`generated package entry is not a regular file or directory: ${path}`)
+  for (const child of await readdir(path)) await collectFiles(join(path, child), root, files)
 }
 
 async function cleanOutputs(source) {
@@ -220,7 +274,11 @@ async function cleanOutputs(source) {
 
 async function packOnce(source, artifactDir) {
   let destination = artifactDir
-  if (destination) await mkdir(destination, { recursive: true })
+  if (destination) {
+    await mkdir(destination, { recursive: true })
+    const existing = await readdir(destination)
+    if (existing.length > 0) throw new Error(`artifact directory must be empty: ${destination}`)
+  }
   else {
     temporaryArtifactDir = await mkdtemp(join(tmpdir(), 'dsh-workflows-release-'))
     destination = temporaryArtifactDir
@@ -269,8 +327,9 @@ function packedFilename(output) {
     else if (value && typeof value === 'object') Object.values(value).forEach(visit)
   }
   values.forEach(visit)
-  if (!files.length) throw new Error('pnpm pack --json did not report a .tgz filename')
-  return files.at(-1)
+  const unique = [...new Set(files)]
+  if (unique.length !== 1) throw new Error(`pnpm pack --json must report exactly one .tgz filename, got ${String(unique.length)}`)
+  return unique[0]
 }
 
 async function verifyTarballGates(tarball, opts) {
@@ -304,28 +363,36 @@ async function verifyTarballGates(tarball, opts) {
 }
 
 async function findOfficial(explicit) {
-  for (const candidate of [explicit, ...DEFAULT_OFFICIALS]) {
+  const candidates = explicit ? [explicit] : DEFAULT_OFFICIALS
+  for (const candidate of candidates) {
     if (!candidate) continue
     try {
       const info = await stat(candidate)
       if (info.isDirectory()) {
         await access(join(candidate, 'package.json'), constants.R_OK)
-        return resolve(candidate)
+        const revision = (await capture('git', ['-C', candidate, 'rev-parse', 'HEAD'])).trim()
+        if (revision === OFFICIAL_COMMIT) return resolve(candidate)
+        if (explicit) throw new Error(`--official must be checkout ${OFFICIAL_COMMIT}, got ${revision}`)
       }
-    } catch { /* try the next candidate */ }
+    } catch (error) {
+      if (explicit) throw error
+      /* try the next candidate */
+    }
   }
   return undefined
 }
 
 async function writeArtifactMetadata(opts, manifest) {
   const tag = /-/u.test(manifest.version) ? 'next' : 'latest'
+  const filename = basename(opts.tarball)
   const metadata = {
     package: PACKAGE_NAME,
     version: manifest.version,
-    filename: opts.tarball,
+    filename,
     sha256: opts.digest,
     distTag: tag,
-    publish: `npm publish ${JSON.stringify(opts.tarball)} --access public --provenance --tag ${tag}`,
+    prerelease: /-/u.test(manifest.version),
+    publish: `npm publish ./${filename} --access public --provenance --tag ${tag}`,
   }
   await writeFile(join(opts.artifactDir, 'release-artifact.json'), `${JSON.stringify(metadata, null, 2)}\n`, 'utf8')
 }
@@ -359,6 +426,8 @@ function runChild(file, args, { cwd = ROOT, env = process.env, capture: shouldCa
       cwd,
       env: { ...env },
       shell: process.platform === 'win32' && /(?:^|[\\/])pnpm(?:\.cmd)?$/u.test(file),
+      detached: process.platform !== 'win32',
+      windowsHide: true,
       stdio: shouldCapture ? ['ignore', 'pipe', 'pipe'] : 'inherit',
     })
     children.add(child)
@@ -378,7 +447,7 @@ function runChild(file, args, { cwd = ROOT, env = process.env, capture: shouldCa
       child.stderr.on('data', chunk => { stderr += chunk })
     }
     child.once('error', error => finish(rejectRun, error))
-    child.once('exit', (code, signal) => {
+    child.once('close', (code, signal) => {
       if (code === 0) finish(resolveRun, shouldCapture ? stdout : undefined)
       else {
         const tail = (stderr || stdout).trim().slice(-4_000)
@@ -386,6 +455,13 @@ function runChild(file, args, { cwd = ROOT, env = process.env, capture: shouldCa
       }
     })
   })
+}
+
+function terminate(child, signal) {
+  try {
+    if (process.platform === 'win32') child.kill(signal)
+    else process.kill(-child.pid, signal)
+  } catch { /* the child may have exited */ }
 }
 
 function report(stageName, details = {}) {

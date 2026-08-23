@@ -19,7 +19,6 @@ export interface CompletionNoticeOptions {
     readonly maxBytes?: number;
     readonly maxItems?: number;
     readonly maxCohortBytes?: number;
-    readonly maxConsecutiveWakes?: number;
 }
 /** Render one bounded owner-visible notice while preserving the dashboard footer. */
 export declare function renderWorkflowCompletionNotice(input: WorkflowCompletionNoticeInput, maxBytes?: number, report?: string | undefined): string;
@@ -34,9 +33,6 @@ export declare class WorkflowCompletionNotifier {
     private readonly reservations;
     private readonly attempted;
     private readonly owners;
-    /** Survives an empty drain so a later completion cannot open a fourth wake. */
-    private readonly consecutiveWakes;
-    private readonly listeners;
     private disposed;
     private disposal?;
     constructor(ctx: any, storeOrOptions?: WorkflowRunStore | CompletionNoticeOptions, maybeOptions?: CompletionNoticeOptions);
@@ -47,7 +43,6 @@ export declare class WorkflowCompletionNotifier {
     private drainOwner;
     private finalizeDirect;
     private finalize;
-    humanInput(agent: any): void;
     whenOwnerQuiescent(agent: any, signal?: AbortSignal): Promise<void>;
     dispose(): Promise<void>;
 }

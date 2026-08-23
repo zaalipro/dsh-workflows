@@ -23,7 +23,6 @@ export declare const COMMAND_SUCCESS: {
 };
 export declare const CREATE_WORKFLOW_COMMAND_DESCRIPTION = "Author, smoke-check, and save a new workflow (create-workflow skill)";
 export declare const WORKFLOWS_COMMAND_DESCRIPTION = "Open saved workflows and live runs";
-export declare const WORKFLOWS_COMMAND_SUCCESS = "Opened the workflow dashboard.";
 /**
  * The steered user message must be exactly what the user typed. Enforcement
  * (no interview, validate_only, auto-save) lives in the skill content and the
@@ -55,7 +54,7 @@ export declare function readPackagedSkillFrom(candidates: readonly URL[]): Promi
 export declare function readPackagedSkillSyncFrom(candidates: readonly URL[]): string;
 export declare function readPackagedSkill(): Promise<string>;
 export declare function readPackagedSkillSync(): string;
-/** Use H's protected package binding; never emulate trust with a low rank. */
+/** Prefer a future protected binding; stock rc.2 uses its provider rank seam. */
 export declare function registerTrustedWorkflowSkill(ctx: any): Promise<() => void>;
 export declare function registerTrustedWorkflowSkillSync(ctx: any, options?: {
     readonly required?: boolean;

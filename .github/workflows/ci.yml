@@ -44,7 +44,7 @@ jobs:
       - run: pnpm run lint
       - run: pnpm run doc-sync
       - run: pnpm run verify:package
-      - name: Unit coverage (100% per owned file)
+      - name: Owned-source coverage (80% aggregate floors)
         run: pnpm run test:coverage
       - run: pnpm run test:snapshot
       - name: Upload Linux diagnostics
@@ -94,7 +94,7 @@ jobs:
           retention-days: 3
 
   chromium:
-    name: Browser helper / Node 24 / official 141eb6f
+    name: Browser helper / Node 24 / official 0.1.1-rc.2
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -104,7 +104,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: 141eb6fef83422698aef7a981029e843e8161534
+          ref: b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
           path: official-harness
           persist-credentials: false
       - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
@@ -157,7 +157,8 @@ jobs:
           retention-days: 3
 
   release-pack:
-    name: Pack once / official 141eb6f / Node 24
+    if: github.ref_type != 'tag'
+    name: Pack once / official 0.1.1-rc.2 / Node 24
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -167,7 +168,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: 141eb6fef83422698aef7a981029e843e8161534
+          ref: b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
           path: official-harness
           persist-credentials: false
       - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c

@@ -150,12 +150,13 @@ describe('workflow tool execute (SH21)', () => {
   it('defaults inline script calls to validate_only so authoring never launches children', async () => {
     const deps = services()
     const tool = createWorkflowTool(deps as any)
-    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent() }))).resolves.toEqual({
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
       status: 'validated', ok: true, result: { smoke: true },
+      saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
     })
     expect(deps.launched).toEqual([])
     expect(deps.validated).toHaveLength(1)
-    expect(deps.saved).toEqual([])
+    expect(deps.saved).toHaveLength(1)
   })
 
   it('saves an inline smoke to the project registry when the session has a cwd', async () => {
@@ -175,6 +176,20 @@ describe('workflow tool execute (SH21)', () => {
     expect(deps.launched).toEqual([])
   })
 
+  it('saves an inline smoke to user scope without a Session cwd', async () => {
+    const deps = services()
+    const tool = createWorkflowTool(deps as any)
+    await expect(tool.execute({
+      script: SCRIPT, meta: META, save_scope: 'user',
+    }, exec({ agent: agent() }))).resolves.toMatchObject({
+      status: 'validated', saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
+    })
+    expect(deps.saved).toEqual([{
+      envelope: { meta: META, script: SCRIPT },
+      options: { scope: 'user', signal: SIGNAL },
+    }])
+  })
+
   it('repairs object-literal semicolons before smoke and save', async () => {
     const deps = services()
     const tool = createWorkflowTool(deps as any)
@@ -190,26 +205,25 @@ describe('workflow tool execute (SH21)', () => {
     expect(deps.saved[0].envelope.script).toBe('complete({ a: 1, b: 2 })')
   })
 
-  it('keeps a successful smoke when project save throws or returns no path', async () => {
+  it('fails inline authoring loudly when saving fails or cannot be attempted', async () => {
     const deps = services()
     deps.registry.save = async () => { throw new Error('disk full') }
     const tool = createWorkflowTool(deps as any)
-    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
-      status: 'validated', ok: true, result: { smoke: true },
-    })
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') })))
+      .rejects.toThrow('disk full')
     deps.registry.save = async () => ({ name: 'audit', path: '' })
-    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
-      status: 'validated', ok: true, result: { smoke: true },
-    })
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') })))
+      .rejects.toThrow('workflow registry.save returned no valid saved path')
+    deps.registry.save = async () => undefined
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') })))
+      .rejects.toThrow('workflow registry.save returned no valid saved path')
     const noSave = services()
     delete (noSave.registry as { save?: unknown }).save
     const toolNoSave = createWorkflowTool(noSave as any)
-    await expect(toolNoSave.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') }))).resolves.toEqual({
-      status: 'validated', ok: true, result: { smoke: true },
-    })
-    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('   ') }))).resolves.toEqual({
-      status: 'validated', ok: true, result: { smoke: true },
-    })
+    await expect(toolNoSave.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('/repo') })))
+      .rejects.toThrow('workflow inline authoring requires registry.save')
+    await expect(tool.execute({ script: SCRIPT, meta: META }, exec({ agent: agent('   ') })))
+      .rejects.toThrow('workflow inline project save requires a session cwd')
     const withSave = services()
     const toolSave = createWorkflowTool(withSave as any)
     await expect(toolSave.execute({ script: SCRIPT, meta: META }, { agent: agent('/repo') })).resolves.toEqual({
@@ -221,12 +235,33 @@ describe('workflow tool execute (SH21)', () => {
     expect(withSave.saved[0].options).toEqual({ scope: 'project', cwd: '/repo' })
   })
 
+  it('propagates abort before and during an inline save', async () => {
+    const before = new AbortController()
+    before.abort(new DOMException('cancelled before save', 'AbortError'))
+    const first = services()
+    await expect(createWorkflowTool(first as any).execute(
+      { script: SCRIPT, meta: META }, exec({ agent: agent('/repo'), signal: before.signal }),
+    )).rejects.toMatchObject({ name: 'AbortError' })
+    expect(first.saved).toEqual([])
+
+    const during = new AbortController()
+    const second = services()
+    second.registry.save = async () => {
+      during.abort(new DOMException('cancelled during save', 'AbortError'))
+      return { name: 'audit', path: '/tmp/.dsh/workflows/audit.workflow.json' }
+    }
+    await expect(createWorkflowTool(second as any).execute(
+      { script: SCRIPT, meta: META }, exec({ agent: agent('/repo'), signal: during.signal }),
+    )).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
   it('validate_only returns canonical JSON and never records a Chat prefix', async () => {
     const deps = services()
-    const parent = agent()
+    const parent = agent('/repo')
     const tool = createWorkflowTool(deps as any)
     await expect(tool.execute({ script: SCRIPT, meta: META, args: { n: 1 }, validate_only: true }, exec({ agent: parent }))).resolves.toEqual({
       status: 'validated', ok: true, result: { smoke: true },
+      saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
     })
     expect(deps.validated[0]).toMatchObject({ parent, args: { n: 1 }, filename: '<inline workflow>' })
     expect(deps.launched).toEqual([])
@@ -241,8 +276,8 @@ describe('workflow tool execute (SH21)', () => {
       return { ok: true, status: 'completed', note: VALIDATION_NOTE }
     }
     const tool = createWorkflowTool(deps as any)
-    await expect(tool.execute({ script: SCRIPT, meta: META, validate_only: true }, exec({ agent: agent() }))).resolves.toEqual({
-      status: 'validated', ok: true,
+    await expect(tool.execute({ script: SCRIPT, meta: META, validate_only: true }, exec({ agent: agent('/repo') }))).resolves.toEqual({
+      status: 'validated', ok: true, saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
     })
     deps.supervisor.validate = async () => ({ ok: false, status: 'error', error: 'canned execution failed' })
     await expect(tool.execute({
@@ -256,8 +291,9 @@ describe('workflow tool execute (SH21)', () => {
       ok: true, status: 'would-pause', value: 'would pause: retry later', note: VALIDATION_NOTE,
     })
     const tool = createWorkflowTool(deps as any)
-    await expect(tool.execute({ script: SCRIPT, meta: META, validate_only: true }, exec({ agent: agent() }))).resolves.toEqual({
+    await expect(tool.execute({ script: SCRIPT, meta: META, validate_only: true }, exec({ agent: agent('/repo') }))).resolves.toEqual({
       status: 'validated', ok: true, result: 'would pause: retry later',
+      saved_path: '/tmp/.dsh/workflows/audit.workflow.json',
     })
   })
 
@@ -282,6 +318,13 @@ describe('workflow tool execute (SH21)', () => {
     expect(tool.parameters).toMatchObject({ type: 'object' })
     expect(tool.description).toContain('Launch is BACKGROUND')
     expect(tool.description).toContain('SAVES')
+    expect(tool.description).toContain('items/minItems/maxItems')
+    expect(tool.description).toContain('inclusive array-length bounds')
+    expect(tool.description).toContain('non-negative safe integer (not `-0`)')
+    expect(tool.description).toContain('must satisfy `minItems <= maxItems`')
+    expect(tool.description).toContain('forbidden beside `oneOf`')
+    expect(tool.description).toContain('post-validates the structured child result')
+    expect(tool.description).not.toContain('Bound array length in the prompt')
     expect(tool.description).not.toContain('The run executes in the foreground')
     expect(JSON.stringify(tool.output.schema)).not.toContain('agentsStarted')
     expect(tool.output.render!({}, { status: 'validated', ok: true, result: { smoke: true } } as any)).toEqual([
@@ -294,7 +337,7 @@ describe('workflow tool execute (SH21)', () => {
     expect(validated).toContain('workflow smoke check passed.')
     expect(validated).toContain(VALIDATION_NOTE)
     expect(validated).toContain('… [truncated]')
-    expect(validated).toContain('Not saved.')
+    expect(validated).toContain('No new workflow definition was saved')
     expect(renderLaunch({ status: 'validated', ok: true })).toContain('null')
     expect(renderLaunch({
       status: 'validated', ok: true, saved_path: '/tmp/.dsh/workflows/audit.workflow.json',

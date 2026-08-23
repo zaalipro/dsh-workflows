@@ -1,7 +1,75 @@
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { spawn } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+const localIoProbe = vi.hoisted(() => ({
+  racePath: undefined as string | undefined,
+  raceObservations: 0,
+  releaseRace: undefined as (() => void) | undefined,
+  raceGate: undefined as Promise<void> | undefined,
+  afterObservation: undefined as ((path: string) => Promise<void>) | undefined,
+  afterDirectorySync: undefined as ((path: string) => Promise<boolean>) | undefined,
+  afterSwap: undefined as ((from: string, to: string) => Promise<void>) | undefined,
+  syncPaths: [] as string[],
+}))
+
+vi.mock('node:fs/promises', async importOriginal => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return {
+    ...actual,
+    async lstat(path: Parameters<typeof actual.lstat>[0], ...args: unknown[]) {
+      const result = await (actual.lstat as (...values: unknown[]) => Promise<unknown>)(path, ...args)
+      if (String(path) === localIoProbe.racePath && localIoProbe.raceObservations < 2) {
+        localIoProbe.raceObservations += 1
+        if (localIoProbe.raceObservations === 1 && localIoProbe.afterObservation !== undefined) {
+          const action = localIoProbe.afterObservation
+          localIoProbe.afterObservation = undefined
+          await action(String(path))
+        }
+        if (localIoProbe.raceObservations === 2) localIoProbe.releaseRace?.()
+        await localIoProbe.raceGate
+      }
+      return result
+    },
+    async open(path: Parameters<typeof actual.open>[0], ...args: unknown[]) {
+      const handle = await (actual.open as (...values: unknown[]) => Promise<Awaited<ReturnType<typeof actual.open>>>)(path, ...args)
+      return new Proxy(handle, {
+        get(target, property) {
+          if (property === 'sync') {
+            return async () => {
+              localIoProbe.syncPaths.push(String(path))
+              await target.sync()
+              if (localIoProbe.afterDirectorySync !== undefined) {
+                const action = localIoProbe.afterDirectorySync
+                if (await action(String(path))) localIoProbe.afterDirectorySync = undefined
+              }
+            }
+          }
+          const value = Reflect.get(target, property, target) as unknown
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+    },
+  }
+})
+
+vi.mock('fs-native-extensions', async importOriginal => {
+  const actual = await importOriginal<typeof import('fs-native-extensions')>()
+  return {
+    ...actual,
+    async swap(from: string, to: string) {
+      await actual.swap(from, to)
+      if (localIoProbe.afterSwap !== undefined) {
+        const action = localIoProbe.afterSwap
+        localIoProbe.afterSwap = undefined
+        await action(from, to)
+      }
+    },
+  }
+})
 
 import { WorkflowRegistry } from '../src/registry/index.js'
 
@@ -12,6 +80,14 @@ const posixOnly = process.platform !== 'win32'
 afterEach(async () => {
   await Promise.all(registries.splice(0).map(registry => registry.dispose()))
   await Promise.all(temps.splice(0).map(path => rm(path, { recursive: true, force: true })))
+  localIoProbe.racePath = undefined
+  localIoProbe.raceObservations = 0
+  localIoProbe.releaseRace = undefined
+  localIoProbe.raceGate = undefined
+  localIoProbe.afterObservation = undefined
+  localIoProbe.afterDirectorySync = undefined
+  localIoProbe.afterSwap = undefined
+  localIoProbe.syncPaths.length = 0
 })
 
 async function temp(prefix = 'dsh-registry-save-'): Promise<string> {
@@ -102,6 +178,40 @@ function registry(config: Record<string, unknown> & { dshHome: string }, fs?: Re
   return { registry: created, events }
 }
 
+async function childSave(args: readonly string[]): Promise<{ status: string; code?: string; script?: string }> {
+  const fixture = fileURLToPath(new URL('./fixtures/registry-save-child.ts', import.meta.url))
+  return await new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ['--import', 'tsx', fixture, ...args], {
+      cwd: process.cwd(),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.setEncoding('utf8').on('data', chunk => { stdout += chunk })
+    child.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk })
+    const timeout = setTimeout(() => {
+      child.kill('SIGKILL')
+      reject(new Error('registry child timed out'))
+    }, 15_000)
+    child.once('error', error => { clearTimeout(timeout); reject(error) })
+    child.once('exit', code => {
+      clearTimeout(timeout)
+      if (code !== 0) return reject(new Error(`registry child exited ${code}: ${stderr}`))
+      try { resolve(JSON.parse(stdout.trim())) } catch { reject(new Error(`invalid registry child output: ${stdout}\n${stderr}`)) }
+    })
+  })
+}
+
+async function waitForEntry(path: string, prefix: string): Promise<string> {
+  const deadline = Date.now() + 10_000
+  while (Date.now() < deadline) {
+    const match = (await readdir(path)).find(name => name.startsWith(prefix))
+    if (match !== undefined) return match
+    await new Promise(resolve => setTimeout(resolve, 5))
+  }
+  throw new Error(`timed out waiting for ${prefix}`)
+}
+
 describe('registry save (RS8)', () => {
   it('creates a canonical project definition and emits workflows/change only after success', async () => {
     const { home, project } = await layout()
@@ -145,6 +255,10 @@ describe('registry save (RS8)', () => {
       .rejects.toThrow(/can only be saved to project or user scope/u)
     await expect(workflows.save(envelope('nope'), { scope: 'project' }))
       .rejects.toThrow('workflow definition save requires a session cwd')
+    const userWorkflows = registry({ dshHome: home }, hostFs()).registry
+    await expect(userWorkflows.save(envelope('global'), { scope: 'user' })).resolves.toMatchObject({
+      name: 'global', scope: 'user', path: join(home, 'workflows', 'global.workflow.json'),
+    })
     await expect(workflows.save(envelope('huge', 'x'.repeat(200)), { cwd: project, scope: 'project' }))
       .rejects.toThrow(/definition exceeds the 80-byte limit/u)
     expect(events).toEqual([])
@@ -199,6 +313,146 @@ describe('registry save (RS8)', () => {
     await expect(local.save(envelope('linked'), { cwd: project, scope: 'project' }))
       .rejects.toThrow(/symbolic-link definitions are not allowed/u)
     expect(await readFile(outside, 'utf8')).toBe('sentinel')
+  })
+
+  it.skipIf(!posixOnly)('rejects a cooperating versioned-replace race against the exact observed inode', async () => {
+    const { home, project } = await layout()
+    const destination = join(project, '.dsh', 'workflows', 'cooperate.workflow.json')
+    await writeFile(destination, `${JSON.stringify(envelope('cooperate', 'return 0'), null, 2)}\n`)
+    const first = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    const second = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    localIoProbe.racePath = destination
+    localIoProbe.raceGate = new Promise<void>(resolve => { localIoProbe.releaseRace = resolve })
+
+    const outcomes = await Promise.allSettled([
+      first.registry.save(envelope('cooperate', 'return 1'), { cwd: project, scope: 'project' }),
+      second.registry.save(envelope('cooperate', 'return 2'), { cwd: project, scope: 'project' }),
+    ])
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
+    const rejected = outcomes.find(outcome => outcome.status === 'rejected') as PromiseRejectedResult
+    expect(rejected.reason).toMatchObject({ code: 'WORKFLOW_STALE_VERSION' })
+    expect(['return 1', 'return 2']).toContain(JSON.parse(await readFile(destination, 'utf8')).script)
+    expect([...first.events, ...second.events]).toEqual(['workflows/change'])
+  })
+
+  it.skipIf(!posixOnly)('uses cross-process atomic exchange so one update wins and the stale writer restores it', async () => {
+    const { home, project } = await layout()
+    const barrier = await temp('dsh-registry-exchange-barrier-')
+    const destination = join(project, '.dsh', 'workflows', 'cross-process.workflow.json')
+    await writeFile(destination, `${JSON.stringify(envelope('cross-process', 'return 0'), null, 2)}\n`)
+
+    const outcomes = await Promise.all([
+      childSave([home, project, barrier, 'one', 'return 1']),
+      childSave([home, project, barrier, 'two', 'return 2']),
+    ])
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(1)
+    expect(outcomes.filter(outcome => outcome.code === 'WORKFLOW_STALE_VERSION')).toHaveLength(1)
+    const winner = outcomes.find(outcome => outcome.status === 'fulfilled')?.script
+    expect(JSON.parse(await readFile(destination, 'utf8')).script).toBe(winner)
+    const lockInfo = await lstat(join(project, '.dsh', 'workflows', '.cross-process.workflow.json.lock'))
+    expect(lockInfo.isFile()).toBe(true)
+    expect(lockInfo.nlink).toBe(1)
+  })
+
+  it.skipIf(!posixOnly)('keeps a late third publisher outside an in-flight stale rollback', async () => {
+    const { home, project } = await layout()
+    const barrier = await temp('dsh-registry-three-process-barrier-')
+    const destination = join(project, '.dsh', 'workflows', 'cross-process.workflow.json')
+    await writeFile(destination, `${JSON.stringify(envelope('cross-process', 'return 0'), null, 2)}\n`)
+
+    const first = childSave([home, project, barrier, 'one', 'return 1', 'hold'])
+    const second = childSave([home, project, barrier, 'two', 'return 2', 'hold'])
+    const swapped = await waitForEntry(barrier, 'swapped-')
+    const winnerId = swapped.slice('swapped-'.length)
+    const third = childSave([home, project, barrier, 'three', 'return 3'])
+    await waitForEntry(barrier, 'ready-three')
+    await writeFile(join(barrier, `continue-${winnerId}`), '')
+
+    const outcomes = await Promise.all([first, second, third])
+    expect(outcomes.filter(outcome => outcome.status === 'fulfilled')).toHaveLength(2)
+    expect(outcomes.filter(outcome => outcome.code === 'WORKFLOW_STALE_VERSION')).toHaveLength(1)
+    expect(JSON.parse(await readFile(destination, 'utf8')).script).toBe('return 3')
+  })
+
+  it.skipIf(!posixOnly)('rejects an in-place version change after observation without overwriting the racer', async () => {
+    const { home, project } = await layout()
+    const destination = join(project, '.dsh', 'workflows', 'mutated.workflow.json')
+    await writeFile(destination, `${JSON.stringify(envelope('mutated', 'return 0'), null, 2)}\n`)
+    const { registry: workflows, events } = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    const raced = `${JSON.stringify(envelope('mutated', 'return "racer-version-with-different-size"'), null, 2)}\n`
+    localIoProbe.racePath = destination
+    localIoProbe.afterObservation = async path => { await writeFile(path, raced) }
+
+    await expect(workflows.save(envelope('mutated', 'return "ours"'), { cwd: project, scope: 'project' }))
+      .rejects.toMatchObject({ code: 'WORKFLOW_STALE_VERSION' })
+    expect(await readFile(destination, 'utf8')).toBe(raced)
+    expect(events).toEqual([])
+  })
+
+  it.skipIf(!posixOnly)('fsyncs staged bytes and the parent directory before reporting a local change', async () => {
+    const { home, project } = await layout()
+    const root = join(project, '.dsh', 'workflows')
+    const { registry: workflows, events } = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    const saved = await workflows.save(envelope('durable'), { cwd: project, scope: 'project' })
+
+    const tempSync = localIoProbe.syncPaths.findIndex(path => path.startsWith(join(root, '.durable.workflow.json.')) && path.endsWith('.tmp'))
+    const directorySync = localIoProbe.syncPaths.indexOf(root)
+    expect(tempSync).toBeGreaterThanOrEqual(0)
+    expect(directorySync).toBeGreaterThan(tempSync)
+    expect(await readFile(saved.path, 'utf8')).toContain('"durable"')
+    expect(events).toEqual(['workflows/change'])
+  })
+
+  it.skipIf(!posixOnly)('does not report success when a post-publication writer changes the requested bytes', async () => {
+    const { home, project } = await layout()
+    const root = join(project, '.dsh', 'workflows')
+    const destination = join(root, 'post-publish.workflow.json')
+    const { registry: workflows, events } = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    const raced = `${JSON.stringify(envelope('post-publish', 'return "external"'), null, 2)}\n`
+    localIoProbe.afterDirectorySync = async path => {
+      if (path !== root) return false
+      await writeFile(destination, raced)
+      return true
+    }
+
+    await expect(workflows.save(envelope('post-publish', 'return "ours"'), { cwd: project, scope: 'project' }))
+      .rejects.toMatchObject({ code: 'WORKFLOW_STALE_VERSION' })
+    expect(await readFile(destination, 'utf8')).toBe(raced)
+    expect(events).toEqual([])
+  })
+
+  it.skipIf(!posixOnly)('finishes rollback after an abort at exchange instead of leaving proposed bytes published', async () => {
+    const { home, project } = await layout()
+    const destination = join(project, '.dsh', 'workflows', 'abort-exchange.workflow.json')
+    await writeFile(destination, `${JSON.stringify(envelope('abort-exchange', 'return 0'), null, 2)}\n`)
+    const { registry: workflows, events } = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    const controller = new AbortController()
+    const displacedRace = `${JSON.stringify(envelope('abort-exchange', 'return "external"'), null, 2)}\n`
+    localIoProbe.afterSwap = async from => {
+      controller.abort()
+      // The exchanged `from` is the displaced prior destination. Its mutation
+      // forces the stale rollback path after the commit point.
+      await writeFile(from, displacedRace)
+    }
+
+    await expect(workflows.save(envelope('abort-exchange', 'return "ours"'), {
+      cwd: project,
+      scope: 'project',
+      signal: controller.signal,
+    })).rejects.toMatchObject({ code: 'WORKFLOW_STALE_VERSION' })
+    expect(await readFile(destination, 'utf8')).toBe(displacedRace)
+    expect(await readFile(destination, 'utf8')).not.toContain('return \\"ours\\"')
+    expect(events).toEqual([])
+  })
+
+  it.skipIf(posixOnly)('fails local save before publication where durable no-follow publication is unsupported', async () => {
+    const { home, project } = await layout()
+    const destination = join(project, '.dsh', 'workflows', 'unsupported.workflow.json')
+    const { registry: workflows, events } = registry({ dshHome: home }, hostFs({ openPrivateDirectory: undefined }))
+    await expect(workflows.save(envelope('unsupported'), { cwd: project, scope: 'project' }))
+      .rejects.toMatchObject({ code: 'WORKFLOW_REGISTRY_UNSUPPORTED' })
+    await expect(lstat(destination)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(events).toEqual([])
   })
 })
 

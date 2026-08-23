@@ -4014,7 +4014,7 @@ Testing is layered so a passing unit suite cannot hide an integration, artifact,
   - Purpose: Turn a validated model request into one immutable supervisor source while respecting Session-world filesystem policy. This prevents an editable `script_path` from bypassing size, UTF-8, link, and envelope validation.
   - Do:
     1. Implement `resolveWorkflowSource(ctx, request, { agent, signal, definitionMaxBytes })`: `name` calls registry `get()` in Session cwd; inline script uses supplied meta; `.workflow.json` reads and parses the envelope; another path reads a bare body and requires supplied meta.
-    2. Read paths through official `ctx.fs.readBytesNoFollow`, enforce 1 MiB before decode, use fatal UTF-8 decoding, and translate not-found/not-regular/too-large errors to the exact Design diagnostics.
+    2. Prefer official `ctx.fs.readBytesNoFollow` when present. Published stock RC2 lacks it: only for the verified local RC2 `lstat`/`resolve`/`processPath`/`fileUrl`/`readBytes` shape, authorize and normalize through those public Host methods, then use a plugin-owned bounded descriptor read with atomic final-component `O_NOFOLLOW`; reject unknown/remote providers. Enforce 1 MiB before decode, use fatal UTF-8 decoding, and translate not-found/not-regular/too-large errors to the exact Design diagnostics.
     3. Snapshot source/meta/args before handing them to validation/start; never execute meta, infer it from JS, or resolve paths against process cwd.
     4. Test all sources, absent saved definition, undefined cwd, relative/absolute policy, invalid UTF-8, symlink/non-file/race/oversize, malformed envelope, filename mismatch, caller abort, and post-resolution file mutation.
   - Details:
@@ -4890,3 +4890,19 @@ Testing is layered so a passing unit suite cannot hide an integration, artifact,
 ## Blockers
 
 None
+
+## Post-implementation release-policy amendments
+
+### 2026-08-23: truthful owned-source coverage denominator
+
+The release coverage gate instruments only `src/**/*.{ts,tsx}`, excludes type-only declarations, and enforces aggregate floors of 80% for statements, branches, functions, and lines. Generated `lib/`, release helper scripts, browser helpers, snapshots, stress suites, packed-consumer execution, and real-provider execution retain their separate gates. This amendment supersedes historical per-file 100% language: the corrected explicit denominator measured 85.35% statements/lines, 80.69% branches, and 84.98% functions, so the package does not claim coverage it does not have.
+
+### 2026-08-23: official `0.1.1-rc.2` Host and package-owned compatibility evaluator
+
+Plugin `0.1.0-rc.3` supports exactly official DeepSeek Harness `0.1.1-rc.2`; stock `0.1.0-rc.8` and later unverified versions remain unsupported. The package no longer waits for symbolic release H. The plugin leaves the process-global stock `ctx.workflowEngine` untouched and privately instantiates its package-owned MIT compatibility evaluator, built from the attributed `vendor/workflow-engine` source into `lib/compat-engine/index.js` and `worker.cjs`, for supervisor execution. The evaluator owns deferred start, tuple journal calls, replay checkpoints, gates, budgets, and scratch; official `0.1.1-rc.2` owns Host composition, Agent and Session state, providers, filesystem services, Remotes, and Client surfaces. Release evidence must compile against exact `0.1.1-rc.2`, install one unchanged tarball through real Web and headless profile add/boot/remove cycles, and boot stock after removal. Until npm publication, the supported simple installs are pinned GitHub release `v0.1.0-rc.3` and an exact tarball stored at a durable absolute path.
+
+This amendment explicitly supersedes the historical symbolic-H activation criteria and the prohibition on a second or vendored evaluator. The evaluator is private to this plugin's supervisor and is not installed into or substituted for the Harness-global engine service; the historical requirements and task text below remain as design history rather than current release policy.
+
+### 2026-08-23: surface-only completion notices
+
+Completion delivery appends one durable `user/message` directly to the launching Agent's Session with `surfaceOp: 'append'`. It does not call `Agent.followup()`, `Agent.inject()`, or open a model turn. Per-owner FIFO cohort limits of 20 notices and 262,144 rendered UTF-8 bytes remain queue and payload bounds, but `maxConsecutiveCompletionWakes` and notifier `maxConsecutiveWakes` are removed because no completion cohort wakes the model. This amendment supersedes the historical three-wake cap, human-input reset, and completion-driven fixed-point language while preserving the at-most-once claimed/delivered/abandoned outbox transitions.

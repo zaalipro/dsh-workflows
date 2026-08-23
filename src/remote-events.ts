@@ -1,6 +1,6 @@
 import type { WorkflowRunChange } from './supervisor/types.js'
 
-/** Canonical H ApiProxy registration for workflow invalidation hints. */
+/** Canonical optional Host ApiProxy registration for workflow invalidation hints. */
 export type WorkflowRemoteEvent = WorkflowRunChange
 /** Spec name for the invalidate-only `workflows/run-change` payload. */
 export type WorkflowRunInvalidation = WorkflowRunChange
@@ -32,7 +32,7 @@ interface ApiRemoteEventsLike {
   }) => unknown
 }
 
-/** Register one effect-owned bounded H event lane; no package-local queue is retained. */
+/** Register one effect-owned bounded Host event lane; no package-local queue is retained. */
 export function registerWorkflowRemoteEvents(
   ctx: { readonly apiRemoteEvents?: ApiRemoteEventsLike },
   config: WorkflowRemoteEventConfig = {},

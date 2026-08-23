@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { WorkflowSupervisor } from '../src/supervisor/index.js'
 import type {
@@ -40,6 +40,8 @@ class MemoryStore implements WorkflowRunStore {
   readonly entries = new Map<string, { sessionId: string; head: WorkflowRunHeadRecord; detail: WorkflowRunDetailPayloadV2 }>()
   insertionGate?: Promise<void>
   insertionStarted?: () => void
+  terminalFailure?: Error
+  terminalCommits = 0
   private sequence = 0
   constructor(readonly root: string) {}
   async initialize(): Promise<readonly any[]> { return [] }
@@ -68,6 +70,8 @@ class MemoryStore implements WorkflowRunStore {
     return { ...entry.head }
   }
   async commitTerminalAndClaimNotice(request: WorkflowTerminalCommitRequest) {
+    this.terminalCommits += 1
+    if (this.terminalFailure !== undefined) throw this.terminalFailure
     const entry = this.entries.get(request.runId)!
     entry.detail = request.detail ?? entry.detail
     entry.head = { ...entry.head, ...request.head, revision: entry.head.revision + 1, completionNotice: { state: 'claimed', claimId: 'c'.repeat(32), processEpoch: 'd'.repeat(32), claimedAt: 10 }, scriptPath: entry.head.scriptPath }
@@ -103,6 +107,59 @@ function scratchLayout() {
 }
 
 describe('workflow supervisor teardown', () => {
+  it('fails forward when terminal persistence is permanently unavailable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-terminal-failure-'))
+    roots.push(root)
+    const store = new MemoryStore(root)
+    const terminalFailure = new Error('terminal manifest commit failed')
+    store.terminalFailure = terminalFailure
+    const bus = new EventBus()
+    let settle!: (value: any) => void
+    const result = new Promise(resolve => { settle = resolve })
+    const handle = {
+      id: 'execution-terminal-failure',
+      result,
+      release: () => undefined,
+      resume: () => undefined,
+      cancel: () => undefined,
+      dispose: async () => undefined,
+      checkpoint: () => ({ journal: [], agentSpend: 0, agentSeq: 0 }),
+    }
+    const supervisor = new WorkflowSupervisor({
+      workflowEngine: { start: () => handle },
+      on: bus.on.bind(bus),
+      emit: bus.emit.bind(bus),
+      logger: { warn: () => undefined },
+      workflows: { save: async () => ({ path: '/tmp/unused' }) },
+      workflowStorage: { layout: scratchLayout() },
+    }, { defaultAgentBudget: 8, maxAgentBudget: 8, maxMembersPerRun: 8 }, store)
+    await supervisor.initialize()
+    const agent = { session: { id: 'session-terminal-failure', header: { cwd: '/tmp' } }, followup: async () => undefined }
+    const launched = await supervisor.start({
+      script: 'return 1', meta: { name: 'terminal-failure', description: 'terminal failure' }, parent: agent,
+    })
+    settle({ value: { ok: true }, stopReason: 'completed', agentsStarted: 0 })
+
+    // Let the attempt observer clear its Attempt before teardown. Its failed
+    // terminal commit deliberately leaves the durable row nonterminal.
+    await vi.waitFor(() => { expect(store.terminalCommits).toBe(1) })
+    expect(store.entries.get(launched.runId)?.head.status).toBe('running')
+    expect(bus.events.filter(event => event.name === 'workflows/run-end')).toHaveLength(0)
+
+    const first = supervisor.dispose()
+    const second = supervisor.dispose()
+    await expect(Promise.race([
+      first,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('dispose timed out')), 1_000)),
+    ])).rejects.toBe(terminalFailure)
+    await expect(second).rejects.toBe(terminalFailure)
+    await expect(supervisor.dispose()).rejects.toBe(terminalFailure)
+    expect(store.terminalCommits).toBe(2)
+    expect(store.entries.get(launched.runId)?.head.status).toBe('running')
+    expect(store.entries.get(launched.runId)?.detail.result).toEqual({ state: 'pending' })
+    expect(bus.events.filter(event => event.name === 'workflows/run-end')).toHaveLength(0)
+  })
+
   it('skips deferred release when admission closes after public maps', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-teardown-'))
     roots.push(root)

@@ -1,7 +1,7 @@
 import { isWorkflowDefinitionName } from '../registry/names.js'
 import { snapshotWorkflowJsonValue } from '../supervisor/value-view.js'
-export interface WorkflowToolArgs { readonly name?:string;readonly script?:string;readonly script_path?:string;readonly meta?:Record<string,unknown>;readonly args?:Record<string,unknown>;readonly validate_only?:boolean;readonly resume_from_run_id?:string;readonly agent_budget?:number }
-export type ParsedWorkflowToolRequest={readonly kind:'fresh';readonly source:{readonly kind:'name';readonly name:string}|{readonly kind:'script';readonly script:string;readonly meta:Record<string,unknown>}|{readonly kind:'script_path';readonly path:string;readonly meta?:Record<string,unknown>};readonly args:Record<string,unknown>;readonly validateOnly:boolean;readonly agentBudget?:number}|{readonly kind:'resume';readonly runId:string;readonly agentBudget?:number}
+export interface WorkflowToolArgs { readonly name?:string;readonly script?:string;readonly script_path?:string;readonly meta?:Record<string,unknown>;readonly args?:Record<string,unknown>;readonly validate_only?:boolean;readonly save_scope?:'project'|'user';readonly resume_from_run_id?:string;readonly agent_budget?:number }
+export type ParsedWorkflowToolRequest={readonly kind:'fresh';readonly source:{readonly kind:'name';readonly name:string}|{readonly kind:'script';readonly script:string;readonly meta:Record<string,unknown>}|{readonly kind:'script_path';readonly path:string;readonly meta?:Record<string,unknown>};readonly args:Record<string,unknown>;readonly validateOnly:boolean;readonly saveScope?:'project'|'user';readonly agentBudget?:number}|{readonly kind:'resume';readonly runId:string;readonly agentBudget?:number}
 function record(value:unknown):value is Record<string,unknown>{return typeof value==='object'&&value!==null&&!Array.isArray(value)}
 function detachedRecord(value: Record<string, unknown>, field: string): Record<string, unknown> {
   let snapshot: unknown
@@ -14,16 +14,17 @@ function detachedRecord(value: Record<string, unknown>, field: string): Record<s
 /** Validate model-facing workflow request before any source or runtime side effect. */
 export function parseWorkflowToolRequest(value:unknown):ParsedWorkflowToolRequest {
   if(!record(value)) throw new Error('workflow request must be an object')
-  const allowed=new Set(['name','script','script_path','meta','args','validate_only','resume_from_run_id','agent_budget'])
+  const allowed=new Set(['name','script','script_path','meta','args','validate_only','save_scope','resume_from_run_id','agent_budget'])
   for(const key of Object.keys(value)) if(!allowed.has(key)) throw new Error(`workflow request has unknown field "${key}"`)
   const v=value as WorkflowToolArgs
   const budget=v.agent_budget
   if(budget!==undefined&&(!Number.isSafeInteger(budget)||budget<1||budget>1024)) throw new Error('workflow agent_budget must be a safe integer from 1 through 1024')
   if(v.args!==undefined&&!record(v.args)) throw new Error('workflow args must be a JSON object (wrap arrays/scalars in a field)')
   if(v.validate_only!==undefined&&typeof v.validate_only!=='boolean') throw new Error('workflow validate_only must be a boolean')
+  if(v.save_scope!==undefined&&v.save_scope!=='project'&&v.save_scope!=='user') throw new Error('workflow save_scope must be project or user')
   if(v.resume_from_run_id!==undefined){
     if(typeof v.resume_from_run_id!=='string'||v.resume_from_run_id==='') throw new Error('workflow resume_from_run_id must be a non-empty string')
-    for(const key of ['name','script','script_path','meta','args','validate_only'] as const) if(v[key]!==undefined) throw new Error('workflow resume_from_run_id cannot be combined with a source, meta, args, or validate_only')
+    for(const key of ['name','script','script_path','meta','args','validate_only','save_scope'] as const) if(v[key]!==undefined) throw new Error('workflow resume_from_run_id cannot be combined with a source, meta, args, validate_only, or save_scope')
     return {kind:'resume',runId:v.resume_from_run_id,agentBudget:budget}
   }
   const sources=[v.name!==undefined?'name':undefined,v.script!==undefined?'script':undefined,v.script_path!==undefined?'script_path':undefined].filter(Boolean)
@@ -32,19 +33,23 @@ export function parseWorkflowToolRequest(value:unknown):ParsedWorkflowToolReques
   if(v.name!==undefined){
     if(typeof v.name!=='string'||!isWorkflowDefinitionName(v.name)) throw new Error(`workflow name "${String(v.name)}" is invalid`)
     if(v.meta!==undefined) throw new Error('workflow name source must not include meta')
+    if(v.save_scope!==undefined) throw new Error('workflow save_scope is allowed only with an inline script validate-only save')
     return {kind:'fresh',source:{kind:'name',name:v.name},args,validateOnly:v.validate_only??false,agentBudget:budget}
   }
   if(v.script!==undefined){
     if(typeof v.script!=='string') throw new Error('workflow script must be a string')
     if(!record(v.meta)) throw new Error('workflow script source requires the meta object')
-    return {kind:'fresh',source:{kind:'script',script:v.script,meta:detachedRecord(v.meta,'meta')},args,validateOnly:v.validate_only??true,agentBudget:budget}
+    const validateOnly=v.validate_only??true
+    if(v.save_scope!==undefined&&!validateOnly) throw new Error('workflow save_scope is allowed only with an inline script validate-only save')
+    return {kind:'fresh',source:{kind:'script',script:v.script,meta:detachedRecord(v.meta,'meta')},args,validateOnly,saveScope:v.save_scope??'project',agentBudget:budget}
   }
+  if(v.save_scope!==undefined) throw new Error('workflow save_scope is allowed only with an inline script validate-only save')
   if(typeof v.script_path!=='string'||v.script_path==='') throw new Error('workflow script_path must be a non-empty string')
   if(v.script_path.endsWith('.workflow.json')&&v.meta!==undefined) throw new Error('workflow .workflow.json source must not include meta')
   if(!v.script_path.endsWith('.workflow.json')&&!record(v.meta)) throw new Error('workflow bare script_path requires the meta object')
   return {kind:'fresh',source:{kind:'script_path',path:v.script_path,...(v.meta===undefined?{}:{meta:detachedRecord(v.meta,'meta')})},args,validateOnly:v.validate_only??false,agentBudget:budget}
 }
-export const WORKFLOW_TOOL_SCHEMA={type:'object',additionalProperties:false,properties:{name:{type:'string'},script:{type:'string'},script_path:{type:'string'},meta:{type:'object'},args:{type:'object'},validate_only:{type:'boolean'},resume_from_run_id:{type:'string'},agent_budget:{type:'integer',minimum:1,maximum:1024}}} as const
+export const WORKFLOW_TOOL_SCHEMA={type:'object',additionalProperties:false,properties:{name:{type:'string'},script:{type:'string'},script_path:{type:'string'},meta:{type:'object'},args:{type:'object'},validate_only:{type:'boolean'},save_scope:{type:'string',enum:['project','user']},resume_from_run_id:{type:'string'},agent_budget:{type:'integer',minimum:1,maximum:1024}}} as const
 
 /** defineTool parameter map for the replacement; parseWorkflowToolRequest remains the cross-field gate. */
 export const WORKFLOW_TOOL_PARAMETERS = {
@@ -92,6 +97,11 @@ export const WORKFLOW_TOOL_PARAMETERS = {
   validate_only: {
     type: 'boolean',
     description: 'Smoke-check one canned-host path instead of starting a live run (no children, no run record). Defaults true for inline script (and then saves the definition); defaults false for name/script_path. Never launches children.',
+  },
+  save_scope: {
+    type: 'string',
+    enum: ['project', 'user'],
+    description: 'Where a successful inline validate-only authoring smoke is saved. Defaults to project; use user for $DSH_HOME/workflows. Invalid with name, script_path, resume, or validate_only:false.',
   },
   resume_from_run_id: {
     type: 'string',

@@ -4,17 +4,18 @@ import {
   adaptEngineHandle,
   isCompleteEngineHandle,
   rejectPartialEngineHandle,
+  supportsEngineReplay,
 } from '../src/supervisor/engine-compat.js'
 
 const COMPLETED = { value: { ok: true }, stopReason: 'completed' as const, agentsStarted: 2 }
 
 function completeHandle(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'execution-h',
+    id: 'execution-complete',
     result: Promise.resolve(COMPLETED),
-    cancel() { /* h */ },
-    resume() { /* h */ },
-    release() { /* h */ },
+    cancel() { /* complete handle */ },
+    resume() { /* complete handle */ },
+    release() { /* complete handle */ },
     checkpoint: () => ({ journal: [], agentSpend: 0, agentSeq: 0 }),
     dispose: async () => undefined,
     ...overrides,
@@ -22,7 +23,7 @@ function completeHandle(overrides: Record<string, unknown> = {}) {
 }
 
 describe('stock engine handle compatibility', () => {
-  it('passes a complete H handle through unchanged', () => {
+  it('passes a complete replay-capable handle through unchanged', () => {
     const raw = completeHandle()
     expect(isCompleteEngineHandle(raw)).toBe(true)
     expect(adaptEngineHandle(raw)).toBe(raw)
@@ -38,7 +39,7 @@ describe('stock engine handle compatibility', () => {
     expect(adaptEngineHandle({ result: 1, cancel() { /* x */ }, dispose: async () => undefined })).toBeUndefined()
   })
 
-  it('wraps a stock RC8 handle and synthesizes replay after dispose', async () => {
+  it('wraps a partial stock handle without synthesizing replay authority', async () => {
     let cancelled: string | undefined
     const resumed: string[] = []
     const raw = {
@@ -50,8 +51,9 @@ describe('stock engine handle compatibility', () => {
     const handle = adaptEngineHandle(raw)
     expect(handle).toBeDefined()
     expect(isCompleteEngineHandle(handle)).toBe(true)
+    expect(supportsEngineReplay(handle!)).toBe(false)
     expect(handle!.id).toMatch(/^[0-9a-f]{32}$/u)
-    expect(() => handle!.checkpoint()).toThrow(/checkpoint is not ready/u)
+    expect(handle!.checkpoint()).toBeUndefined()
     handle!.release()
     handle!.resume()
     expect(resumed).toEqual(['resume'])
@@ -59,9 +61,35 @@ describe('stock engine handle compatibility', () => {
     expect(cancelled).toBe('stop')
     const result = await handle!.result
     expect(result).toEqual({ value: 'done', stopReason: 'completed', agentsStarted: 3 })
-    expect(() => handle!.checkpoint()).toThrow(/checkpoint is not ready/u)
+    expect(handle!.checkpoint()).toBeUndefined()
     await handle!.dispose()
-    expect(handle!.checkpoint()).toEqual({ journal: [], agentSpend: 3, agentSeq: 3 })
+    expect(handle!.checkpoint()).toBeUndefined()
+  })
+
+  it('preserves the raw receiver for receiver-sensitive stock methods', async () => {
+    const calls: string[] = []
+    const raw = {
+      marker: 'raw',
+      result: Promise.resolve(COMPLETED),
+      cancel(this: { marker: string }, reason?: string) { calls.push(`${this.marker}:cancel:${reason}`) },
+      resume(this: { marker: string }) { calls.push(`${this.marker}:resume`) },
+      release(this: { marker: string }) { calls.push(`${this.marker}:release`) },
+      checkpoint(this: { marker: string }) {
+        calls.push(`${this.marker}:checkpoint`)
+        return { journal: [], agentSpend: 0, agentSeq: 0 }
+      },
+      async dispose(this: { marker: string }) { calls.push(`${this.marker}:dispose`) },
+    }
+    // Force the compatibility adapter rather than complete-handle passthrough
+    // while retaining receiver-sensitive cancel/dispose.
+    delete (raw as { resume?: unknown }).resume
+    const handle = adaptEngineHandle(raw)!
+    handle.cancel('stop')
+    handle.resume()
+    handle.release()
+    await handle.dispose()
+    expect(handle.checkpoint()).toEqual({ journal: [], agentSpend: 0, agentSeq: 0 })
+    expect(calls).toEqual(['raw:cancel:stop', 'raw:release', 'raw:dispose', 'raw:checkpoint'])
   })
 
   it('keeps a provided id and optional release/resume/checkpoint on a partial handle', async () => {
@@ -77,6 +105,7 @@ describe('stock engine handle compatibility', () => {
       dispose: async () => { calls.push('dispose') },
     })
     expect(handle?.id).toBe('execution-stock')
+    expect(supportsEngineReplay(handle!)).toBe(false)
     handle!.release()
     handle!.resume()
     await handle!.dispose()
@@ -132,12 +161,15 @@ describe('stock engine handle compatibility', () => {
     })
     await afterFailedDispose!.result
     await expect(afterFailedDispose!.dispose()).resolves.toBeUndefined()
-    expect(afterFailedDispose!.checkpoint()).toEqual({ journal: [], agentSpend: 2, agentSeq: 2 })
+    expect(afterFailedDispose!.checkpoint()).toBeUndefined()
     expect(() => rejectPartialEngineHandle(undefined)).not.toThrow()
     expect(() => rejectPartialEngineHandle({})).not.toThrow()
     expect(() => rejectPartialEngineHandle({
       cancel() { throw new Error('cancel failed') },
       dispose: async () => { throw new Error('dispose failed') },
+    })).not.toThrow()
+    expect(() => rejectPartialEngineHandle({
+      dispose() { throw new Error('synchronous dispose failed') },
     })).not.toThrow()
     await Promise.resolve()
   })

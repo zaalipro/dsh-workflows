@@ -6,14 +6,16 @@ This tutorial takes a Web or headless user from installation to one saved JavaSc
 
 ## 1. Install on a compatible Harness
 
-Use the symbolic official release **H**, the first release with all external-workflow prerequisites. Stock `0.1.0-rc.8` is incompatible and activation stops before storage or Session admission.
+Use official DeepSeek Harness `0.1.1-rc.2` with plugin `0.1.0-rc.3`. Ensure `pnpm` is on the service user's `PATH`; `0.1.0-rc.8` and unverified later Harness releases are unsupported.
 
-Install it like any other profile plugin:
+Install a pinned release tag, or the exact tested tarball from a durable absolute path:
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows
-dsh plugin --profile headless add github:zaalipro/dsh-workflows
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.3.tgz
 ```
+
+After npm publication, `dsh plugin --profile <profile> add @zaalipro/dsh-workflows@0.1.0-rc.3` is equivalent.
 
 Restart the profile. Web gains the dashboard and durable Chat renderer in addition to Host behavior; headless gains registry, supervisor, commands, questions, recorder, and model tool without loading browser code. Removal is covered in the [package README](../README.md#installation).
 
@@ -30,6 +32,8 @@ The command replies exactly:
 ```text
 Opened the workflow authoring skill.
 ```
+
+The command steers that same leading `/create-workflow` user message. The packaged skill is user-invocable, so the compatible Host injects its trusted instructions into that next model step deterministically instead of relying on the model to choose the skill from its catalog.
 
 The packaged skill asks for intent, inputs, fan-out, evidence, failure tolerance, final artifact, maximum agents, a lowercase kebab name, and project or user scope. Choose **project** to save `review-changes.workflow.json` under the nearest Git root's `.dsh/workflows` directory. If no Git root exists, the Session cwd is the project root. Choose **user** to save under `$DSH_HOME/workflows`.
 
@@ -57,13 +61,18 @@ Phase titles in `phase(title)` and `agent(..., { phase })` must match metadata t
 
 ## 3. Understand the validation smoke
 
-Before saving, the authoring skill asks the model-facing workflow tool to validate the proposed source with representative args:
+The authoring skill asks the model-facing workflow tool to validate and save the proposed inline source with representative args. `save_scope` defaults to `project`; choose `user` for `$DSH_HOME/workflows`. A user-scope save does not require a Session cwd.
 
 ```json
 {
-  "script_path": ".dsh/workflows/review-changes.workflow.json",
+  "script": "<plain JavaScript workflow body>",
+  "meta": {
+    "name": "review-changes",
+    "description": "Review workspace changes and verify every finding"
+  },
   "args": { "targets": ["src", "tests"] },
-  "validate_only": true
+  "validate_only": true,
+  "save_scope": "project"
 }
 ```
 
@@ -127,7 +136,7 @@ In Web, submit exact bare:
 /workflows
 ```
 
-This Host command opens the dialog labelled `Workflows`. The Client owns the overlay. `/workflows` with arguments or attachments does not open the overlay; it remains unresolved in the composer command plane with its draft intact. Dashboard chrome and Chat labels follow the host locale: the package registers English and Chinese dictionaries, English is the fallback, and the close control uses the same `Close workflows` accessible name as the visible label. Inspector headings (`Pending`, `JSON outcome`, and the rest of criterion 11.4) and the exact criterion 11.4/11.11 error strings stay English.
+This browser-only slash action opens the dialog labelled `Workflows`; it invokes neither Host command execution nor the model and creates no command Chat row. `/workflows` with arguments or attachments does not open the overlay; it is refused locally with its draft and attachments intact. Dashboard chrome and Chat labels follow the host locale: the package registers English and Chinese dictionaries, English is the fallback, and the close control uses the same `Close workflows` accessible name as the visible label. Inspector headings (`Pending`, `JSON outcome`, and the rest of criterion 11.4) and the exact criterion 11.4/11.11 error strings stay English.
 
 The dashboard lists saved definitions with a Start control, then the run navigator (display name, status, current phase, agents spent/total, running and settled member counts, a bounded terminal summary, and retained-run loaded/total disclosure). Active runs sort oldest-first and history sorts by newest settlement. `Load more` fetches the next authorized bounded page; only terminal rows are eligible for deterministic oldest-first retention eviction, never active rows or display ordinal history.
 
@@ -213,7 +222,9 @@ After Host process death, startup recovery changes any retained active run to **
 
 ## 10. Author replay-safe JavaScript
 
-The worker exposes `args`; `agent`; thunk or declarative `parallel`; `pipeline`; `phase`; `log`; `complete`; `budget`; `pause`; `await_user`; `read_scratch_file`; and `write_scratch_file`. `agent(prompt, opts)` accepts exactly `label`, `phase`, `schema`, `provider`, and `model`. Stock workers have no native `complete` and reject `minItems`/`maxItems`; this package injects `complete()` and strips those keywords before schema validation. Unsupported options such as `fork_context`, unsupported schemas, invalid calls, and infrastructure failures are fatal; ordinary child failures return `null`. Bound array length in the prompt and in JavaScript.
+The worker exposes `args`; `agent`; thunk or declarative `parallel`; `pipeline`; `phase`; `log`; `complete`; `budget`; `pause`; `await_user`; `read_scratch_file`; and `write_scratch_file`. `agent(prompt, opts)` accepts exactly `label`, `phase`, `schema`, `provider`, and `model`. Stock workers have no native `complete`, so this package injects it.
+
+Structured schemas support `type`, `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `enum`, `const`, and `oneOf`. `minItems` and `maxItems` are inclusive array-length bounds. Each bound must be a non-negative safe integer (negative zero, fractions, and non-numbers are invalid), may appear only on a `type: 'array'` node, must satisfy `minItems <= maxItems`, and is forbidden beside `oneOf`. The package validates the authored schema before any child starts, removes only these two forward-compatible keywords from the copy sent to stock RC2, and post-validates the returned structured value against the authored bounds. Unsupported options such as `fork_context`, unsupported schemas, invalid calls, and infrastructure failures are fatal; ordinary child failures or schema-invalid child values return `null`.
 
 This complete body guards nullable outputs, keeps verification fail-closed, sorts and filters deterministically, bounds a log preview explicitly, synchronizes phase titles, and publishes a report:
 
@@ -237,6 +248,7 @@ const reviews = await parallel(targets.map(target => ({
     properties: {
       findings: {
         type: 'array',
+        maxItems: 20,
         items: {
           type: 'object',
           properties: {
@@ -313,7 +325,7 @@ P/R/X/S activate Pause/Resume/Stop/Save only when the dialog owns focus, no modi
 
 ### Incompatible Harness
 
-Symptom: activation reports `@zaalipro/dsh-workflows requires a DeepSeek Harness release with the external workflow prerequisites; 0.1.0-rc.8 is not compatible`. Install verified official release H; do not bypass the capability check or infer another tag is H.
+Symptom: activation reports an unsupported Host face or version. Install official `0.1.1-rc.2` with plugin `0.1.0-rc.3`; do not widen the peer range or assume a later Harness version is compatible.
 
 ### Storage is already owned
 

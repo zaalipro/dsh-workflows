@@ -22,7 +22,7 @@ const CLEANUP_TIMEOUT_MS = 15_000
 /**
  * The worker and AgentLoop are Harness-owned prerequisites, not package
  * runtime dependencies.  Prefer a built, read-only Harness checkout when one
- * is available; the package-name fallback is what an installed H profile
+ * is available; the package-name fallback is what an installed official profile
  * supplies.  All imports stay inside the key-gated test body.
  */
 const HARNESS_CANDIDATES = [
@@ -93,7 +93,7 @@ async function harnessModule(relativePath: string, packageName: string): Promise
       return await importModule(pathToFileURL(path).href)
     } catch {
       // A source-only checkout is not a runnable provider fixture.  Try the
-      // next read-only checkout, then the installed H package below.
+      // next read-only checkout, then the installed official package below.
     }
   }
   return importModule(packageName)
@@ -171,12 +171,11 @@ async function closeResource(resource: unknown, label: string): Promise<void> {
 }
 
 /**
- * Stock RC8 worker handles predate the H release/checkpoint additions.  Keep
- * this compatibility adapter local to the opt-in test: it preserves the
- * worker's execution id and result, adds the supervisor's required lifecycle
- * face, and deliberately exposes an empty replay journal after settlement.
- * The real H worker takes the direct branch and exercises its native replay
- * authority instead.
+ * A partial stock worker handle can omit release/checkpoint. Keep this
+ * compatibility adapter local to the opt-in test: it preserves the worker's
+ * execution id and result, adds the supervisor's required lifecycle face, and
+ * deliberately exposes an empty replay journal after settlement. A complete
+ * worker handle takes the direct branch and exercises its replay authority.
  */
 function installEngineCompatibilityAdapter(ctx: any, workerFiber: any, starts: readonly { id: string; seq: number }[]): EngineInstallation {
   const original = ctx.workflowEngine
@@ -320,7 +319,7 @@ describe('real-provider workflow', () => {
         eventDisposer = () => {
           try { removeStart?.() } finally { removeEnd?.() }
         }
-        // The worker engine is the only service that needs the H compatibility
+        // The worker engine is the only service that needs this test compatibility
         // shim.  It must be replaced through its owning fiber, not provided a
         // second time (Cordis rejects duplicate service identities).
         engineInstallation = installEngineCompatibilityAdapter(ctx, workerEngineFiber, starts)

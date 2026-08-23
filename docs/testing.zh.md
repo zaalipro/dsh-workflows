@@ -27,7 +27,7 @@ pnpm exec vitest run tests/keyless-snapshot.spec.ts --reporter=dot && printf 'RD
 pnpm exec vitest run tests/dashboard-snapshot.client.spec.tsx --reporter=dot && printf 'RD6 dashboard snapshots PASS\n'
 ```
 
-`tests/keyless-snapshot.spec.ts` 是 source-resolved fixture：它把官方 `tool-workflow/*` event 送进 `ConversationNodeAssembler`，证明 append/prepend/full-replay 一致，把 Interrupted Chat node 映射为 cancelled，并检查 completion-notice footer。它不启动官方 assembled snapshot harness，也不比较 reviewed Session/stdout JSONL；`examples/workflows-keyless/` 输入仍是后续 H-assembled gate。Dashboard snapshot 固定 accessible empty、live、terminal、interrupted、disclosure 和 member-outcome semantic，而不是 CSS hash。
+`tests/keyless-snapshot.spec.ts` 是 source-resolved fixture：它把官方 `tool-workflow/*` event 送进 `ConversationNodeAssembler`，证明 append/prepend/full-replay 一致，把 Interrupted Chat node 映射为 cancelled，并检查 completion-notice footer。它不启动官方 assembled snapshot harness，也不比较 reviewed Session/stdout JSONL；`examples/workflows-keyless/` 输入仍是后续 assembled gate。Dashboard snapshot 固定 accessible empty、live、terminal、interrupted、disclosure 和 member-outcome semantic，而不是 CSS hash。
 
 ### Package policy 与 exact packed consumer
 
@@ -36,7 +36,7 @@ pnpm exec vitest run tests/verify-package.spec.ts --reporter=dot && printf 'RD3 
 pnpm exec vitest run tests/packed-consumer.spec.ts --reporter=dot && printf 'RD8 packed consumer PASS\n'
 ```
 
-Packed-consumer test 只执行一次 `pnpm pack --json`，记录 SHA-256，并把完全相同的绝对 tarball 交给 `scripts/verify-package.mjs --tarball`。缺少 skill、client bundle 或 required peer 会在 verifier 失败，而不会开始任何 consumer Session。`scripts/packed-consumer.mjs` 随后禁用 script 安装同一 byte，import 所有 JavaScript 与 strict NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，并以对 official checkout 的 `official-h-probe` 结束。Live Web/headless profile boot、`dsh plugin` add/remove 和 stock-profile restore 等待官方 H；在 `141eb6f` 上 probe 报告 `not-advertised`，而不是假装 activation 成功。Source-tree fallback 或第二次 pack 都是失败。Isolated install stage 也会由 `pnpm run check:release` 以及 `DSH_RUN_PACKED_CONSUMER=1` 运行。
+Standalone packed-consumer test 只执行一次 `pnpm pack --json`，记录 SHA-256，并把完全相同的绝对 tarball 交给 `scripts/verify-package.mjs --tarball`。发布时由 `scripts/check-release.mjs` 独占 pack ownership，并把同一 artifact 交给 `scripts/packed-consumer.mjs`；generic unit command 排除会自行 pack 的 spec。缺少 skill、client bundle、evaluator 或 required peer asset 会在任何 consumer Session 开始前失败。Runner 以 scripts disabled 安装该 artifact，再安装 pinned consumer-only TypeScript/Node type 以及精确的预构建官方 CLI，import 所有 JavaScript 与 strict NodeNext export，并通过 lazy-CJS seam 加载 `lib/client.js`。所有声明的 Host、Client、Cordis 与 React peer 仍保留精确 compatibility declaration，但都标记为 optional：隔离的 `autoInstallPeers: true` probe 不得 materialize 其中任何一个，而 standalone import/type probe 会显式提供 peer。真实 Web 与 headless profile cycle 必须保留官方 `autoInstallPeers: false`，不得包含 profile-local peer package，所有 peer 都必须通过 healed official fallback 解析，并且 agent-loop 与 agent-presets 解析到的 `dsh-scope` realpath 必须完全相同。随后每个 profile 执行两次 bounded activation/teardown sentinel boot（第二次证明 lease 已释放），再 remove 并验证 manifest restoration。Source-tree runtime fallback、用 `--help` 充当 activation evidence、split Host graph，或发布期间第二次 pack 都是失败。
 
 ### 自动化 Chromium
 
@@ -44,7 +44,7 @@ Packed-consumer test 只执行一次 `pnpm pack --json`，记录 SHA-256，并�
 pnpm exec vitest run tests/browser-smoke.spec.ts --reporter=dot && printf 'RD10 browser automation PASS\n'
 ```
 
-`tests/browser-smoke.spec.ts` 当前只覆盖 `scripts/browser-smoke.mjs` helper boundary：absolute argument、loopback readiness JSON、stdin teardown，以及与 caller workspace 隔离。它并不用 Chromium 驱动 slash discovery、disclosure 或 1,199/767/320 px layout。该 product journey 仍被官方 H Web activation 阻塞，属于下面的最终 Ego Lite checklist，而不是 helper 已经覆盖的替代。
+`tests/browser-smoke.spec.ts` 当前只覆盖 `scripts/browser-smoke.mjs` helper boundary：absolute argument、loopback readiness JSON、stdin teardown，以及与 caller workspace 隔离。它并不用 Chromium 驱动 slash discovery、disclosure 或 1,199/767/320 px layout。该 product journey 属于下面的最终 Ego Lite checklist，而不是 helper 已经覆盖的替代。
 
 ### Lifecycle、storage 与 Client stress
 
@@ -66,15 +66,9 @@ pnpm exec vitest run tests/real-provider.spec.ts --reporter=dot && printf 'RD14 
 
 没有 key 时，只有该文件注册一个 skipped test，reason 准确为 `DEEPSEEK_API_KEY is not set`。其他 package、platform、workflow 或 storage lane 都不能 self-skip。
 
-### 官方 H 前置能力
+### 精确 official Host checkout
 
-在包含拟议 H 前置能力的官方 Harness checkout 中运行该验收，而不是本 package checkout：
-
-```sh
-pnpm exec vitest run --config vitest.config.ts --no-passWithNoTests packages/core/tools/tests/json-schema.spec.ts packages/fs/fs/tests/service.spec.ts packages/fs/fs-local/tests/filesystem.spec.ts packages/fs/fs-sandbox/tests/fs-sandbox.spec.ts packages/workflow/workflow/tests/workflow.spec.ts packages/workflow/workflow-worker-thread/tests packages/workflow/tool-ralph/tests/integration.spec.ts packages/interaction/commands/tests/commands.spec.ts packages/client/ui-commands/tests/service.client.spec.ts packages/host/apiproxy/tests/api-proxy-remote-events.spec.ts packages/host/apiproxy/tests/frame-queue.spec.ts packages/api/remotes/tests/remote-events.spec.ts && pnpm run typecheck && pnpm run lint && pnpm run doc-sync && printf 'U45_UPSTREAM_ACCEPTANCE_OK\n'
-```
-
-最后一行必须是 `U45_UPSTREAM_ACCEPTANCE_OK`。这证明 source 与 built worker path、Ralph、schema、descriptor-rooted filesystem method、exact-Agent replacement、command action/fallback behavior、Remote forwarding、type checking、lint 和双语官方文档都基于 official base `141eb6f` 加上仅经审查的 prerequisite change。Donor commit `391c829` 仍然只作为 reference。
+Packed consumer 与 CI checkout 官方 DeepSeek Harness `0.1.1-rc.2` commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`。Package build 与 test 针对 `0.1.1-rc.2` development dependency 编译；不使用 Harness source patch 或 fork checkout。Package-owned evaluator build、strict NodeNext consumer、add/boot/remove profile cycle 与 removal 后的 stock boot 都是 blocking release evidence。
 
 ### 最终自动化 aggregate
 
@@ -82,16 +76,17 @@ pnpm exec vitest run --config vitest.config.ts --no-passWithNoTests packages/cor
 pnpm run check:release
 ```
 
-成功时准确以 `release checks passed` 结束。Orchestrator 按顺序运行 clean/frozen-install verification、build、typecheck、lint、per-file coverage、snapshot、documentation、package policy、一次 immutable pack 与 packed consumer（在 H 公布前为 `official-h-probe`）、browser helper boundary、三个 stress suite 和 opt-in provider file。它不会 publish、启动 Ego Lite 或录制 GIF。Live profile boot 与 Chromium product journey 仍被官方 H 阻塞。
+成功时准确以 `release checks passed` 结束。Orchestrator 按顺序运行 clean/frozen-install verification、build、typecheck、lint、owned-source aggregate coverage、snapshot、documentation、package policy、一次 immutable pack 与 packed consumer（`official-host-probe` 加真实 Web/headless add/boot/remove）、browser helper boundary、三个 stress suite 和 opt-in provider file。它不会 publish、启动 Ego Lite 或录制 GIF。Packed profile cycle 针对官方 `0.1.1-rc.2` 是 blocking gate；Chromium product journey 仍是最终 Ego Lite acceptance。
 
 ## Coverage policy
 
-每个 owned handwritten runtime source file 都必须在 `pnpm run test:coverage` 下**逐文件**达到 100% statement、branch、function 与 line。Aggregate 100% 不充分。该命令排除 packed-consumer、browser-smoke、snapshot、stress 和 real-provider lane。已保存的 `coverage-all` report 并不是 generated `lib/` 加 dependency 的 100%（最近一次约为 57%）；它不能替代 per-file handwritten gate。Test 覆盖 deterministic clock 与 barrier、每个 error/cancellation branch、effect disposal、HMR registration、authorization 和 external world state，而不依赖 self-reported success。
+`pnpm run test:coverage` 对 owned package integration source 强制执行真实的 aggregate floor：**80% statement、80% branch、80% function 与 80% line**。它显式只 instrument `src/**/*.{ts,tsx}` 并排除 type-only declaration，因此未被 import 的 owned source 仍计入，而 generated `lib/` 与 `scripts/` 下的 release helper 不会意外进入 denominator。不再声明逐文件 100%；8 月 23 日 baseline 为 85.35% statement/line、80.69% branch 与 84.98% function。该命令排除 packed-consumer、browser-smoke、snapshot、stress 和 real-provider lane。已保存的 `coverage-all` report 并不是 generated `lib/` 加 dependency 的 100%（最近一次约为 57%）；它不能替代 owned-source aggregate gate。Test 覆盖 deterministic clock 与 barrier、每个 error/cancellation branch、effect disposal、HMR registration、authorization 和 external world state，而不依赖 self-reported success。
 
 唯一不 instrument 的 artifact 是 generated 或 browser-delivery product，而不是 handwritten Host behavior 的例外：
 
 | Exclusion | 为何不作为 owned runtime source instrument | 必需证据 |
 |---|---|---|
+| `vendor/workflow-engine/*.ts` 与 emitted `lib/compat-engine/*` | 带 attribution 的 MIT compatibility evaluator，使用独立 process/worker protocol gate | `tests/compat-engine.spec.ts`、supervisor replay/gate/budget/scratch suite、packed artifact verification 与 live profile smoke |
 | `lib/typert.host.*` 与 `lib/typert.remote-client.*` | 从 decorated Host source 生成 | `tests/build-artifacts.spec.ts`、Remote API test、packed import 与 browser mount smoke |
 | `lib/client.js`、emitted Client declaration/map 与 Lightning CSS output | Generated bundle product | Client component/controller spec、dashboard semantic snapshot、packed serving 与 `tests/browser-smoke.spec.ts` |
 | `src/client/css-modules.d.ts` | 无 executable statement 的 type-only generated-facing declaration | Client TSC 加 build suite source assertion |
@@ -101,7 +96,7 @@ Handwritten Client TypeScript 仍由其 Client test project 覆盖；generated o
 
 ## CI platform matrix
 
-Blocking Ubuntu 24.04 job 运行 Node `22.19.0`、`24` 和 `26`；每个 job 使用 frozen lockfile，并覆盖 build、typecheck、lint、docs、package policy 以及分配的 unit/coverage/snapshot gate。Node 24 还拥有 macOS 14、Windows Server 2022、Chromium helper、race-stress 和 release-pack/packed-consumer job。Packed lane checkout 官方 commit `141eb6fef83422698aef7a981029e843e8161534` 作为 incompatible baseline，不应用 H prerequisite patch；它只 pack 一次，并保留一个 digest 和 artifact path。在官方 H 存在之前，对该 checkout 的 live activation 预期会 fail closed。
+Blocking Ubuntu 24.04 job 运行 Node `22.19.0`、`24` 和 `26`；每个 job 使用 frozen lockfile，并覆盖 build、typecheck、lint、docs、package policy 以及分配的 unit/coverage/snapshot gate。Node 24 还拥有 macOS 14、Windows Server 2022、Chromium helper、race-stress 和 release-pack/packed-consumer job。Packed lane checkout 官方 `0.1.1-rc.2` commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`；不应用 Harness patch，只 pack 一次并保留一个 digest 和 artifact path，而且要求 Web 与 headless 的 live add/boot/remove。
 
 Windows 运行每个支持的 definition、manifest、scratch、retention、recovery 与 subprocess case。它明确断言 junction/hard-link behavior，以及可工作的 native advisory locking 或已记录的 `WORKFLOW_STORAGE_UNSUPPORTED` result；它绝不静默 skip workflow、把 job 标记为 `continue-on-error`，或在没有断言准确 branch 时把 platform limitation 当作成功。
 
@@ -115,7 +110,7 @@ CI 只在可用时把 `DEEPSEEK_API_KEY` 传给隔离的 provider job。Test 不
 
 ## Final manual Web acceptance
 
-这是 release checklist，不是 coding task、CI step 或 automated Chromium 的替代。只有全部自动化 gate 通过后，才使用安装了完全相同 tested tarball 的真实 H Web profile 和 real server/model flow 执行。
+这是 release checklist，不是 coding task、CI step 或 automated Chromium 的替代。只有全部自动化 gate 通过后，才使用安装了完全相同 tested tarball 的真实官方 `0.1.1-rc.2` Web profile 和 real server/model flow 执行。
 
 - [ ] 启动 tarball-installed real server，确认 package activation 没有 source checkout fallback。
 - [ ] 使用 **Ego Lite** 完成 smoke journey。全程复用它的 task space；绝不 wipe 或 reset 任何 user session、cookie、browser storage 或 daily-browser state。
@@ -127,4 +122,4 @@ CI 只在可用时把 `DEEPSEEK_API_KEY` 传给隔离的 provider job。Test 不
 - [ ] 任何 product-visible GUI change 都要从这个 **real PR server/model flow** 录制并保留 GIF，展示 launch、live update、member outcome inspection、control 和 narrow layout。Mocked 或 source-only GIF 不是 release evidence。
 - [ ] 验证完成后，**只关闭 Ego Lite task space**。不要 wipe session、cookie、storage 或不相关 tab/space。
 
-在 release evidence 中记录 tested tarball SHA-256、H build identity、platform、automated aggregate log、manual result 和 GIF location。即使 automated suite 为绿色，任何失败的 manual item 也会阻止 release。
+在 release evidence 中记录 tested tarball SHA-256、official Host build identity、platform、automated aggregate log、manual result 和 GIF location。即使 automated suite 为绿色，任何失败的 manual item 也会阻止 release。

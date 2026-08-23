@@ -199,6 +199,23 @@ export class WorkflowRunsRemote extends TypertRemoteService {
     }
     try {
       const sessionId = sessionIdOf(agent)
+      // A cursorless request defines a new snapshot, so its page is the
+      // baseline. Reading a one-row baseline first creates an avoidable race:
+      // an actively running workflow can advance between the two reads and
+      // make opening/refreshing the dashboard fail as a stale cursor even
+      // though the caller supplied no cursor at all.
+      if (request?.cursor === undefined) {
+        const page = await this.supervisor.list(agent, { limit }, signal)
+        signal.throwIfAborted()
+        const items = page.items.slice(0, limit)
+        const revision = page.sessionRevision
+        const nextCursor = this.nextCursor('runs', sessionId, '', revision, 0, items.length, page.total)
+        return { ok: true, value: {
+          epoch: this.processEpoch as WorkflowRunListPage['epoch'],
+          sessionRevision: revision, items, total: page.total,
+          ...(nextCursor === undefined ? {} : { nextCursor }),
+        } }
+      }
       // Obtain the current authorized baseline before accepting its cursor.
       const baseline = await this.supervisor.list(agent, { limit: 1 }, signal)
       signal.throwIfAborted()
@@ -253,6 +270,21 @@ export class WorkflowRunsRemote extends TypertRemoteService {
     try {
       // Authorize the selected run before any cursor distinction is exposed.
       await this.supervisor.detail(agent, request.runId, signal)
+      // As with the run list, a cursorless page establishes (rather than
+      // continues) a snapshot. Use that one read both as the page and as the
+      // revision/total bound for the first authenticated continuation token.
+      if (request.cursor === undefined) {
+        const value = await read({ ...request, limit })
+        signal.throwIfAborted()
+        const items = value.items.slice(0, limit)
+        const hmac = this.nextCursor(
+          kind, sessionIdOf(agent), String(request.runId), value.revision,
+          0, items.length, pageableTotal(kind, value),
+        )
+        const rest = { ...value, nextCursor: undefined }
+        delete (rest as { nextCursor?: WorkflowRunCursor }).nextCursor
+        return { ok: true, value: { ...rest, items, ...(hmac === undefined ? {} : { nextCursor: hmac }) } as T }
+      }
       const baseline = await read({ ...request, cursor: undefined, limit: 1 })
       signal.throwIfAborted()
       const bound = pageableTotal(kind, baseline)

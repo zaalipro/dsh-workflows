@@ -2,7 +2,7 @@
 
 Status: implemented
 
-This note records the package architecture as implemented in `@zaalipro/dsh-workflows`. Official Harness release **H** has not shipped: the worker-thread evaluator, `tools.replace`, `registerFallback`, trusted packaged-skill binding, `ApiRemoteEventRegistry`, and production nested private-directory I/O are still missing from stock `141eb6f` / `dsh-v0.1.0-rc.8`. The package fail-closes on that baseline rather than activating.
+This note records the current package architecture as implemented in `@zaalipro/dsh-workflows`. Plugin `0.1.0-rc.3` supports exactly official Harness `0.1.1-rc.2`; both the CLI and workflow package manifests must match before activation. The package supplies its own compatibility evaluator and retained-storage descriptors because the stock evaluator and private-directory face do not expose the complete workflow product contract.
 
 English | [中文](2026-08-20-installable-workflows-package.zh.md)
 
@@ -12,27 +12,27 @@ Saved workflows and supervised retained runs cross engine, Agent, Session, files
 
 ## Summary
 
-One MIT package, `@zaalipro/dsh-workflows`, installs the complete Host product and the optional Web Client over the official Harness workflow engine in compatible release H. The package owns saved definitions, logical-run supervision, version-2 retained inspection, commands and exact-Agent tool integration, durable Chat recording, completion notices, generated Remote methods, and the dashboard. It does not ship a second evaluator, a forked Harness distribution, Grok CLI code, or a Rhai runtime.
+One MIT package, `@zaalipro/dsh-workflows`, installs the complete Host product and optional Web Client on official Harness `0.1.1-rc.2`. The package owns the compatibility evaluator, saved definitions, logical-run supervision, version-2 retained inspection, commands and exact-Agent tool integration, durable Chat recording, completion notices, generated Remote methods, and the dashboard. It does not ship a forked Harness distribution, Grok CLI code, or a Rhai runtime.
 
 ## Context
 
-Official commit `141eb6f` and tag `dsh-v0.1.0-rc.8` are the API-reality and patch-development base. That stock release lacks the required external workflow seams and is deliberately incompatible. **H** denotes the first future official release containing the complete prerequisite set; no unverified later tag is assigned that name.
+Official commit `141eb6f` and tag `dsh-v0.1.0-rc.8` were the original incompatible API-reality baseline. Current release evidence instead pins official `0.1.1-rc.2`; unverified earlier or later versions fail the exact manifest gate.
 
 Development-fork commit `391c829` is a behavioral donor only. Its durable-run experience helps identify required outcomes and regressions, but its RC5-derived substrate is not copied wholesale. The package consumes narrow official capabilities instead: deferred workflow starts, deterministic journal checkpoints and gates, descriptor-rooted private storage, exact-Agent tool/prompt replacement, trusted packaged-skill precedence, client-owned command actions, generated external Remote mounting, and bounded event forwarding.
 
 ## Decision
 
-### One distribution unit over one official engine
+### One distribution unit with a package compatibility evaluator
 
-The npm package is the sole installable unit. Its bundle patch mounts one Host aggregate in Web and headless and advertises one Client aggregate only in Web. The official worker-thread provider remains the only JavaScript workflow engine. Registry, supervisor, recorder, question bridge, commands, tool adapter, Remote services, dashboard, and durable renderer share one package version and unwind under one ownership tree.
+The npm package is the sole installable unit. Its bundle patch mounts one Host aggregate in Web and headless and advertises one Client aggregate only in Web. The stock workflow service stays mounted for stock consumers, while plugin runs use the package-private compatibility evaluator. Registry, supervisor, recorder, question bridge, commands, tool adapter, Remote services, dashboard, and durable renderer share one package version and unwind under one ownership tree.
 
-The package checks H's explicit prerequisite markers before filesystem initialization or Session admission. A missing capability fails activation rather than selecting a degraded implementation. Removing the package removes one dependency and one bundle layer and leaves the official profile composition intact.
+The package resolves the exact CLI and workflow package versions before configuration, filesystem initialization, or Session admission, then preflights the required stock service faces. A mismatch or missing capability fails activation rather than selecting a degraded implementation. Removing the package removes one dependency and one bundle layer and leaves the official profile composition intact.
 
 ### Exact-Agent integration instead of a parallel model tool
 
-The package never registers a second global `workflow` tool. For each Agent, it examines the effective inherited entry and prompt section. Only reference equality with H's exported official identities permits synchronous `ToolRuntime.replace` and `SystemPrompt.replaceSection` operations through that exact `agent.ctx`. A missing tool, custom same-name tool, identity change, or preset omission receives no replacement. Partial installation rolls back immediately, and the restoring disposers leave no duplicate schema or guidance through HMR.
+The package never registers a second global `workflow` tool. For each Agent, it examines the effective inherited entry. On stock `0.1.1-rc.2`, only the complete official public workflow fingerprint permits Agent-scoped `tools.register` and `systemPrompt.section`; a future atomic seam retains exact identity/marker compare-and-swap. A missing tool, custom same-name tool, identity change, or preset omission receives no replacement. Package-owned mutations suppress unscoped `tools/change` fan-out so multiple Agent shadows quiesce without re-registration loops.
 
-The packaged `create-workflow` skill uses H's protected trusted contribution for that exact reserved name. Ordinary project/user/global skill precedence remains unchanged for every other name.
+The packaged `create-workflow` skill is read from the installed asset and uses the official trusted contribution when that seam is available. Ordinary project/user/global skill precedence remains unchanged for every other name.
 
 ### Browser ownership for `/workflows`
 
@@ -64,7 +64,7 @@ Forwarded `workflows/run-change` events contain only a per-Session revision inva
 
 Host and Client are disjoint TypeScript programs. Build order is Host TSC, focused Typert generation in a copied temporary mini-workspace, Client TSC over generated declarations, then the classic lazy-CJS browser bundle. The staging root owns one aggregate Host config; the copied package owns one staging `tsconfig.json`; no hand-authored Remote descriptor or obsolete nested Host/Client face exists. Generated Typert artifacts are consumed from `WorkspaceTypertGenerator.generate()` return values.
 
-Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. `scripts/packed-consumer.mjs` installs those bytes with scripts disabled, imports every public JavaScript/NodeNext export, loads `lib/client.js` through the lazy-CJS seam, and ends on an `official-h-probe` of stock `141eb6f`, which reports `not-advertised`. Live `dsh plugin` add/remove, Web/headless profile boot, and stock-profile restore wait on official H and run only when `DSH_RUN_PACKED_CONSUMER=1` against an H-advertising checkout. Browser, stress, provider, and final aggregate gates operate on the same product boundary. npm publication and a GitHub Release, when performed, reuse the tested bytes rather than repacking.
+Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. `scripts/packed-consumer.mjs` installs those bytes with scripts disabled, imports every public JavaScript/NodeNext export, loads `lib/client.js` through the lazy-CJS seam, verifies the exact official `0.1.1-rc.2` Host, and runs Web/headless plugin add, bounded boot, removal, and restored stock boot under isolated homes. Browser, stress, provider, and final aggregate gates operate on the same product boundary. npm publication and a GitHub Release, when performed, reuse the tested bytes rather than repacking.
 
 ## Rejected alternatives
 
@@ -72,7 +72,7 @@ Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. `s
 
 **Publish several npm packages.** Separate registry, supervisor, storage, and UI packages would expose incompatible version combinations and split durable admission, teardown, and asset compatibility across independent install units. One package still has disjoint Host/Client build faces without splitting runtime ownership.
 
-**Ship a second workflow engine or copy donor files wholesale.** Another evaluator would fork hook, schema, cancellation, subagent, and durable vocabulary behavior. Wholesale donor code also imports RC5 assumptions. H's official engine remains authoritative; donor behavior contributes tests and requirements only.
+**Copy donor files wholesale.** Wholesale donor code imports RC5 assumptions. The narrowly attributed package evaluator maintains only the required workflow behavior; donor behavior otherwise contributes tests and requirements only.
 
 **Resume execution across process death.** Persisting enough authority would require reconstructing Agent identity, args/script authority, gates, child handles, and external-effect claims. A journal cannot prove that an uncommitted external effect did not occur. Interrupted inspection is honest; a new run is safer than false continuation.
 
@@ -84,9 +84,9 @@ Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. `s
 
 ## Consequences
 
-The package can install and uninstall as one reversible profile layer, and official H continues to own script semantics, child execution, and durable Chat vocabulary. Durable-before-visible launch and fixed-point teardown make the supervisor responsible for every accepted attempt through cleanup. Same-process replay suppresses committed matching effects, while documentation and authoring patterns must keep uncommitted effects idempotent.
+The package can install and uninstall as one reversible profile layer, while the compatibility evaluator owns plugin script semantics and child execution and the official Session vocabulary remains authoritative for durable Chat. Durable-before-visible launch and fixed-point teardown make the supervisor responsible for every accepted attempt through cleanup. Same-process replay suppresses committed matching effects, while documentation and authoring patterns must keep uncommitted effects idempotent.
 
-The design pays for strict compatibility: stock RC8 cannot load the package, and a release is compatible only after every H prerequisite and package acceptance gate passes. Native locking and descriptor-rooted filesystem capabilities are mandatory; unsupported platforms fail rather than silently weakening storage. Retained data and browser reads are bounded, so older terminal detail can become explicitly truncated or evicted.
+The design pays for strict compatibility: only official `0.1.1-rc.2` can load plugin `0.1.0-rc.3`, and a later release requires a new verified package release. Native locking and plugin-owned descriptor operations are mandatory; unsupported platforms fail rather than silently weakening storage. Retained data and browser reads are bounded, so older terminal detail can become explicitly truncated or evicted.
 
 The browser receives richer inspection without becoming an execution authority. Generated Remote staging and tarball-first verification add build complexity, but they detect missing assets, source fallback, protocol drift, and install-only failures before publication.
 

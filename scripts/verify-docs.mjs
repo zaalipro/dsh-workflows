@@ -25,10 +25,10 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Compatibility', '## Installation', '## Removal',
       '## Saved definitions and authoring', '## Launch and operate',
       '## Replay, recovery, and security', '## Limitations',
-      'symbolic official DeepSeek Harness release **H**',
-      'Stock `0.1.0-rc.8`', '**not compatible**',
-      'dsh plugin --profile web add github:zaalipro/dsh-workflows',
-      'dsh plugin --profile web add @zaalipro/dsh-workflows',
+      'official DeepSeek Harness **`0.1.1-rc.2`**',
+      'Stock `0.1.0-rc.8`', 'unsupported',
+      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3',
+      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.3',
       'dsh plugin --profile headless remove @zaalipro/dsh-workflows',
       'same-process only', '.workflow-storage.lock', 'Interrupted',
       'no Grok CLI', 'no Rhai',
@@ -36,9 +36,9 @@ const REQUIRED_CONTENT = Object.freeze({
     chinese: [
       '## 兼容性', '## 安装', '## 移除', '## 已保存定义与创作',
       '## 启动与操作', '## Replay、恢复与安全', '## 限制',
-      '官方版本 **H**', '原版 `0.1.0-rc.8`', '**与本包不兼容**',
-      'dsh plugin --profile web add github:zaalipro/dsh-workflows',
-      'dsh plugin --profile web add @zaalipro/dsh-workflows',
+      '官方 DeepSeek Harness **`0.1.1-rc.2`**', '原版 `0.1.0-rc.8`', '不受支持',
+      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3',
+      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.3',
       'dsh plugin --profile headless remove @zaalipro/dsh-workflows',
       'same-process only', '.workflow-storage.lock', 'Interrupted',
       'Grok CLI', 'Rhai',
@@ -52,8 +52,8 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Manifest version 2 and secure storage',
       '## Replay and script containment', '## Bounded Remote',
       'temporary copied mini-workspace', 'fs-native-extensions',
-      'not a security sandbox for hostile code', 'not a compatible installed release',
-      'have not shipped', 'fail-closes',
+      'not a security sandbox for hostile code', 'official `0.1.1-rc.2`',
+      'private compatibility evaluator', 'never replaces stock `ctx.workflowEngine`',
     ],
     chinese: [
       '## 包拓扑', '## 组件与事件归属',
@@ -62,31 +62,31 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Manifest version 2 与安全存储', '## Replay 与 script containment',
       '## Bounded Remote', 'mini-workspace',
       'fs-native-extensions', 'hostile-code security sandbox',
-      '不是兼容的 installed release',
-      '尚未', 'fail-close',
+      '官方 `0.1.1-rc.2`',
+      'private compatibility evaluator', '绝不替换 stock `ctx.workflowEngine`',
     ],
   },
   'docs/testing.md': {
     english: [
       '## Automated gates', '## Coverage policy', '## CI platform matrix',
       '## Real-provider secret and cleanup policy',
-      '## Final manual Web acceptance', '100%',
+      '## Final manual Web acceptance', '80% statements',
       '22.19.0', 'Node 24', '`26`', 'macOS 14', 'Windows Server 2022',
       'DEEPSEEK_API_KEY is not set', 'Ego Lite',
       'never wipe or reset any user session', 'only the Ego Lite task space',
       'real PR server/model flow', 'GIF', 'pnpm run check:release',
-      'official-h-probe', 'does not apply an H prerequisite patch',
+      'official-host-probe', 'no Harness source patch',
       'ConversationNodeAssembler', 'coverage-all',
     ],
     chinese: [
       '## 自动化 gate', '## Coverage policy', '## CI platform matrix',
       '## Real-provider secret 与 cleanup policy',
-      '## Final manual Web acceptance', '100%',
+      '## Final manual Web acceptance', '80% statement',
       '22.19.0', 'Node 24', '`26`', 'macOS 14', 'Windows Server 2022',
       'DEEPSEEK_API_KEY is not set', 'Ego Lite',
       '绝不 wipe 或 reset 任何 user session', '只关闭 Ego Lite task space',
       'real PR server/model flow', 'GIF', 'pnpm run check:release',
-      'official-h-probe', '不应用 H prerequisite patch',
+      'official-host-probe', '不使用 Harness source patch',
       'ConversationNodeAssembler', 'coverage-all',
     ],
   },
@@ -117,7 +117,7 @@ const REQUIRED_CONTENT = Object.freeze({
       '141eb6f', 'dsh-v0.1.0-rc.8', '391c829',
       'Exact-Agent', 'quiescent checkpoint', 'fs-native-extensions@1.5.0',
       'invalidation-only', 'tarball-first',
-      'has not shipped',
+      'official Harness `0.1.1-rc.2`', 'compatibility evaluator',
     ],
     chinese: [
       'Status: implemented', '## Summary', '## Context', '## Decision',
@@ -125,7 +125,7 @@ const REQUIRED_CONTENT = Object.freeze({
       '141eb6f', 'dsh-v0.1.0-rc.8', '391c829',
       'Exact-Agent', 'quiescent checkpoint', 'fs-native-extensions@1.5.0',
       'invalidation-only', 'tarball-first',
-      '尚未发布',
+      '官方 Harness `0.1.1-rc.2`', 'compatibility evaluator',
     ],
   },
 })
@@ -259,7 +259,7 @@ function validateProse(relativePath, text) {
     fail(`${relativePath}: contains an absolute developer-machine path`)
   }
   if (/(?:\b0\.1\.0-rc\.9\b|\brc[\s._-]*9\b)/iu.test(text)) {
-    fail(`${relativePath}: names rc9 even though symbolic H is the only future compatibility floor`)
+    fail(`${relativePath}: names unverified rc9 as compatible with exact Host 0.1.1-rc.2`)
   }
   if (/stock\s+(?:Harness\s+)?(?:version\s+)?0\.1\.0-rc\.8\s+(?:is|as)\s+compatible/iu.test(text)) {
     fail(`${relativePath}: claims unmodified 0.1.0-rc.8 compatibility`)

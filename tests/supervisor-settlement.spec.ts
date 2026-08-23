@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { WorkflowSupervisor } from '../src/supervisor/index.js'
+import { STOCK_RESULT_ENVELOPE } from '../src/supervisor/parallel-compat.js'
 import type {
   DetailReadRequest,
   DetailReadResult,
@@ -85,13 +86,24 @@ class MemoryStore implements WorkflowRunStore {
   async dispose() { /* test store */ }
 }
 
-function scratchLayout() {
+function scratchLayout(files = new Map<string, string>()) {
   const directory = (path: string): any => ({
     path,
     openDirectory: async (name: string) => directory(join(path, name)),
-    listEntries: async () => [],
-    readBytes: async () => new Uint8Array(),
-    writeText: async () => ({ operation: 'createIfAbsent' }),
+    listEntries: async () => [...files.entries()].map(([name, content], index) => ({
+      name, type: 'file', identity: { size: new TextEncoder().encode(content).byteLength, version: index + 1, nlink: 1 },
+    })),
+    fileInfo: async (name: string) => {
+      const content = files.get(name)
+      if (content === undefined) throw Object.assign(new Error('missing'), { code: 'FS_NOT_FOUND' })
+      return { size: new TextEncoder().encode(content).byteLength, version: content, nlink: 1 }
+    },
+    readBytes: async (name: string) => {
+      const content = files.get(name)
+      if (content === undefined) throw Object.assign(new Error('missing'), { code: 'FS_NOT_FOUND' })
+      return new TextEncoder().encode(content)
+    },
+    writeText: async (name: string, content: string) => { files.set(name, content) },
     assertIdentity: async () => undefined,
     close: async () => undefined,
   })
@@ -99,6 +111,40 @@ function scratchLayout() {
 }
 
 describe('workflow supervisor settlement', () => {
+  it('persists and unwraps scratch returned by a stock worker', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-stock-scratch-'))
+    roots.push(root)
+    const files = new Map<string, string>()
+    const result = Promise.resolve({
+      value: {
+        [STOCK_RESULT_ENVELOPE]: true,
+        value: { ok: true },
+        scratch: { 'report.md': 'stock report' },
+      },
+      stopReason: 'completed',
+      agentsStarted: 0,
+    })
+    const store = new MemoryStore(root)
+    const supervisor = new WorkflowSupervisor({
+      workflowEngine: { start: () => ({ id: 'stock', result, cancel: () => {}, dispose: async () => {} }) },
+      on: () => () => {}, emit: () => {}, logger: { warn: () => undefined },
+      workflows: { save: async () => ({ path: '/tmp/unused' }) },
+      workflowStorage: { layout: scratchLayout(files) },
+    }, { defaultAgentBudget: 8, maxAgentBudget: 8, maxMembersPerRun: 8 }, store)
+    const agent = { session: { id: 'session-stock-scratch', header: { cwd: '/tmp' } }, followup: async () => undefined }
+    try {
+      const launched = await supervisor.start({
+        script: "await write_scratch_file('report.md', 'stock report'); return { ok: true }",
+        meta: { name: 'stock-scratch', description: 'stock scratch' }, parent: agent,
+      })
+      await supervisor.whenOwnerQuiescent(agent)
+      expect(files.get('report.md')).toBe('stock report')
+      const retained = store.entries.get(launched.runId)
+      expect(retained?.detail.result).toMatchObject({ state: 'available', value: { ok: true } })
+      expect(retained?.detail.artifacts).toEqual([{ name: 'report.md', bytes: 12 }])
+    } finally { await supervisor.dispose() }
+  })
+
   it('captures checkpoint only after result and dispose, then commits completed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-settlement-'))
     roots.push(root)

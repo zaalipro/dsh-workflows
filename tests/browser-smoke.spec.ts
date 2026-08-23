@@ -10,6 +10,8 @@ import { describe, expect, it } from 'vitest'
 const execFileAsync = promisify(execFile)
 const root = resolve(import.meta.dirname, '..')
 const helper = resolve(root, 'scripts/browser-smoke.mjs')
+const releaseTarball = process.env.DSH_WORKFLOWS_TARBALL
+const officialCheckout = process.env.DSH_OFFICIAL_CHECKOUT ?? process.env.DSH_HARNESS_CHECKOUT
 
 async function waitForExit(
   child: ReturnType<typeof spawn>,
@@ -57,6 +59,14 @@ async function fixtureServer(directory: string, body: string): Promise<string> {
 }
 
 describe('tarball browser-smoke helper boundary', () => {
+  it('runs the frozen published CLI without requiring checkout dependencies', async () => {
+    const source = await readFile(helper, 'utf8')
+    expect(source).toContain("join(PLUGIN_ROOT, 'node_modules', '@deepseek-ai', 'dsh')")
+    expect(source).toContain("join(publishedPackageRoot, 'lib', 'bin.js')")
+    expect(source).not.toContain("join(options.official, 'node_modules'")
+    expect(source).not.toContain("'tsx/esm'")
+  })
+
   it('rejects missing and relative arguments without opening a browser', async () => {
     const missing = await execFileAsync(process.execPath, [helper], { cwd: root }).catch(error => error as { code: number; stderr: string })
     expect(missing.code).toBe(1)
@@ -200,7 +210,73 @@ describe('tarball browser-smoke helper boundary', () => {
     }
   })
 
-  it('serves the packed client bundle on loopback and tears the page server down', async () => {
+  it.skipIf(!releaseTarball || !officialCheckout)(
+    'installs the exact tarball, activates official Web, and serves its installed client bytes',
+    { timeout: 300_000 },
+    async () => {
+      const child = spawn(process.execPath, [
+        helper,
+        '--tarball', resolve(releaseTarball!),
+        '--official', resolve(officialCheckout!),
+        '--workspace', root,
+      ], {
+        cwd: root,
+        env: { ...process.env, DEEPSEEK_API_KEY: undefined },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+      const exited = waitForExit(child, 290_000)
+      try {
+        const readiness = await new Promise<{ kind: string; url: string; pid: number }>((resolvePromise, reject) => {
+          const timer = setTimeout(() => reject(new Error('real Web readiness timeout')), 240_000)
+          let output = ''
+          child.stdout?.setEncoding('utf8')
+          const onData = (chunk: string): void => {
+            output += chunk
+            for (const line of output.split(/\r?\n/u)) {
+              if (!line.trim().startsWith('{')) continue
+              try {
+                const value = JSON.parse(line) as { kind?: unknown; url?: unknown; pid?: unknown }
+                if (value.kind !== 'ready' || typeof value.url !== 'string' || typeof value.pid !== 'number') continue
+                clearTimeout(timer)
+                child.stdout?.off('data', onData)
+                resolvePromise(value as { kind: string; url: string; pid: number })
+                return
+              } catch { /* wait for a complete JSON line */ }
+            }
+          }
+          child.stdout?.on('data', onData)
+          child.once('exit', code => {
+            clearTimeout(timer)
+            reject(new Error(`browser helper exited before readiness with ${String(code)}`))
+          })
+        })
+        expect(readiness).toMatchObject({ kind: 'ready', url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/u), pid: expect.any(Number) })
+
+        const page = await fetch(readiness.url)
+        expect(page.status).toBe(200)
+        await page.arrayBuffer()
+        const bundle = await fetch(new URL('/plugins/@zaalipro/dsh-workflows/client.js', readiness.url))
+        expect(bundle.status).toBe(200)
+        expect(bundle.headers.get('content-type')).toMatch(/^text\/javascript/u)
+        expect(await bundle.text()).toContain('@zaalipro/dsh-workflows')
+        const sourceMap = await fetch(new URL('/plugins/@zaalipro/dsh-workflows/client.js.map', readiness.url))
+        expect(sourceMap.status).toBe(200)
+        expect((await sourceMap.json()) as { version?: unknown }).toMatchObject({ version: 3 })
+      } finally {
+        child.stdin?.end()
+        const result = await exited.catch(async error => {
+          child.kill('SIGTERM')
+          await new Promise(resolvePromise => setTimeout(resolvePromise, 5_000))
+          stopChild(child)
+          throw error
+        })
+        expect(result.code, result.stderr).toBe(0)
+        expect(result.stdout.trim().split('\n').filter(Boolean)).toHaveLength(1)
+      }
+    },
+  )
+
+  it('keeps the static client accessibility fixture bounded on loopback', async () => {
     const fixture = await mkdtemp(join(tmpdir(), 'dsh-browser-page-'))
     const client = await readFile(join(root, 'lib/client.js'), 'utf8')
     const css = await readFile(join(root, 'src/client/WorkflowsDashboard.module.css'), 'utf8')

@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { gunzipSync } from 'node:zlib'
 
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const PACKAGE_VERSION = '0.1.0-rc.2'
+const PACKAGE_VERSION = '0.1.0-rc.3'
 const PACKAGE_LICENSE = 'MIT'
 const NODE_RANGE = '^22.19.0 || >=24.0.0'
 const PACKAGE_MANAGER = 'pnpm@11.7.0'
@@ -60,6 +60,8 @@ const REQUIRED_RUNTIME_DEPENDENCIES = Object.freeze([
   'fs-native-extensions',
 ])
 const REQUIRED_GENERATED_ASSETS = Object.freeze([
+  'lib/compat-engine/index.js',
+  'lib/compat-engine/worker.cjs',
   'lib/typert.host.js',
   'lib/typert.host.d.ts',
   'lib/typert.remote-client.js',
@@ -209,6 +211,11 @@ function verifyManifest(manifest) {
   if (!isRecord(manifest.dsh.bundle)) throw new Error('dsh.bundle must be an object')
   expectStringArrayEqual(Object.keys(manifest.dsh.bundle), ['patch'], 'dsh.bundle keys')
   expectEqual(manifest.dsh.bundle.patch, './cordis.patch.yml', 'dsh.bundle.patch')
+  if (!isRecord(manifest.dsh.compatibility)) throw new Error('dsh.compatibility must be an object')
+  expectStringArrayEqual(Object.keys(manifest.dsh.compatibility), ['host', 'versions', 'evaluator'], 'dsh.compatibility keys')
+  expectEqual(manifest.dsh.compatibility.host, '@deepseek-ai/dsh', 'dsh.compatibility.host')
+  expectStringArrayEqual(manifest.dsh.compatibility.versions, ['0.1.1-rc.2'], 'dsh.compatibility.versions')
+  expectEqual(manifest.dsh.compatibility.evaluator, 'plugin-compat-engine-v1', 'dsh.compatibility.evaluator')
   verifyClientDeclaration(manifest.dsh.client)
 
   const exportTargets = verifyExports(manifest.exports)
@@ -333,6 +340,8 @@ function verifyDependencies(manifest, clientDeclaration) {
     '1.5.0',
     'dependencies.fs-native-extensions',
   )
+  expectEqual(sections.dependencies.chokidar, '4.0.3', 'dependencies.chokidar')
+  expectEqual(sections.dependencies.clsx, '2.1.1', 'dependencies.clsx')
   if ('fs-native-extensions' in sections.optionalDependencies
     || 'fs-native-extensions' in sections.peerDependencies) {
     throw new Error('fs-native-extensions must be an ordinary dependency only')
@@ -361,16 +370,30 @@ function verifyDependencies(manifest, clientDeclaration) {
   for (const name of peersToCheck) {
     if (!(name in sections.peerDependencies)) throw new Error(`${name} must be a peer dependency`)
     if (!(name in sections.devDependencies)) throw new Error(`${name} peer must also be a development dependency`)
+    if (name.startsWith('@deepseek-ai/dsh-')) {
+      expectEqual(sections.peerDependencies[name], '0.1.1-rc.2', `peerDependencies.${name}`)
+      expectEqual(sections.devDependencies[name], '0.1.1-rc.2', `devDependencies.${name}`)
+    }
   }
 
-  if (manifest.peerDependenciesMeta !== undefined) {
-    if (!isRecord(manifest.peerDependenciesMeta)) throw new Error('peerDependenciesMeta must be an object')
-    for (const [name, meta] of Object.entries(manifest.peerDependenciesMeta)) {
-      if (!(name in sections.peerDependencies)) throw new Error(`peerDependenciesMeta names undeclared peer ${name}`)
-      if (!isRecord(meta) || Object.keys(meta).some(key => key !== 'optional')
-        || (meta.optional !== undefined && typeof meta.optional !== 'boolean')) {
-        throw new Error(`peerDependenciesMeta.${name} is invalid`)
-      }
+  expectEqual(sections.devDependencies['@deepseek-ai/dsh'], '0.1.1-rc.2', 'devDependencies.@deepseek-ai/dsh')
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    if ('@deepseek-ai/dsh' in sections[field]) {
+      throw new Error(`@deepseek-ai/dsh must be a development dependency only, not ${field}`)
+    }
+  }
+
+  if (!isRecord(manifest.peerDependenciesMeta)) {
+    throw new Error('peerDependenciesMeta must declare every peer optional')
+  }
+  expectStringArrayEqual(
+    Object.keys(manifest.peerDependenciesMeta),
+    Object.keys(sections.peerDependencies),
+    'peerDependenciesMeta optional peer set',
+  )
+  for (const [name, meta] of Object.entries(manifest.peerDependenciesMeta)) {
+    if (!isRecord(meta) || Object.keys(meta).length !== 1 || meta.optional !== true) {
+      throw new Error(`peerDependenciesMeta.${name} must be exactly { optional: true }`)
     }
   }
   if (Array.isArray(manifest.bundleDependencies) && manifest.bundleDependencies.length > 0) {
@@ -420,6 +443,8 @@ function verifySourcePublicationList(filesField, exportTargets) {
     'lib/client.js.map',
     'cordis.patch.yml',
     'skills/create-workflow/SKILL.md',
+    'vendor/workflow-engine/LICENSE',
+    'vendor/workflow-engine/README.md',
     'NOTICE.md',
     'README.md',
     'docs/user-guide.md',
@@ -431,7 +456,7 @@ function verifySourcePublicationList(filesField, exportTargets) {
       throw new Error(`files does not publish required asset ${JSON.stringify(path)}`)
     }
   }
-  for (const generated of REQUIRED_GENERATED_ASSETS) {
+  for (const generated of REQUIRED_GENERATED_ASSETS.filter(path => path.startsWith('lib/typert.'))) {
     if (!files.includes(generated)) {
       throw new Error(`files must explicitly list generated Typert asset ${JSON.stringify(generated)}`)
     }
@@ -454,6 +479,8 @@ function verifyPackedFiles(files, exportTargets) {
     'package.json',
     'cordis.patch.yml',
     'skills/create-workflow/SKILL.md',
+    'vendor/workflow-engine/LICENSE',
+    'vendor/workflow-engine/README.md',
     'README.md',
     'docs/user-guide.md',
     'docs/architecture.md',
@@ -496,10 +523,23 @@ function verifyLegalFiles(root) {
     'https://github.com/holepunchto/fs-native-extensions',
     'Apache License 2.0',
     'Kasper Isager Dalsgarð',
+    'workflow compatibility evaluator',
+    'DeepSeek',
+    '391c829343',
   ]) {
     if (!notice.includes(text)) throw new Error(`NOTICE.md is missing ${JSON.stringify(text)}`)
   }
   if (/proper-lockfile/iu.test(notice)) throw new Error('NOTICE.md must not attribute proper-lockfile')
+  const evaluatorLicense = readUtf8File(resolve(root, 'vendor/workflow-engine/LICENSE'), 'vendor/workflow-engine/LICENSE')
+  if (!evaluatorLicense.startsWith('MIT License\n') || !evaluatorLicense.includes('Copyright (c) 2026 DeepSeek')) {
+    throw new Error('vendor/workflow-engine/LICENSE is not the attributed DeepSeek MIT license')
+  }
+  requireSingleFinalLf(evaluatorLicense, 'vendor/workflow-engine/LICENSE')
+  const evaluatorReadme = readUtf8File(resolve(root, 'vendor/workflow-engine/README.md'), 'vendor/workflow-engine/README.md')
+  for (const text of ['DeepSeek Harness workflow-worker-thread', 'MIT', '391c829343', '@zaalipro/dsh-workflows']) {
+    if (!evaluatorReadme.includes(text)) throw new Error(`vendor/workflow-engine/README.md is missing ${JSON.stringify(text)}`)
+  }
+  requireSingleFinalLf(evaluatorReadme, 'vendor/workflow-engine/README.md')
   requireSingleFinalLf(notice, 'NOTICE.md')
 }
 
@@ -575,7 +615,10 @@ function scanText(path, text) {
   if (!documentation && !path.endsWith('.map') && /(?:^|["'`])(?:\.\.\/)*src\//mu.test(text)) {
     throw new Error(`${path} contains source-tree runtime reference`)
   }
-  if (/\bprocess\.cwd\s*\(\s*\)/u.test(text) && /(?:worker|client|skill|patch|asset)/iu.test(text)) {
+  // Reject only direct resolution of a package-owned literal from cwd. A
+  // runtime user path may legitimately use cwd as its lexical base, and words
+  // such as "client" elsewhere in the same compiled module are unrelated.
+  if (/\b(?:join|resolve)\s*\(\s*process\.cwd\s*\(\s*\)\s*,\s*["'`][^"'`]*(?:worker|client|skill|patch|asset)/iu.test(text)) {
     throw new Error(`${path} resolves a packaged asset through process.cwd()`)
   }
 }

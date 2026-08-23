@@ -1,0 +1,170 @@
+/**
+ * Non-protocol wire vocabulary for the worker-thread engine: the `workerData` init payload and
+ * the child-port interfaces the worker-side runtime consumes. Host/worker messages are defined in
+ * `./protocol.ts`; transported child requests and results are plain JSON for structured clone.
+ * @module @deepseek-ai/dsh-workflow-worker-thread/types
+ */
+
+import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
+import type { WorkflowMeta } from '@deepseek-ai/dsh-workflow'
+
+interface WorkflowJournalBase {
+  readonly ordinal: number
+  readonly callId: readonly [number, ...number[]]
+  readonly fingerprint: string
+}
+
+/** Plugin-owned replay vocabulary, intentionally independent of the stock seam declarations. */
+export type WorkflowJournalEntry = WorkflowJournalBase & (
+  | { readonly kind: 'agent'; readonly seq: number; readonly result: import('@deepseek-ai/dsh-session').JsonValue }
+  | { readonly kind: 'phase'; readonly title: string }
+  | { readonly kind: 'log'; readonly message: string }
+  | { readonly kind: 'scratch-read'; readonly content?: string }
+  | { readonly kind: 'scratch-write' }
+  | { readonly kind: 'await-user' }
+)
+
+export interface WorkflowCheckpoint {
+  readonly journal: WorkflowJournalEntry[]
+  readonly agentSpend: number
+  readonly agentSeq: number
+}
+
+/** Descriptor-rooted scratch capability owned by the package supervisor. */
+export interface WorkflowScratchPort {
+  read(name: string, signal?: AbortSignal): Promise<string | undefined>
+  write(name: string, content: string, signal?: AbortSignal): Promise<void>
+}
+
+/**
+ * The per-run limits the worker-side runtime enforces. The host keeps the
+ * knobs only it can act on (`provider`, `disposeGraceMs`).
+ */
+export interface WorkerLimits {
+  /** Concurrent `agent()` ceiling (already auto-resolved; ≥ 1). */
+  maxConcurrentAgents: number
+  /** Total `agent()` calls per run (the runaway-loop backstop). */
+  maxTotalAgents: number
+  /** Items accepted by one `parallel()`/`pipeline()` call. */
+  maxItemsPerCall: number
+  /** vm timeout for the script's initial synchronous slice (inside the worker). */
+  syncTimeoutMs: number
+}
+
+/** The `workerData` payload one run is initialized with (host → worker, once, at spawn). */
+export interface WorkerInit {
+  /** The validated meta block (plain data off the start request, validated host-side). */
+  meta: WorkflowMeta
+  /** The plain-JS script body, exactly as the start request carried it. */
+  body: string
+  /** The run's `args` value; the workerData structured clone is the copy that isolates the caller. */
+  args?: unknown
+  /** The worker-enforced limits. */
+  limits: WorkerLimits
+  /** Committed host-call results replayed instead of relaunching children; omitted for a fresh start. */
+  journal?: readonly WorkflowJournalEntry[]
+  /** Cumulative budget already spent by earlier attempts of this logical run. */
+  initialAgentSpend?: number
+  /** Highest member sequence issued by earlier attempts; keeps retry members distinct. */
+  initialAgentSeq?: number
+  /** Smoke-check mode: canned `agent()` results, no child RPC, no journal persistence. */
+  validateOnly?: boolean
+}
+
+/** Host-enforced scratch resource limits for one run. */
+export interface WorkerScratchLimits {
+  /** Maximum scratch RPCs admitted over this engine attempt. */
+  maxOperations: number
+  /** Maximum admitted scratch RPCs that may be pending at once. */
+  maxPendingOperations: number
+  /** Maximum number of scratch files. */
+  maxFiles: number
+  /** Maximum UTF-8 bytes in one scratch file. */
+  maxFileBytes: number
+  /** Maximum UTF-8 bytes across all scratch files. */
+  maxTotalBytes: number
+}
+
+/** Host-enforced bounds for worker messages and caller-controlled text. */
+export interface WorkerHostLimits {
+  /** Maximum approximate encoded bytes in one worker protocol message. */
+  maxProtocolMessageBytes: number
+  /** Maximum UTF-8 JSON-array bytes retained across replayed and new journal entries. */
+  maxJournalBytes: number
+  /** Maximum UTF-8 bytes in one child prompt. */
+  maxChildPromptBytes: number
+  /** Maximum UTF-8 bytes in one progress event string. */
+  maxEventTextBytes: number
+  /** Scratch storage limits. */
+  scratch: WorkerScratchLimits
+}
+
+/** What the worker asks the host to start for one `agent()` call (options already validated worker-side). */
+export interface ChildStartRequest {
+  /** The child's prompt text. */
+  prompt: string
+  /** The structured-output schema, if the call passed one (already subset-checked). */
+  schema?: ObjectJsonSchema
+  /** The per-child provider override, if the call passed one. */
+  provider?: string
+  /** The per-child model override, if the call passed one. */
+  model?: string
+}
+
+/**
+ * The JSON projection of a child's `SubagentResult` crossing the port. The
+ * seam's `stopReason` union is merge-extensible, so it degrades to `string`
+ * on the wire — the runtime only ever branches on `'completed'`.
+ */
+export interface ChildResult {
+  /** The child's final assistant output blocks. */
+  output: ContentBlock[]
+  /** The structured value, present iff the request carried a schema AND the provider honored it. */
+  structured?: unknown
+  /** Why the child run ended (`'completed'` is the only value the runtime branches on). */
+  stopReason: string
+}
+
+/**
+ * The worker-side handle for one started child — the RPC mirror of the
+ * subagent seam's run handle, reduced to what the runtime consumes.
+ */
+export interface ChildHandle {
+  /** The child agent's id (minted host-side by the subagent seam). */
+  readonly id: string
+  /**
+   * Resolves with the child's terminal {@link ChildResult}; REJECTS only when
+   * the host reports an infrastructure fault (`child-failed`) — a child that
+   * failed for its own reasons resolves with a non-`completed` stop reason.
+   */
+  readonly result: Promise<ChildResult>
+  /** Ask the host to dispose the child; resolves on the host's ack. */
+  dispose(): Promise<void>
+}
+
+/**
+ * The worker-side port the runtime starts child agents through — the seam
+ * that lets the execution core stay ignorant of the thread boundary.
+ */
+export interface ChildPort {
+  /**
+   * Start one child agent on the host (the `agent()` hook's start half).
+   * @param request - the prompt and validated options.
+   * @returns the published child handle; rejects when synchronous start or the
+   *   provider's asynchronous start fails.
+   */
+  startAgent(request: ChildStartRequest): Promise<ChildHandle>
+  /**
+   * Write one single-component scratch file into the run's scratch directory.
+   * @param name - single-component file name (no separators).
+   * @param content - full file content, written atomically.
+   */
+  writeScratch(name: string, content: string): Promise<void>
+  /**
+   * Read one single-component scratch file.
+   * @param name - single-component file name (no separators).
+   * @returns the file content, or `undefined` when absent.
+   */
+  readScratch(name: string): Promise<string | undefined>
+}

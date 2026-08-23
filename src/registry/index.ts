@@ -1,13 +1,11 @@
 /** Saved workflow-definition registry and its bounded Host-facing adapter. */
-import { constants as fsConstants } from 'node:fs';
+import { constants as fsConstants, type BigIntStats } from 'node:fs';
 import {
   lstat as localLstat,
   mkdir as localMkdir,
   open as localOpen,
   readdir as localReaddir,
-  rename as localRename,
   unlink as localUnlink,
-  writeFile as localWriteFile,
   link as localLink,
   chmod as localChmod,
 } from 'node:fs/promises';
@@ -200,6 +198,194 @@ async function localEntry(path: string): Promise<{ type: 'file' | 'directory' | 
     /* c8 ignore start -- unexpected local lstat faults stay loud */
     throw error;
     /* c8 ignore stop */
+  }
+}
+
+interface LocalFileVersion {
+  readonly dev: bigint;
+  readonly ino: bigint;
+  readonly size: bigint;
+  readonly mtimeNs: bigint;
+  readonly ctimeNs: bigint;
+  readonly mode: bigint;
+  readonly nlink: bigint;
+}
+
+function localVersionFromStats(info: BigIntStats): LocalFileVersion {
+  return {
+    dev: info.dev,
+    ino: info.ino,
+    size: info.size,
+    mtimeNs: info.mtimeNs,
+    ctimeNs: info.ctimeNs,
+    mode: info.mode,
+    nlink: info.nlink,
+  };
+}
+
+/** Capture the same final-entry identity/version fields used by the stock Host fs. */
+async function localFileVersion(path: string): Promise<LocalFileVersion | undefined> {
+  try {
+    const info = await localLstat(path, { bigint: true });
+    if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1n) {
+      throw new WorkflowRegistryError(`${path}: workflow definition must be a regular file; symbolic-link definitions are not allowed`, 'WORKFLOW_DEFINITION_INVALID');
+    }
+    return localVersionFromStats(info);
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+function sameLocalFileVersion(left: LocalFileVersion, right: LocalFileVersion): boolean {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.size === right.size
+    && left.mtimeNs === right.mtimeNs
+    && left.ctimeNs === right.ctimeNs
+    && left.mode === right.mode
+    && left.nlink === right.nlink;
+}
+
+/** Exchange changes ctime itself; these fields identify the entry across it. */
+function sameLocalFileAfterExchange(left: LocalFileVersion, right: LocalFileVersion): boolean {
+  return left.dev === right.dev
+    && left.ino === right.ino
+    && left.size === right.size
+    && left.mtimeNs === right.mtimeNs
+    && left.mode === right.mode
+    && left.nlink === right.nlink;
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.byteLength !== right.byteLength) return false;
+  for (let index = 0; index < left.byteLength; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
+// Path-local serialization avoids needless same-process exchange/rollback while
+// preserving optimistic semantics: every writer observes before joining this
+// queue, then must still match that exact observation at its commit point.
+const localPublicationTails = new Map<string, Promise<void>>();
+
+async function withLocalPublicationLock<T>(path: string, action: () => Promise<T>): Promise<T> {
+  const previous = localPublicationTails.get(path) ?? Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const tail = previous.then(() => gate);
+  localPublicationTails.set(path, tail);
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+    if (localPublicationTails.get(path) === tail) localPublicationTails.delete(path);
+  }
+}
+
+/** Make the destination directory entry durable before reporting success. */
+async function fsyncLocalDirectory(path: string): Promise<void> {
+  /* c8 ignore start -- local durable publication requires POSIX directory fsync */
+  if (process.platform === 'win32' || (fsConstants.O_DIRECTORY ?? 0) === 0 || (fsConstants.O_NOFOLLOW ?? 0) === 0) {
+    throw new WorkflowRegistryError(`${path}: durable no-follow definition publication is unavailable on ${process.platform}`, 'WORKFLOW_REGISTRY_UNSUPPORTED');
+  }
+  /* c8 ignore stop */
+  const handle = await localOpen(path, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW);
+  try {
+    const info = await handle.stat();
+    if (!info.isDirectory()) throw new WorkflowRegistryError(`${path}: workflow root must be a directory`, 'WORKFLOW_ROOT_UNSAFE');
+    await handle.sync();
+  } finally {
+    await handle.close().catch(() => undefined);
+  }
+}
+
+type NativePublication = Pick<typeof import('fs-native-extensions'), 'swap' | 'waitForLock' | 'unlock'>;
+
+async function requireNativePublication(path: string): Promise<NativePublication> {
+  /* c8 ignore start -- native exchange is intentionally unsupported elsewhere */
+  if (process.platform !== 'linux' && process.platform !== 'darwin') {
+    throw new WorkflowRegistryError(`${path}: atomic definition exchange is unavailable on ${process.platform}`, 'WORKFLOW_REGISTRY_UNSUPPORTED');
+  }
+  try {
+    const native = await import('fs-native-extensions');
+    if (typeof native.swap !== 'function'
+      || typeof native.waitForLock !== 'function'
+      || typeof native.unlock !== 'function') {
+      throw new TypeError('atomic swap/lock exports are unavailable');
+    }
+    return native;
+  } catch (error) {
+    throw new WorkflowRegistryError(`${path}: atomic definition exchange is unavailable`, 'WORKFLOW_REGISTRY_UNSUPPORTED', { cause: error });
+  }
+  /* c8 ignore stop */
+}
+
+interface LocalPublicationLock {
+  readonly handle: Awaited<ReturnType<typeof localOpen>>;
+  readonly assertIdentity: () => Promise<void>;
+  readonly release: () => Promise<void>;
+}
+
+/**
+ * Lock a stable, never-unlinked sibling entry. Locking the destination inode
+ * is insufficient because an exchange changes which inode future writers see.
+ */
+async function acquireLocalPublicationLock(
+  lockPath: string,
+  native: NativePublication,
+): Promise<LocalPublicationLock> {
+  let handle: Awaited<ReturnType<typeof localOpen>> | undefined;
+  let locked = false;
+  try {
+    handle = await localOpen(
+      lockPath,
+      fsConstants.O_RDWR | fsConstants.O_CREAT | fsConstants.O_NOFOLLOW,
+      0o600,
+    );
+    const openedStats = await handle.stat({ bigint: true });
+    const opened = localVersionFromStats(openedStats);
+    if (!openedStats.isFile() || opened.nlink !== 1n) {
+      throw new WorkflowRegistryError(`${lockPath}: publication lock must be a regular single-link file`, 'WORKFLOW_ROOT_UNSAFE');
+    }
+    await native.waitForLock(handle.fd);
+    locked = true;
+    const held = localVersionFromStats(await handle.stat({ bigint: true }));
+    const lexical = await localFileVersion(lockPath);
+    if (lexical === undefined
+      || !sameLocalFileVersion(opened, held)
+      || !sameLocalFileVersion(held, lexical)) {
+      throw new WorkflowRegistryError(`${lockPath}: publication lock identity changed while held`, 'WORKFLOW_ROOT_UNSAFE');
+    }
+    const retained = handle;
+    const assertIdentity = async (): Promise<void> => {
+      const descriptor = localVersionFromStats(await retained.stat({ bigint: true }));
+      const entry = await localFileVersion(lockPath);
+      if (entry === undefined
+        || !sameLocalFileVersion(held, descriptor)
+        || !sameLocalFileVersion(descriptor, entry)) {
+        throw new WorkflowRegistryError(`${lockPath}: publication lock identity changed while held`, 'WORKFLOW_ROOT_UNSAFE');
+      }
+    };
+    return {
+      handle: retained,
+      assertIdentity,
+      release: async () => {
+        try { native.unlock(retained.fd); } catch { /* close also releases the advisory lock */ }
+        await retained.close().catch(() => undefined);
+      },
+    };
+  } catch (error) {
+    if (locked && handle !== undefined) {
+      try { native.unlock(handle.fd); } catch { /* close below releases it */ }
+    }
+    await handle?.close().catch(() => undefined);
+    if (errorCode(error) === 'ELOOP') {
+      throw new WorkflowRegistryError(`${lockPath}: symbolic-link publication lock is not allowed`, 'WORKFLOW_ROOT_UNSAFE', { cause: error });
+    }
+    throw error;
   }
 }
 
@@ -539,22 +725,27 @@ export class WorkflowRegistry {
 
   /**
    * Save a canonical definition through the Host descriptor capability. The
-   * local fallback is retained for standalone unit use; Host contexts fail
-   * closed when the compatible no-follow capability is unavailable.
+   * guarded local path is also the stock RC2 compatibility seam when its Host
+   * filesystem does not expose retained private-directory descriptors.
    */
   async save(envelope: WorkflowDefinitionEnvelope, options: WorkflowSaveOptions): Promise<WorkflowDefinition> {
     if (!this.config.enabled) throw new WorkflowRegistryError('workflow registry is disabled', 'WORKFLOW_REGISTRY_DISABLED');
     if (options.scope !== 'project' && options.scope !== 'user') {
       throw new WorkflowRegistryError('workflow definitions can only be saved to project or user scope', 'WORKFLOW_SAVE_SCOPE_INVALID');
     }
-    this.requireLookupCwd(options, 'save');
+    if (options.scope === 'project') this.requireLookupCwd(options, 'save');
     const clean = validateDefinitionEnvelope(envelope);
     const bytes = serializeWorkflowDefinition(clean);
     if (bytes.byteLength > this.config.definitionMaxBytes) {
       throw new WorkflowRegistryError(`definition exceeds the ${this.config.definitionMaxBytes}-byte limit`, 'WORKFLOW_DEFINITION_INVALID');
     }
-    const roots = await this.roots(options);
-    const root = roots.find(candidate => candidate.scope === options.scope);
+    const root = options.scope === 'user'
+      ? {
+          scope: 'user' as const,
+          path: workflowPathApi(this.dshHome).join(this.dshHome, 'workflows'),
+          basePath: this.dshHome,
+        }
+      : (await this.roots(options)).find(candidate => candidate.scope === options.scope);
     if (root === undefined) throw new WorkflowRegistryError(`workflow ${options.scope} root is unavailable`, 'WORKFLOW_ROOT_UNSAFE');
     return this.fs === undefined
       ? this.saveLocal(clean, bytes, root, options.signal)
@@ -624,45 +815,159 @@ export class WorkflowRegistry {
     signal?: AbortSignal,
   ): Promise<WorkflowDefinition> {
     aborted(signal);
+    /* c8 ignore start -- the guarded local algorithm deliberately fails before mutation on Windows */
+    if (process.platform === 'win32' || (fsConstants.O_NOFOLLOW ?? 0) === 0 || (fsConstants.O_DIRECTORY ?? 0) === 0) {
+      throw new WorkflowRegistryError(`${root.path}: durable no-follow definition publication is unavailable on ${process.platform}`, 'WORKFLOW_REGISTRY_UNSUPPORTED');
+    }
+    /* c8 ignore stop */
+    // Resolve the native CAS primitive before creating a root or staging file.
+    const nativePublication = await requireNativePublication(root.path);
     await assertLocalRootSafe(root);
     await localMkdir(root.path, { recursive: true, mode: 0o700 });
     await localChmod(root.path, 0o700).catch(() => undefined);
     const filename = `${envelope.meta.name}.workflow.json`;
     const path = joinRoot(root, filename);
-    const current = await localEntry(path);
-    if (current !== undefined && (current.type !== 'file' || current.nlink !== 1)) {
-      throw new WorkflowRegistryError(`${path}: workflow definition must be a regular file; symbolic-link definitions are not allowed`, 'WORKFLOW_DEFINITION_INVALID');
+    const lockPath = joinRoot(root, `.${filename}.lock`);
+    const current = await localFileVersion(path);
+    const observedBytes = current === undefined
+      ? undefined
+      : await readLocalNoFollow(path, this.config.definitionMaxBytes, signal);
+    if (current !== undefined) {
+      const afterRead = await localFileVersion(path);
+      if (afterRead === undefined || !sameLocalFileVersion(current, afterRead)) {
+        throw new WorkflowRegistryError(`${path}: target changed during observation`, 'WORKFLOW_STALE_VERSION');
+      }
     }
     const temp = joinRoot(root, `.${filename}.${randomHex(12)}.tmp`);
-    await localWriteFile(temp, bytes, { flag: 'wx', mode: 0o600 });
+    let tempHandle: Awaited<ReturnType<typeof localOpen>> | undefined;
+    let preserveTemp = false;
     try {
+      tempHandle = await localOpen(temp, fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL, 0o600);
+      await tempHandle.writeFile(bytes);
       aborted(signal);
-      if (current === undefined) {
+      await tempHandle.sync();
+      await tempHandle.close();
+      tempHandle = undefined;
+      aborted(signal);
+      return await withLocalPublicationLock(path, async () => {
+        let cleanOwnedTemp = true;
+        let publicationLock: LocalPublicationLock | undefined;
         try {
-          await localLink(temp, path);
-          // Drop the staging directory entry before the guarded reader checks
-          // link count; the published file itself must have exactly one link.
-          await localUnlink(temp);
-        } catch (error) {
-          /* c8 ignore start -- wx plus link is the create race */
-          throw new WorkflowRegistryError(`${path}: create publication raced another entry`, 'WORKFLOW_STALE_VERSION', { cause: error });
-          /* c8 ignore stop */
+          publicationLock = await acquireLocalPublicationLock(lockPath, nativePublication);
+          // Waiting for a cooperating publisher is not a commit. Honor a late
+          // abort now; after the first mutation recovery must run to completion.
+          aborted(signal);
+          if (current === undefined) {
+            await publicationLock.assertIdentity();
+            try {
+              await localLink(temp, path);
+            } catch (error) {
+              if (errorCode(error) === 'EEXIST') {
+                throw new WorkflowRegistryError(`${path}: create publication raced another entry`, 'WORKFLOW_STALE_VERSION', { cause: error });
+              }
+              throw error;
+            }
+            // Drop the staging directory entry before the guarded reader checks
+            // link count; the published file itself must have exactly one link.
+            await localUnlink(temp);
+          } else {
+            let before: LocalFileVersion | undefined;
+            try {
+              before = await localFileVersion(path);
+            } catch (error) {
+              if (error instanceof WorkflowRegistryError && error.code === 'WORKFLOW_DEFINITION_INVALID') {
+                throw new WorkflowRegistryError(`${path}: target changed before publication`, 'WORKFLOW_STALE_VERSION', { cause: error });
+              }
+              throw error;
+            }
+            if (before === undefined || !sameLocalFileVersion(current, before)) {
+              throw new WorkflowRegistryError(`${path}: target changed before publication`, 'WORKFLOW_STALE_VERSION');
+            }
+            const proposed = await localFileVersion(temp);
+            /* c8 ignore next -- the retained staging handle just created this entry */
+            if (proposed === undefined) throw new WorkflowRegistryError(`${temp}: staging entry disappeared`, 'WORKFLOW_STALE_VERSION');
+            await publicationLock.assertIdentity();
+            await nativePublication.swap(temp, path);
+            cleanOwnedTemp = false;
+            let displaced: LocalFileVersion | undefined;
+            try {
+              displaced = await localFileVersion(temp);
+            } catch {
+              // A non-file substitution at the displaced path is equally stale.
+            }
+            let displacedBytes: Uint8Array | undefined;
+            if (displaced !== undefined) {
+              try {
+                displacedBytes = await readLocalNoFollow(temp, this.config.definitionMaxBytes);
+              } catch {
+                // Treat an unreadable displaced entry as stale and roll it back.
+              }
+            }
+            if (displaced === undefined
+              || displacedBytes === undefined
+              || observedBytes === undefined
+              || !sameLocalFileAfterExchange(current, displaced)
+              || !sameBytes(observedBytes, displacedBytes)) {
+              // Roll back only while the destination is still exactly our staged
+              // inode. A third writer wins without being overwritten by cleanup.
+              let destination: LocalFileVersion | undefined;
+              try {
+                destination = await localFileVersion(path);
+              } catch {
+                // Unsafe substitution: do not exchange through it.
+              }
+              let destinationBytes: Uint8Array | undefined;
+              if (destination !== undefined) {
+                try {
+                  destinationBytes = await readLocalNoFollow(path, this.config.definitionMaxBytes);
+                } catch {
+                  // Unsafe/read-raced destination: do not exchange through it.
+                }
+              }
+              if (destination === undefined
+                || destinationBytes === undefined
+                || !sameLocalFileAfterExchange(proposed, destination)
+                || !sameBytes(bytes, destinationBytes)) {
+                preserveTemp = true;
+                throw new WorkflowRegistryError(`${path}: target changed during publication; displaced entry retained at ${temp}`, 'WORKFLOW_STALE_VERSION');
+              }
+              try {
+                await nativePublication.swap(temp, path);
+                cleanOwnedTemp = true;
+                await fsyncLocalDirectory(root.path);
+              } catch (error) {
+                preserveTemp = true;
+                throw new WorkflowRegistryError(`${path}: stale publication rollback failed; displaced entry retained at ${temp}`, 'WORKFLOW_STALE_VERSION', { cause: error });
+              }
+              throw new WorkflowRegistryError(`${path}: target changed before publication`, 'WORKFLOW_STALE_VERSION');
+            }
+            try {
+              await localUnlink(temp);
+            } catch (error) {
+              preserveTemp = true;
+              await fsyncLocalDirectory(root.path).catch(() => undefined);
+              throw new WorkflowRegistryError(`${path}: publication cleanup failed; displaced entry retained at ${temp}`, 'WORKFLOW_STALE_VERSION', { cause: error });
+            }
+            cleanOwnedTemp = true;
+          }
+          await fsyncLocalDirectory(root.path);
+          const published = await readLocalNoFollow(path, this.config.definitionMaxBytes);
+          if (!sameBytes(published, bytes)) {
+            throw new WorkflowRegistryError(`${path}: target changed after publication`, 'WORKFLOW_STALE_VERSION');
+          }
+          const definition = parseWorkflowDefinition(published, path, root.scope, envelope.meta.name, this.config.definitionMaxBytes);
+          this.emitChange();
+          return definition;
+        } finally {
+          // When exchange could not be safely rolled back, temp contains the
+          // displaced entry and is deliberately not treated as owned staging.
+          if (cleanOwnedTemp) await localUnlink(temp).catch(() => undefined);
+          await publicationLock?.release();
         }
-      } else {
-        const before = await localLstat(path);
-        /* c8 ignore start -- destination identity is rechecked immediately before rename */
-        if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1) {
-          throw new WorkflowRegistryError(`${path}: target changed before publication`, 'WORKFLOW_STALE_VERSION');
-        }
-        /* c8 ignore stop */
-        await localRename(temp, path);
-      }
-      const published = await readLocalNoFollow(path, this.config.definitionMaxBytes, signal);
-      const definition = parseWorkflowDefinition(published, path, root.scope, envelope.meta.name, this.config.definitionMaxBytes);
-      this.emitChange();
-      return definition;
+      });
     } finally {
-      await localUnlink(temp).catch(() => undefined);
+      await tempHandle?.close().catch(() => undefined);
+      if (!preserveTemp) await localUnlink(temp).catch(() => undefined);
     }
   }
 

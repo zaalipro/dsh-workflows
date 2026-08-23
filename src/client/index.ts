@@ -31,7 +31,7 @@ export * from './workflow-definition.js'
 
 /** Services consumed by the browser half of the package. */
 export const inject = [
-  'connection', 'remote', 'sessions', 'slots', 'conversationEvents', 'commandUi', 'locale',
+  'connection', 'remote', 'sessions', 'slots', 'conversationEvents', 'commandUi', 'inputTriggers', 'locale',
 ] as const
 
 type AnyContext = ClientContext & Record<string, any>
@@ -109,6 +109,27 @@ interface WorkflowCommandUi {
   }): unknown
 }
 
+interface WorkflowInputTriggerSource {
+  readonly trigger: '/'
+  readonly name: string
+  readonly order?: number
+  readonly showGroupTitle?: boolean
+  candidates(
+    session: { readonly sessionId: string },
+    request: { readonly query: string; readonly position: 'leading'|'inline' },
+  ): Promise<readonly { readonly name: string; readonly description: string }[]>
+  onPick(pick: { readonly position: 'leading'|'inline' }): 'handled' | { readonly text: string } | undefined
+  matchEnter(
+    session: { readonly sessionId: string },
+    line: string,
+    signal: AbortSignal,
+    envelope: { readonly images: number },
+  ): Promise<'handled' | { readonly claim: {
+    readonly token: string
+    submit(args: string): Promise<{ readonly kind: 'success'|'error'; readonly text?: string }>
+  }} | undefined>
+}
+
 function requireCommandUi(commandUi: unknown): WorkflowCommandUi {
   if (typeof commandUi !== 'object' || commandUi === null) {
     throw new Error('workflow dashboard action registration is unavailable')
@@ -121,7 +142,7 @@ function requireCommandUi(commandUi: unknown): WorkflowCommandUi {
   return commandUi as WorkflowCommandUi
 }
 
-/** H dispatches kind:action via runAction; stock always openPopup. */
+/** Action-capable command UIs dispatch kind:action via runAction; stock RC2 always opens a popup. */
 function commandUiDispatchesActions(commandUi: object): boolean {
   let current: object | null = commandUi
   while (current !== null) {
@@ -130,121 +151,6 @@ function commandUiDispatchesActions(commandUi: object): boolean {
     if (current === Object.prototype) break
   }
   return false
-}
-
-function commandNodeName(record: { name?: unknown; data?: unknown }): string | null {
-  if (typeof record.name === 'string') return record.name
-  const nested = (record.data as { name?: unknown } | undefined)?.name
-  return typeof nested === 'string' ? nested : null
-}
-
-function conversationCommandNodes(snapshot: unknown): readonly { readonly seq: number; readonly name: string | null }[] {
-  const record = snapshot as { nodes?: unknown; chat?: { legacy?: { nodes?: unknown } } } | undefined
-  const nodes = Array.isArray(record?.nodes)
-    ? record.nodes
-    : Array.isArray(record?.chat?.legacy?.nodes)
-      ? record.chat.legacy.nodes
-      : []
-  const out: Array<{ seq: number; name: string | null }> = []
-  for (const node of nodes) {
-    if (typeof node !== 'object' || node === null) continue
-    const item = node as { kind?: unknown; seq?: unknown; name?: unknown; data?: unknown }
-    if (item.kind !== 'command') continue
-    const seq = typeof item.seq === 'number'
-      ? item.seq
-      : typeof (item.data as { seq?: unknown } | undefined)?.seq === 'number'
-        ? (item.data as { seq: number }).seq
-        : undefined
-    if (seq === undefined) continue
-    out.push({ seq, name: commandNodeName(item) })
-  }
-  return out
-}
-
-/** Stock ui-commands emit command/executed; isolate-safe listeners also watch conversation nodes. */
-function listenCommandExecuted(root: AnyContext, onWorkflows: () => void): Disposer {
-  const handler = (_sessionId: unknown, name: unknown): void => {
-    if (name === 'workflows') onWorkflows()
-  }
-  const targets: object[] = [root]
-  const parent = (root as { root?: unknown }).root
-  if (typeof parent === 'object' && parent !== null && parent !== root) targets.push(parent)
-  const disposers: Array<() => unknown> = []
-  for (const target of targets) {
-    const on = (target as { on?: unknown }).on
-    if (typeof on !== 'function') continue
-    try {
-      const registered = (on as (
-        this: object,
-        event: string,
-        listener: (...args: unknown[]) => void,
-        options?: { readonly global?: boolean },
-      ) => unknown).call(target, 'command/executed', handler, { global: true })
-      const dispose = asDisposer(registered)
-      if (dispose !== undefined) disposers.push(dispose)
-    } catch { /* some Client contexts reject undeclared events */ }
-  }
-  if (disposers.length === 0) return undefined
-  return () => { for (const dispose of disposers) void dispose() }
-}
-
-function conversationWatchReady(snapshot: unknown): boolean {
-  const state = (snapshot as { openState?: unknown } | undefined)?.openState
-  return state !== 'cold' && state !== 'loading'
-}
-
-function watchWorkflowsCommands(sessions: any, onWorkflows: () => void): () => void {
-  let stopSession: (() => void) | undefined
-  let attachedId: string | undefined
-  let attachedSession: unknown
-  const attach = (sessionId: unknown): void => {
-    const id = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : undefined
-    const session = id === undefined ? undefined : sessions?.binding?.(id)?.session
-    if (id === attachedId && session === attachedSession && (session === undefined || stopSession !== undefined)) return
-    stopSession?.()
-    stopSession = undefined
-    attachedId = id
-    attachedSession = session
-    if (session === undefined
-      || typeof session.subscribe !== 'function'
-      || typeof session.getSnapshot !== 'function') return
-    let primed = false
-    let baseline = 0
-    const ingest = (openNew: boolean): void => {
-      const snapshot = session.getSnapshot()
-      if (!conversationWatchReady(snapshot)) return
-      const nodes = conversationCommandNodes(snapshot)
-      if (!primed) {
-        for (const node of nodes) if (node.seq > baseline) baseline = node.seq
-        primed = true
-        return
-      }
-      let sawWorkflows = false
-      let max = baseline
-      for (const node of nodes) {
-        if (node.seq <= baseline) continue
-        if (node.seq > max) max = node.seq
-        if (node.name === 'workflows') sawWorkflows = true
-      }
-      baseline = max
-      if (openNew && sawWorkflows) onWorkflows()
-    }
-    ingest(false)
-    const unsubscribe = session.subscribe(() => { ingest(true) })
-    stopSession = asDisposer(unsubscribe)
-  }
-  attach(sessions?.list?.getSnapshot?.()?.current)
-  const stopList = typeof sessions?.list?.subscribe === 'function'
-    ? asDisposer(sessions.list.subscribe(() => { attach(sessions.list.getSnapshot()?.current) }))
-    : undefined
-  const stopProvide = typeof sessions?.currentProvideInfo?.subscribe === 'function'
-    ? asDisposer(sessions.currentProvideInfo.subscribe(() => { attach(sessions.list?.getSnapshot?.()?.current) }))
-    : undefined
-  return () => {
-    stopSession?.()
-    stopList?.()
-    stopProvide?.()
-  }
 }
 
 const PICKER_PAGE_LIMIT = 32
@@ -268,12 +174,12 @@ async function callDefinitionListRpc(connection: any, sessionId: string, request
 
 /** Load the picker catalog; an absent or hung Remote must settle, never spin. */
 async function loadPickerDefinitions(
-  remote: any,
+  definitionsRemote: any,
   session: any,
   signal: AbortSignal,
   connection?: any,
 ): Promise<readonly any[]> {
-  const list = remote?.workflowDefinitions?.list ?? remote?.['workflowDefinitions/list']
+  const list = definitionsRemote?.list ?? definitionsRemote?.['workflowDefinitions/list']
   const sessionId = String(session?.sessionId ?? '')
   if (typeof list !== 'function' && typeof connection?.rpc?.call !== 'function') return []
   const work = (async () => {
@@ -359,28 +265,72 @@ function bindDashboardCatalog(remote: any, sessions: any, connection?: any): {
   }
 }
 
+/** Read a namespace installed dynamically by Typert without traversing the
+ * injected `remote` aggregate. Cordis deliberately rejects that traversal
+ * unless the nested service was part of the plugin inject list; adding it to
+ * the list would deadlock because this plugin is also what mounts it. */
+function mountedRemoteNamespace(root: AnyContext, remote: any, namespace: string): any {
+  if (typeof (root as any).get === 'function') {
+    return (root as any).get(`remote.${namespace}`)
+  }
+  // Unit/minimal host contexts are ordinary objects rather than Cordis
+  // proxies, so retain their convenient nested fake shape.
+  return remote?.[namespace]
+}
+
 /**
  * Register one complete browser aggregate.  The generated Remote is mounted
  * first; every consumer and listener is created in that mount's effect and
  * is disposed before the contribution is unmounted.
  */
-export function apply(ctx: ClientContext): void {
+export function apply(ctx: ClientContext): Promise<void> {
   const root = ctx as AnyContext
-  root.effect(async () => {
+  const startup = root.effect(async () => {
     const cleanup: Array<() => unknown> = []
     const addCleanup = (value: Disposer): void => {
       if (value !== undefined) cleanup.push(value)
     }
     let dashboardActions: WorkflowsStoreInstance['actions'] | undefined
-    let overlayMounted = false
     let pendingOpen = false
     let liveAdapter: DashboardWorkflowRunsAdapter | undefined
     let fallbackRoot: Root | undefined
     let fallbackHost: HTMLElement | undefined
     let fallbackOpen = false
+    let fallbackSchedule = 0
+    let slotDashboardVisible = false
+    let dashboardLogicallyOpen = false
     let remoteDisposer: unknown
+    let controller: WorkflowRunsController | undefined
+    let adapter: DashboardWorkflowRunsAdapter | undefined
+    let rolledBack = false
     let overlayState: { readonly invoker: HTMLElement | null } = { invoker: null }
     const overlayListeners = new Set<() => void>()
+    const rollback = async (): Promise<void> => {
+      if (rolledBack) return
+      rolledBack = true
+      dashboardActions = undefined
+      liveAdapter = undefined
+      overlayListeners.clear()
+      fallbackOpen = false
+      slotDashboardVisible = false
+      dashboardLogicallyOpen = false
+      fallbackSchedule += 1
+      try { fallbackRoot?.unmount() } catch { /* contained */ }
+      fallbackRoot = undefined
+      fallbackHost?.remove()
+      fallbackHost = undefined
+      // Reverse registration order: listeners/slots/consumers stop before
+      // the generated Remote namespace is unmounted.
+      for (const dispose of cleanup.splice(0).reverse()) {
+        try { await dispose() } catch { /* one rollback cannot block the rest */ }
+      }
+      try { adapter?.dispose() } catch { /* contained */ }
+      try { controller?.dispose() } catch { /* contained */ }
+      adapter = undefined
+      controller = undefined
+      await Promise.resolve(disposeValue(remoteDisposer)).catch(() => undefined)
+      remoteDisposer = undefined
+    }
     const publishOverlay = (next: typeof overlayState): void => {
       overlayState = next
       for (const listener of [...overlayListeners]) listener()
@@ -395,8 +345,28 @@ export function apply(ctx: ClientContext): void {
       const id = (root.sessions as any)?.list?.getSnapshot?.()?.current
       return typeof id === 'string' && id.length > 0 ? id : undefined
     }
+    const fallbackObservationOwner = {}
+    const slotObservationOwner = {}
+    const scopedOperations = (owner: object): DashboardWorkflowRunsAdapter | undefined => {
+      if (liveAdapter === undefined) return undefined
+      return new Proxy(liveAdapter, {
+        get(target, property) {
+          if (property === 'observe') {
+            return (sessionId: string | undefined) => { target.observeFor(owner, sessionId) }
+          }
+          const value = Reflect.get(target, property, target)
+          // `source` is a callable external-store object whose own methods
+          // would be lost if Function#bind produced a replacement function.
+          if (property === 'source') return value
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      })
+    }
+    let fallbackOperations: DashboardWorkflowRunsAdapter | undefined
+    let slotOperations: DashboardWorkflowRunsAdapter | undefined
     const renderFallbackDashboard = (): void => {
-      if (typeof document === 'undefined' || liveAdapter === undefined) return
+      if (typeof document === 'undefined' || liveAdapter === undefined || slotDashboardVisible) return
+      fallbackOperations ??= scopedOperations(fallbackObservationOwner)
       if (fallbackHost === undefined) {
         fallbackHost = document.createElement('div')
         fallbackHost.id = 'dsh-workflows-overlay'
@@ -404,15 +374,16 @@ export function apply(ctx: ClientContext): void {
       }
       fallbackRoot ??= createRoot(fallbackHost)
       const sessionId = currentSessionId()
-      if (fallbackOpen) liveAdapter.observe(sessionId)
-      else liveAdapter.observe(undefined)
       fallbackRoot.render(fallbackOpen
         ? createElement(WorkflowsDashboard, {
-          operations: liveAdapter,
+          operations: fallbackOperations!,
           sessionId,
           open: true,
           onClose: () => {
+            dashboardLogicallyOpen = false
             fallbackOpen = false
+            fallbackSchedule += 1
+            dashboardActions?.close?.()
             renderFallbackDashboard()
           },
           labels: dashboardLabelsFromLocale(workflowLocaleFromBind(
@@ -420,6 +391,53 @@ export function apply(ctx: ClientContext): void {
           )),
         })
         : createElement('div'))
+    }
+    const removeFallbackDashboard = (): void => {
+      fallbackOpen = false
+      fallbackSchedule += 1
+      const staleRoot = fallbackRoot
+      fallbackRoot = undefined
+      fallbackHost?.remove()
+      fallbackHost = undefined
+      // Presence is reported from the shell root's layout effect. Detach the
+      // fallback DOM immediately (so two dialogs are never observable), then
+      // let React dispose its separate root after the current commit.
+      queueMicrotask(() => {
+        try { staleRoot?.unmount() } catch { /* contained */ }
+      })
+    }
+    const reportSlotDashboardPresence = (visible: boolean): void => {
+      slotDashboardVisible = visible
+      if (visible) {
+        dashboardLogicallyOpen = true
+        removeFallbackDashboard()
+      } else {
+        // A committed closed state is authoritative and cancels any portal
+        // scheduled by the action which produced that state transition.
+        dashboardLogicallyOpen = false
+        fallbackSchedule += 1
+      }
+    }
+    const reportSlotDashboardUnmount = (): void => {
+      slotDashboardVisible = false
+      // A shell remount/navigation must not make an open dashboard vanish.
+      // Restore the portal only while the store is still logically open;
+      // normal close first clears that flag through `close`/presence.
+      if (dashboardLogicallyOpen) scheduleFallbackDashboard()
+    }
+    const scheduleFallbackDashboard = (): void => {
+      if (rolledBack || !dashboardLogicallyOpen || typeof document === 'undefined'
+        || liveAdapter === undefined || slotDashboardVisible) return
+      const scheduled = ++fallbackSchedule
+      // Give the shell's external store update a microtask to commit its slot.
+      // A later slot mount still reports presence and atomically removes an
+      // already-created fallback; a shell which never renders gets the portal.
+      queueMicrotask(() => {
+        if (scheduled !== fallbackSchedule) return
+        if (rolledBack || !dashboardLogicallyOpen || slotDashboardVisible) return
+        fallbackOpen = true
+        renderFallbackDashboard()
+      })
     }
     let dispatchesActions = false
     const openDashboard = (): boolean => {
@@ -429,34 +447,23 @@ export function apply(ctx: ClientContext): void {
           : null
         captureInvoker(active)
         dashboardActions.open()
-      }
-      // H: the overlay slot store actually mounts the dashboard.
-      // Stock: shell.overlay is an empty list occupant; portal immediately.
-      if (dispatchesActions && dashboardActions !== undefined && typeof dashboardActions.open === 'function') {
+        dashboardLogicallyOpen = true
         pendingOpen = false
-        if (typeof document !== 'undefined' && liveAdapter !== undefined) {
-          queueMicrotask(() => {
-            if (document.querySelector('[data-workflows-dashboard]') === null) {
-              fallbackOpen = true
-              renderFallbackDashboard()
-            }
-          })
-        }
+        scheduleFallbackDashboard()
         return true
       }
       pendingOpen = true
       if (liveAdapter === undefined || typeof document === 'undefined') {
         return dashboardActions !== undefined && typeof dashboardActions.open === 'function'
       }
+      dashboardLogicallyOpen = true
       fallbackOpen = true
       renderFallbackDashboard()
       pendingOpen = false
       return fallbackHost !== undefined
         || (dashboardActions !== undefined && typeof dashboardActions.open === 'function')
     }
-    const requestOpen = (): void => {
-      try { openDashboard() } catch { /* presentation is best-effort */ }
-    }
+    try {
     addCleanup(root.locale?.register?.(NS, workflowLocales))
     const commandUi = requireCommandUi(root.commandUi)
     const translate = typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined
@@ -483,27 +490,84 @@ export function apply(ctx: ClientContext): void {
         },
       })))
     }
-    addCleanup(listenCommandExecuted(root, requestOpen))
 
-    let controller: WorkflowRunsController | undefined
-    let adapter: DashboardWorkflowRunsAdapter | undefined
-    try {
+    // Enter adjudication is independent of commandUi's picker/action plane.
+    // Even action-capable shells can submit an exact typed token through the
+    // composer before commandUi gets a chance to dispatch it. Keep one source
+    // in every runtime so bare Enter is claimed locally and can never fall
+    // through to a Host/model turn. In action-capable shells commandUi remains
+    // the sole menu candidate/pick owner, avoiding duplicate visible actions.
+    const registerSource = root.inputTriggers?.registerSource
+    if (typeof registerSource !== 'function') {
+      throw new Error('workflow dashboard slash action registration is unavailable')
+    }
+    const actionSource: WorkflowInputTriggerSource = {
+      trigger: '/',
+      name: 'workflows',
+      order: -100,
+      showGroupTitle: false,
+      async candidates(_session, request) {
+        if (dispatchesActions || request.position !== 'leading') return []
+        const query = request.query.toLowerCase()
+        if (query !== '' && !'workflows'.includes(query)) return []
+        return [{ name: 'workflows', description: workflowsDescription }]
+      },
+      onPick(pick) {
+        if (dispatchesActions || pick.position !== 'leading') return undefined
+        if (!openDashboard()) return undefined
+        // The input-trigger pipeline applies this replacement through its
+        // span CAS, so a successful menu action consumes only the exact
+        // slash token and cannot append a Host command lifecycle row.
+        return { text: '' }
+      },
+      async matchEnter(_session, line, signal, envelope) {
+        if (line !== '/workflows') {
+          if (/^\/workflows\s/u.test(line)) {
+            throw new Error('the /workflows dashboard action accepts no arguments')
+          }
+          return undefined
+        }
+        signal.throwIfAborted()
+        if (envelope.images > 0) {
+          throw new Error('the /workflows dashboard action does not accept images')
+        }
+        // A claim gives the conversation input machine an ordinary submit
+        // transaction: dashboard open is the commit and kind:success clears
+        // the exact bare-token draft. No Host Remote or model sink is called.
+        return {
+          claim: {
+            token: '/workflows',
+            async submit() {
+              if (!openDashboard()) {
+                return { kind: 'error', text: 'workflow dashboard overlay is not mounted' }
+              }
+              return { kind: 'success' }
+            },
+          },
+        }
+      },
+    }
+    addCleanup(asDisposer(registerSource.call(root.inputTriggers, actionSource)))
+
     const remote = root.remote as TypertClientRemote & Record<string, any>
     const sessions = root.sessions as any
-    const liveController = new WorkflowRunsController(remote, sessions, root.connection)
+    // Dynamic namespaces do not exist until the contribution is mounted. Use
+    // the RPC fallback until then rather than reading them via the traced
+    // aggregate (which is an undeclared-service error in real Cordis).
+    const liveController = new WorkflowRunsController({}, sessions, root.connection)
     const adapterInstance = new DashboardWorkflowRunsAdapter(liveController)
-    const catalog = bindDashboardCatalog(remote, sessions, root.connection)
+    let definitionsRemote: any
+    const catalog = bindDashboardCatalog({
+      get list() { return definitionsRemote?.list },
+      get ['workflowDefinitions/list']() { return definitionsRemote?.['workflowDefinitions/list'] },
+    }, sessions, root.connection)
     adapterInstance.listDefinitions = catalog.listDefinitions
     adapterInstance.launchDefinition = catalog.launchDefinition
     liveAdapter = adapterInstance
     controller = liveController
     adapter = adapterInstance
-    addCleanup(watchWorkflowsCommands(sessions, requestOpen))
+    slotOperations = scopedOperations(slotObservationOwner)
     if (pendingOpen) openDashboard()
-
-    root.workflowRunsController = liveController
-    root.workflowRunsAdapter = liveAdapter
-    root.workflowRunDefinition = workflowRunDefinition
 
     addCleanup(root.conversationEvents?.register?.(workflowMessageDefinition))
     if (root.conversationEvents !== undefined && root.conversationEvents.register !== undefined
@@ -555,6 +619,8 @@ export function apply(ctx: ClientContext): void {
       )
       const dict = workflowLocaleFromBind(typeof root.locale?.bind === 'function' ? root.locale.bind(NS) : undefined)
       const close = (): void => {
+        dashboardLogicallyOpen = false
+        fallbackSchedule += 1
         publishOverlay({ invoker: overlay.invoker })
         props.actions?.close?.()
       }
@@ -582,9 +648,11 @@ export function apply(ctx: ClientContext): void {
           showExecution: () => undefined,
           showRun: () => undefined,
         },
-        operations: adapterInstance,
+        operations: slotOperations ?? adapterInstance,
         invoker: overlay.invoker,
         onClose: close,
+        onPresenceChange: reportSlotDashboardPresence,
+        onUnmount: reportSlotDashboardUnmount,
         labels: dashboardLabelsFromLocale(dict),
       } as any)
     }
@@ -603,31 +671,10 @@ export function apply(ctx: ClientContext): void {
             actions.open()
           }
         }
-        return { operations: adapterInstance, hooks: { workflowRuns: adapterInstance.source } }
+        return { operations: slotOperations ?? adapterInstance, hooks: { workflowRuns: adapterInstance.source } }
       },
     }, DashboardContribution))
     addCleanup(overlayInjection)
-    overlayMounted = overlayInjection !== undefined
-
-    function WorkflowsCommandRow(props: any): ReactElement {
-      const node = props?.node
-      const text = typeof node?.outcome?.text === 'string' && node.outcome.text.length > 0
-        ? node.outcome.text
-        : workflowsDescription
-      return createElement('div', { 'data-workflows-command-row': '' },
-        createElement('span', null, 'workflows'),
-        createElement('span', null, text),
-        createElement('button', {
-          type: 'button',
-          onClick: () => { requestOpen() },
-        }, workflowLocales.en.title),
-      )
-    }
-    addCleanup(asDisposer(root.slots?.inject?.('conversation.chat.commandview', () => root.slots.register({
-      name: 'conversation.chat.commandview',
-      key: 'workflows',
-      locale: NS,
-    }, WorkflowsCommandRow))))
 
     // Overlay and command-row registration must complete before this await.
     // $mount has to run on this fiber (not a detached then) so the generated
@@ -636,16 +683,18 @@ export function apply(ctx: ClientContext): void {
       try { remoteDisposer = await remote.$mount(TYPERT_REMOTE) }
       catch { remoteDisposer = undefined }
     }
-    liveAdapter.observe(currentSessionId())
+    definitionsRemote = mountedRemoteNamespace(root, remote, 'workflowDefinitions')
+    const runsRemote = mountedRemoteNamespace(root, remote, 'workflowRuns')
+    if (runsRemote !== undefined) liveController.setRemote(runsRemote)
     if (pendingOpen) openDashboard()
 
-    if (typeof remote?.workflowDefinitions?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
+    if (typeof definitionsRemote?.list === 'function') addCleanup(asDisposer(commandUi.decorate({
       name: 'workflow',
       available: () => true,
       ui: {
         kind: 'popupSelect',
         options: async (session: any, signal: AbortSignal) => {
-          const definitions = await loadPickerDefinitions(remote, session, signal, root.connection)
+          const definitions = await loadPickerDefinitions(definitionsRemote, session, signal, root.connection)
           return definitions.map((definition: any) => ({
             id: String(definition.name),
             label: String(definition.name),
@@ -697,24 +746,32 @@ export function apply(ctx: ClientContext): void {
         previous = keys
       }))
     }
-    } catch { /* /workflows slash action stays registered */ }
-
-    return async () => {
-      dashboardActions = undefined
-      overlayListeners.clear()
-      fallbackOpen = false
-      try { fallbackRoot?.unmount() } catch { /* contained */ }
-      fallbackRoot = undefined
-      fallbackHost?.remove()
-      fallbackHost = undefined
-      // Reverse registration order: listeners/slots/consumers stop before
-      // the generated Remote namespace is unmounted.
-      for (const dispose of cleanup.reverse()) {
-        try { await dispose() } catch { /* one child cannot block aggregate unload */ }
-      }
-      adapter?.dispose()
-      controller?.dispose()
-      await disposeValue(remoteDisposer)
+    } catch (error) {
+      // Every setup phase, including the pre-controller registrations, owns
+      // the same rollback transaction. Never swallow an unexpected setup
+      // failure: a resolved effect would otherwise make the plugin look active
+      // while its /workflows source had already been removed, allowing a typed
+      // token to fall through to a model turn. Expected optional failures
+      // (notably Remote projection mount) are handled at their call site.
+      await rollback()
+      throw error
     }
+
+    return rollback
   }, 'dsh-workflows: client aggregate')
+
+  // `ctx.effect()` starts immediately, but its callable return value is also
+  // a thenable that settles only after an async effect has finished setting
+  // up.  The plugin callback must expose that setup barrier to Cordis.  If it
+  // is discarded, Cordis can mark the plugin ACTIVE before (for example) the
+  // Typert mount resumes, and a later setup rejection merely tears down this
+  // nested effect without failing the plugin fiber.
+  //
+  // Do not return the disposer yielded by awaiting the thenable.  The effect
+  // wrapper is already owned by this fiber and will be unloaded with it;
+  // returning that disposer as a second outer effect would duplicate
+  // ownership.  `Promise.resolve` also preserves the minimal plain-object
+  // fixtures whose `effect()` shim returns `undefined` while separately
+  // recording the callback promise.
+  return Promise.resolve(startup).then(() => undefined)
 }

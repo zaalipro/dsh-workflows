@@ -54,10 +54,45 @@ describe('package policy verifier', () => {
     expectFailure('--tarball', tarball)
   }))
 
+  it('rejects a tarball missing a compatibility evaluator artifact or provenance', () => withFixture(fixture => {
+    expectFailure('--tarball', makeTarball(fixture, new Set(['package/lib/compat-engine/worker.cjs'])))
+    expectFailure('--tarball', makeTarball(fixture, new Set(['package/vendor/workflow-engine/LICENSE'])))
+  }))
+
   it('rejects a source fixture missing a required peer', () => withFixture(fixture => {
     const manifestPath = join(fixture, 'package.json')
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
     delete manifest.peerDependencies.react
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    expectFailure('--source', fixture)
+  }))
+
+  it('requires the complete peer set to be optional so profiles never auto-install Host identity packages', () => withFixture(fixture => {
+    const manifestPath = join(fixture, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    delete manifest.peerDependenciesMeta.react
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    expectFailure('--source', fixture)
+
+    manifest.peerDependenciesMeta.react = { optional: false }
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    expectFailure('--source', fixture)
+  }))
+
+  it('rejects widened ordinary runtime dependency ranges', () => withFixture(fixture => {
+    const manifestPath = join(fixture, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.dependencies.chokidar = '^4.0.3'
+    manifest.dependencies.clsx = '~2.1.1'
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    expectFailure('--source', fixture)
+  }))
+
+  it('rejects an unverified Harness peer range or compatibility declaration', () => withFixture(fixture => {
+    const manifestPath = join(fixture, 'package.json')
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    manifest.peerDependencies['@deepseek-ai/dsh-workflow'] = '>=0.1.1-rc.2'
+    manifest.dsh.compatibility.versions = ['0.1.1-rc.2', '0.1.1']
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     expectFailure('--source', fixture)
   }))
@@ -69,6 +104,18 @@ describe('package policy verifier', () => {
 
   it('rejects an empty client factory', () => withFixture(fixture => {
     writeFileSync(join(fixture, 'lib/client.js'), 'window.__ModuleLoader__?.load({ id: "@zaalipro/dsh-workflows", factory: () => ({}) })\n')
+    expectFailure('--source', fixture)
+  }))
+
+  it('allows process.cwd() as the lexical base for a runtime user path', () => withFixture(fixture => {
+    const tool = join(fixture, 'lib/types/tool/index.js')
+    writeFileSync(tool, `${readFileSync(tool, 'utf8')}\nconst display = resolveLocalPath(cwd ?? process.cwd(), userPath) // client worker asset\n`)
+    runVerifier('--source', fixture)
+  }))
+
+  it('rejects direct resolution of a package-owned literal from process.cwd()', () => withFixture(fixture => {
+    const tool = join(fixture, 'lib/types/tool/index.js')
+    writeFileSync(tool, `${readFileSync(tool, 'utf8')}\nconst bundled = resolve(process.cwd(), "skills/create-workflow/SKILL.md")\n`)
     expectFailure('--source', fixture)
   }))
 })
@@ -121,6 +168,9 @@ function makeFixture(fixture: string) {
     writeFileSync(join(fixture, `lib/${name}.d.ts`), 'export declare const fixture: boolean\n')
   }
   writeFileSync(join(fixture, 'lib/client.js.map'), '{"version":3,"sources":[]}\n')
+  mkdirSync(join(fixture, 'lib/compat-engine'), { recursive: true })
+  writeFileSync(join(fixture, 'lib/compat-engine/index.js'), 'export const fixture = true\n')
+  writeFileSync(join(fixture, 'lib/compat-engine/worker.cjs'), 'module.exports = true\n')
   writeFileSync(join(fixture, 'cordis.patch.yml'), '[]\n')
   writeFileSync(join(fixture, 'skills/create-workflow/SKILL.md'), '# create-workflow\n')
   mkdirSync(join(fixture, 'docs'), { recursive: true })
@@ -130,6 +180,9 @@ function makeFixture(fixture: string) {
   writeFileSync(join(fixture, 'docs/testing.md'), '# Testing\n')
   writeFileSync(join(fixture, 'LICENSE'), readFileSync(join(root, 'LICENSE')))
   writeFileSync(join(fixture, 'NOTICE.md'), readFileSync(join(root, 'NOTICE.md')))
+  mkdirSync(join(fixture, 'vendor/workflow-engine'), { recursive: true })
+  writeFileSync(join(fixture, 'vendor/workflow-engine/LICENSE'), readFileSync(join(root, 'vendor/workflow-engine/LICENSE')))
+  writeFileSync(join(fixture, 'vendor/workflow-engine/README.md'), readFileSync(join(root, 'vendor/workflow-engine/README.md')))
   writeFileSync(join(fixture, 'package.json'), `${JSON.stringify(makeManifest(), null, 2)}\n`)
 }
 
@@ -146,23 +199,26 @@ function makeManifest() {
     './package.json': './package.json',
   }
   const peers = {
-    '@deepseek-ai/cordis': '>=4.0.1', '@deepseek-ai/dsh-client-connection': '>=0.1.0-rc.8',
-    '@deepseek-ai/dsh-client-ui-conversation': '>=0.1.0-rc.8',
-    '@deepseek-ai/dsh-workflow': '>=0.1.0-rc.8', '@deepseek-ai/dsh-workflow-worker-thread': '>=0.1.0-rc.8', react: '>=18',
+    '@deepseek-ai/cordis': '>=4.0.1', '@deepseek-ai/dsh-client-connection': '0.1.1-rc.2',
+    '@deepseek-ai/dsh-client-ui-conversation': '0.1.1-rc.2',
+    '@deepseek-ai/dsh-workflow': '0.1.1-rc.2', '@deepseek-ai/dsh-workflow-worker-thread': '0.1.1-rc.2', react: '>=18',
   }
   return {
-    name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.2', type: 'module', license: 'MIT',
+    name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.3', type: 'module', license: 'MIT',
     engines: { node: '^22.19.0 || >=24.0.0' }, packageManager: 'pnpm@11.7.0', publishConfig: { access: 'public' },
     main: './lib/types/index.js', types: './lib/types/index.d.ts',
     files: [
-      'lib/types', 'lib/client-types', 'lib/client.js', 'lib/client.js.map',
+      'lib/types', 'lib/compat-engine', 'lib/client-types', 'lib/client.js', 'lib/client.js.map',
       'lib/typert.host.js', 'lib/typert.host.d.ts',
       'lib/typert.remote-client.js', 'lib/typert.remote-client.d.ts',
-      'skills', 'cordis.patch.yml', 'README.md', 'docs', 'LICENSE', 'NOTICE.md', 'package.json',
+      'skills', 'cordis.patch.yml', 'README.md', 'docs', 'LICENSE', 'NOTICE.md',
+      'vendor/workflow-engine/LICENSE', 'vendor/workflow-engine/README.md', 'package.json',
     ], exports,
-    dependencies: { chokidar: '^4.0.0', clsx: '^2.1.1', 'fs-native-extensions': '1.5.0' },
-    peerDependencies: peers, devDependencies: { ...peers },
-    dsh: { bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-conversation'] } },
+    dependencies: { chokidar: '4.0.3', clsx: '2.1.1', 'fs-native-extensions': '1.5.0' },
+    peerDependencies: peers,
+    peerDependenciesMeta: Object.fromEntries(Object.keys(peers).map(name => [name, { optional: true }])),
+    devDependencies: { ...peers, '@deepseek-ai/dsh': '0.1.1-rc.2' },
+    dsh: { compatibility: { host: '@deepseek-ai/dsh', versions: ['0.1.1-rc.2'], evaluator: 'plugin-compat-engine-v1' }, bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-conversation'] } },
   }
 }
 

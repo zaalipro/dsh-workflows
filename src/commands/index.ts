@@ -25,7 +25,6 @@ export const COMMAND_SUCCESS = {
 export const CREATE_WORKFLOW_COMMAND_DESCRIPTION =
   'Author, smoke-check, and save a new workflow (create-workflow skill)'
 export const WORKFLOWS_COMMAND_DESCRIPTION = 'Open saved workflows and live runs'
-export const WORKFLOWS_COMMAND_SUCCESS = 'Opened the workflow dashboard.'
 /**
  * The steered user message must be exactly what the user typed. Enforcement
  * (no interview, validate_only, auto-save) lives in the skill content and the
@@ -37,6 +36,9 @@ export function createWorkflowSteerText(detail: string): string {
 }
 const DEFAULT_SKILL_DESCRIPTION =
   'Author, smoke-check, and save a new saved workflow (invoke via /create-workflow).'
+const CREATE_WORKFLOW_PROVIDER = 'workflow-authoring'
+const CREATE_WORKFLOW_RANK = 0
+const CREATE_WORKFLOW_LOCATOR = Object.freeze({ name: 'create-workflow' })
 type OfficialCommandResult = { readonly kind: 'success'|'error'; readonly text?: string }
 function renderThrown(error: unknown): string {
   try { return error instanceof Error ? error.message : String(error) }
@@ -122,7 +124,7 @@ function validSkill(text: string): boolean {
   return /^---\s*\n/u.test(text)
     && /^name:\s*create-workflow\s*$/mu.test(text)
     && /\/create-workflow/u.test(text)
-    && /^user-invocable:\s*false\s*$/mu.test(text)
+    && /^user-invocable:\s*true\s*$/mu.test(text)
     && /^model-invocable:\s*true\s*$/mu.test(text)
 }
 
@@ -175,8 +177,31 @@ function registrationForSkill(text: string): Record<string, unknown> {
     description: parsed.description,
     content: parsed.content,
     source: 'bundled',
-    invocation: { modelInvocable: true, userInvocable: false },
+    invocation: { modelInvocable: true, userInvocable: true },
   }
+}
+
+/** Stock rc.2 provider whose rank keeps the product procedure above project/user collisions. */
+function createWorkflowSkillProvider(text: string): Record<string, unknown> {
+  const registration = registrationForSkill(text)
+  const definition: Readonly<Record<string, unknown>> = Object.freeze({
+    ...registration,
+    provider: CREATE_WORKFLOW_PROVIDER,
+  })
+  const candidate = Object.freeze({
+    name: definition.name,
+    description: definition.description,
+    source: definition.source,
+    provider: CREATE_WORKFLOW_PROVIDER,
+    invocation: definition.invocation,
+    rank: CREATE_WORKFLOW_RANK,
+    locator: CREATE_WORKFLOW_LOCATOR,
+  })
+  return Object.freeze({
+    name: CREATE_WORKFLOW_PROVIDER,
+    list: () => Promise.resolve([candidate]),
+    get: (selected: unknown) => Promise.resolve(selected === candidate ? definition : undefined),
+  })
 }
 
 function asDisposer(value: unknown): () => unknown {
@@ -187,12 +212,18 @@ function asDisposer(value: unknown): () => unknown {
   return () => undefined
 }
 
-/** Use H's protected package binding; never emulate trust with a low rank. */
+/** Prefer a future protected binding; stock rc.2 uses its provider rank seam. */
 export async function registerTrustedWorkflowSkill(ctx: any): Promise<() => void> {
   const content = await readPackagedSkill()
-  const register = ctx?.skills?.registerTrustedPackageSkill
-  if (typeof register !== 'function') throw new Error('trusted packaged skill registration is unavailable')
-  return asDisposer(register.call(ctx.skills, registrationForSkill(content), { protectedName: 'create-workflow' })) as () => void
+  const trusted = ctx?.skills?.registerTrustedPackageSkill
+  if (typeof trusted === 'function') {
+    return asDisposer(trusted.call(ctx.skills, registrationForSkill(content), { protectedName: 'create-workflow' })) as () => void
+  }
+  const registerProvider = ctx?.skills?.registerProvider
+  if (typeof registerProvider === 'function') {
+    return asDisposer(registerProvider.call(ctx.skills, () => createWorkflowSkillProvider(content))) as () => void
+  }
+  throw new Error('protected packaged skill registration is unavailable')
 }
 
 export function registerTrustedWorkflowSkillSync(ctx: any, options: { readonly required?: boolean } = {}): () => unknown {
@@ -200,11 +231,12 @@ export function registerTrustedWorkflowSkillSync(ctx: any, options: { readonly r
   if (typeof trusted === 'function') {
     return asDisposer(trusted.call(ctx.skills, registrationForSkill(readPackagedSkillSync()), { protectedName: 'create-workflow' }))
   }
-  const register = ctx?.skills?.register
-  if (typeof register === 'function') {
-    return asDisposer(register.call(ctx.skills, registrationForSkill(readPackagedSkillSync())))
+  const registerProvider = ctx?.skills?.registerProvider
+  if (typeof registerProvider === 'function') {
+    const content = readPackagedSkillSync()
+    return asDisposer(registerProvider.call(ctx.skills, () => createWorkflowSkillProvider(content)))
   }
-  if (options.required !== false) throw new Error('trusted packaged skill registration is unavailable')
+  if (options.required !== false) throw new Error('protected packaged skill registration is unavailable')
   return () => undefined
 }
 
@@ -354,7 +386,7 @@ function makeAlias(
     }
     const fiber = owner.inject(['commands'], (registrationCtx: any) => {
       if (typeof registrationCtx?.commands?.registerFallback !== 'function') {
-        throw new Error('workflow command aliases require H registerFallback')
+        throw new Error('workflow command aliases require the official commands.registerFallback seam')
       }
       registrationCtx.commands.registerFallback(contribution)
     })
@@ -405,17 +437,6 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
     },
   })
   cleanup.push(asDisposer(workflowCommand))
-  const workflowsCommand = commands.register({
-    name: 'workflows',
-    description: WORKFLOWS_COMMAND_DESCRIPTION,
-    handler: async (invocation: any): Promise<OfficialCommandResult> => {
-      try {
-        invocation.signal?.throwIfAborted()
-        return commandSuccess(WORKFLOWS_COMMAND_SUCCESS)
-      } catch (error) { return commandError(error) }
-    },
-  })
-  cleanup.push(asDisposer(workflowsCommand))
   const createCommand = commands.register({
     name: 'create-workflow',
     description: CREATE_WORKFLOW_COMMAND_DESCRIPTION,
@@ -458,7 +479,7 @@ export function applyCommands(ctx: any, config: CommandsConfig = {}): (() => Pro
       }
       const probe = agent.ctx.inject(['commands'], (registrationCtx: any) => {
         if (typeof registrationCtx?.commands?.registerFallback !== 'function') {
-          throw new Error('workflow command aliases require H registerFallback')
+          throw new Error('workflow command aliases require the official commands.registerFallback seam')
         }
       })
       try { void asDisposer(probe)() } catch { /* contained */ }

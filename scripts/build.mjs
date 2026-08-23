@@ -51,6 +51,8 @@ export async function build() {
     await mkdir(LIB, { recursive: true })
 
     await runTsc('tsconfig.host.json')
+    await runTsc('tsconfig.compat-engine.json')
+    await buildCompatibilityEngine()
 
     const staging = await mkdtemp(resolve(ROOT, '.dsh-workflows-build-'))
     try {
@@ -65,6 +67,33 @@ export async function build() {
   } finally {
     removeSignalForwarding()
   }
+}
+
+/** Bundle the plugin-owned enhanced workflow engine and its isolated worker. */
+async function buildCompatibilityEngine() {
+  const outDir = resolve(LIB, 'compat-engine')
+  const common = {
+    config: false,
+    cwd: ROOT,
+    outDir,
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    sourcemap: true,
+    clean: false,
+    failOnWarn: true,
+  }
+  await tsdown({
+    ...common,
+    entry: { index: resolve(ROOT, 'vendor/workflow-engine/index.ts') },
+    format: 'esm',
+  })
+  await tsdown({
+    ...common,
+    entry: { worker: resolve(ROOT, 'vendor/workflow-engine/worker.ts') },
+    format: 'cjs',
+  })
 }
 
 /**
@@ -83,7 +112,7 @@ export async function generateTypert(stagingRoot) {
   await prepareTypertSourceOverlay(packageRoot)
 
   const manifest = JSON.parse(await readFile(resolve(ROOT, 'package.json'), 'utf8'))
-  // RC8 discovery can mistake this Markdown data export for a source face.
+  // Typert discovery can mistake this Markdown data export for a source face.
   delete manifest.exports['./skills/create-workflow/SKILL.md']
   await writeJson(resolve(packageRoot, 'package.json'), manifest)
 
@@ -159,7 +188,7 @@ export async function generateTypert(stagingRoot) {
 }
 
 /**
- * Make the copied Host face reach the real decorated classes. The RC8
+ * Make the copied Host face reach the real decorated classes. The Typert
  * generator also needs a permissive local helper parameter while it analyzes
  * the discriminated public failure union.  That narrow analysis-only edit
  * never reaches the source tree or the packed package.

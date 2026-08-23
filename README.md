@@ -2,31 +2,38 @@
 
 English | [中文](README.zh.md)
 
-`@zaalipro/dsh-workflows@0.1.0-rc.2` is one installable DeepSeek Harness bundle for saved JavaScript workflows, supervised background runs, retained inspection, slash commands, and the Web dashboard. It reuses the official Harness workflow engine; it contains no Grok CLI code, account, quota, binary, source, protocol, or runtime dependency, and it contains no Rhai parser or evaluator.
+`@zaalipro/dsh-workflows@0.1.0-rc.3` is one installable DeepSeek Harness bundle for saved JavaScript workflows, supervised background runs, retained inspection, slash commands, and the Web dashboard. It targets official DeepSeek Harness `0.1.1-rc.2` and ships one package-owned MIT compatibility evaluator for replay-safe background execution; it contains no Grok CLI code, account, quota, binary, protocol, or runtime dependency, and no Rhai parser or evaluator.
 
 ## Compatibility
 
-The compatibility floor is the symbolic official DeepSeek Harness release **H**: the first future official release that contains every external-workflow prerequisite consumed by this package. Stock `0.1.0-rc.8` at official commit `141eb6f` is the patch-development base and is **not compatible** with this package. Do not infer compatibility from a later tag; package activation verifies H's declared capabilities before it creates storage or admits a Session.
+The verified Host is official DeepSeek Harness **`0.1.1-rc.2`**. Plugin `0.1.0-rc.3` is compiled and smoke-tested against that exact release, and its direct Harness peer dependencies are pinned to that exact version. Stock `0.1.0-rc.8` remains unsupported, and later Harness versions require a new verified plugin release.
 
 The package requires Node `^22.19.0 || >=24.0.0`, uses `pnpm@11.7.0`, and is distributed under the [MIT license](LICENSE). Native-lock attribution is in [NOTICE.md](NOTICE.md).
 
 ## Installation
 
-Same command as any other profile plugin. It adds one dependency and one bundle layer named `@zaalipro/dsh-workflows`. There is no extra patch file, no `allowBuilds` entry, and no install-time build.
+Ensure `pnpm` is on the service user's `PATH`. Install the pinned release tag like any other profile plugin; it adds one dependency and one bundle layer named `@zaalipro/dsh-workflows`, with no manual profile patch or install-time build.
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows
-dsh plugin --profile headless add github:zaalipro/dsh-workflows
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3
+dsh plugin --profile headless add github:zaalipro/dsh-workflows#v0.1.0-rc.3
 ```
 
-When the package is on npm, use the registry name instead:
+For an exact tested tarball copied to a durable path (not `/tmp`):
 
 ```sh
-dsh plugin --profile web add @zaalipro/dsh-workflows
-dsh plugin --profile headless add @zaalipro/dsh-workflows
+dsh plugin --profile web add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.3.tgz
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.3.tgz
 ```
 
-Web loads the Host product and browser Client; headless loads only the Host product and never evaluates browser code. The JavaScript evaluator is the official `@deepseek-ai/dsh-workflow-worker-thread` peer, not a worker packed inside this package.
+After `0.1.0-rc.3` is publicly published on npm, the equivalent registry install is:
+
+```sh
+dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.3
+dsh plugin --profile headless add @zaalipro/dsh-workflows@0.1.0-rc.3
+```
+
+Web loads the Host product and browser Client; headless loads only the Host product and never evaluates browser code. The plugin leaves the stock `ctx.workflowEngine` untouched. Its supervisor privately uses the package-owned compatibility evaluator emitted as `lib/compat-engine/index.js` and `worker.cjs`.
 
 ## Removal
 
@@ -60,19 +67,21 @@ Each file contains exactly metadata-as-data and one plain JavaScript body:
 }
 ```
 
-Names are lowercase kebab-case, start with a letter, use at most 64 UTF-16 code units, match the filename stem, and avoid command-reserved and Windows device names. Run `/create-workflow [detail]` for the installed authoring skill, which gathers intent and fan-out, writes JavaScript with metadata kept as JSON data, validates one representative args-selected path with canned agent results, and saves only after that smoke check succeeds. See the installed [authoring skill](skills/create-workflow/SKILL.md) for the complete hook and quota reference.
+Names are lowercase kebab-case, start with a letter, use at most 64 UTF-16 code units, match the filename stem, and avoid command-reserved and Windows device names. Run `/create-workflow [detail]` for the installed authoring skill, which gathers intent and fan-out, writes JavaScript with metadata kept as JSON data, validates one representative args-selected path with canned agent results, and saves only after that smoke check succeeds. Its inline tool call defaults to `save_scope: "project"`, or uses `save_scope: "user"` for `$DSH_HOME/workflows`; user scope works without a Session cwd. See the installed [authoring skill](skills/create-workflow/SKILL.md) for the complete hook and quota reference.
+
+Structured `agent()` schemas may put inclusive `minItems` and `maxItems` bounds on array nodes. Each bound must be a non-negative safe integer (not `-0`), `minItems` cannot exceed `maxItems`, and neither keyword may sit beside `oneOf`. The evaluator checks the declaration before launching a child and checks the returned value again; its stock-RC2 adaptation removes the two keywords only from the provider-facing schema copy.
 
 ## Launch and operate
 
 Launch a saved definition with `/workflow <name> [<json-args>]` or its generated `/<name> [<json-args>]` alias. An ordinary command keeps a colliding bare name; the workflow receives the first free repeatedly prefixed alias such as `/workflow-review-changes`, while `/workflow review-changes` always works. Launch returns immediately with `Started workflow "<display-name>" in the background. Open /workflows to watch it.`; later runs of the same metadata name use display handles such as `review-changes-2` without exposing internal ids.
 
-In Web, bare `/workflow` opens the saved-definition picker and exact bare `/workflows` opens the dashboard (Host command plus Client overlay). In headless, bare `/workflow` prints usage and `/workflows` acknowledges the dashboard command. The dashboard lists saved definitions with Start, plus live and retained runs, phases, agent spend, member outcomes, logs, terminal results, and chunked scratch artifacts. Pause, Resume, Stop, and eligible Save actions are revision-checked; keyboard and narrow-screen drill-down remain available.
+In Web, bare `/workflow` opens the saved-definition picker and exact bare `/workflows` is a browser-only slash action that opens the dashboard without Host command lifecycle events or a model turn. Arguments and attachments are refused locally and remain in the composer. In headless, bare `/workflow` prints usage; `/workflows` is intentionally not a Host command because there is no dashboard surface. The dashboard lists saved definitions with Start, plus live and retained runs, phases, agent spend, member outcomes, logs, terminal results, and chunked scratch artifacts. Pause, Resume, Stop, and eligible Save actions are revision-checked; keyboard and narrow-screen drill-down remain available.
 
-An eligible terminal run attempts one owner-visible completion notice. It prefers bounded `scratch/report.md`, otherwise uses a bounded result preview, and ends with `Open /workflows to inspect the run.` Notice delivery is at most once: a process failure may omit a notice but cannot retry a claimed, delivered, or abandoned notice.
+An eligible terminal run attempts one owner-visible completion notice. It prefers bounded `scratch/report.md`, otherwise uses a bounded result preview, and ends with `Open /workflows to inspect the run.` The notice is appended directly to the durable Session surface, so it becomes visible without waking the model or entering an Agent inbox. Delivery is at most once: a process failure may omit a notice but cannot retry a claimed, delivered, or abandoned notice.
 
 ## Replay, recovery, and security
 
-Pause and Resume are **same-process only**. After an attempt result settles and disposal drains admitted child and scratch work, the official engine's quiescent checkpoint is the only replay authority. Matching committed journal calls replay without spending another agent or repeating their committed effects; observer events are not authority. An external effect whose result did not commit can run again, so effectful prompts and verification steps must be idempotent.
+Pause and Resume are **same-process only**. After an attempt result settles and disposal drains admitted child and scratch work, the package evaluator's quiescent checkpoint is the only replay authority. Matching committed journal calls replay without spending another agent or repeating their committed effects; observer events are not authority. An external effect whose result did not commit can run again, so effectful prompts and verification steps must be idempotent.
 
 `await_user()` resumes the same acknowledged attempt and commits that gate; `pause()` is uncommitted and re-fires on replay while its condition remains true. A `budget-limited` run cannot be resumed by a human control: the model tool must use the internal resume token with an absolute `agent_budget` greater than the old total and no greater than 1,024.
 
@@ -97,4 +106,4 @@ Workflow scripts have the same trust premise as existing model shell access. A w
 - [Testing and release acceptance](docs/testing.md) — automated evidence and the final manual Web checklist.
 - [Installed authoring skill](skills/create-workflow/SKILL.md) — JavaScript globals, schemas, budgets, scratch, and safe authoring patterns.
 - [License](LICENSE) and [native dependency notice](NOTICE.md).
-- Official Harness workflow subsystem docs on the default `master` branch describe stock RC8 (immediate start, parent-turn `await result`). They are API reality for the incompatible baseline, not the H `deferStart` / `validate` / `checkpoint` vocabulary this package consumes. Do not treat `blob/main/...` URLs as H documentation.
+- Official Harness `0.1.1-rc.2` supplies the Host, Agent, Session, provider, and Client services. The plugin compatibility evaluator owns its private deferred-start, journal, gate, scratch, and checkpoint protocol.

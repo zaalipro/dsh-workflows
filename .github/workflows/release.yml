@@ -11,13 +11,13 @@ permissions:
 # A tag release is never cancelled by a later CI run. Publication is also
 # serialized so two tags cannot race a public npm dist-tag.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-zaalipro-dsh-workflows
   cancel-in-progress: false
 
 env:
   CI: 'true'
   DSH_TELEMETRY_DISABLED: '1'
-  DSH_OFFICIAL_BASE_COMMIT: 141eb6fef83422698aef7a981029e843e8161534
+  DSH_OFFICIAL_BASE_COMMIT: b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
 
 jobs:
   pack:
@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: 141eb6fef83422698aef7a981029e843e8161534
+          ref: b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
           path: official-harness
           persist-credentials: false
       - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
@@ -68,26 +68,28 @@ jobs:
             --tag "$GITHUB_REF_NAME" \
             --artifact-dir "$RUNNER_TEMP/dsh-workflows-release"
       - id: artifact
-        name: Record and validate the one immutable artifact
+        name: Consume and validate release artifact metadata
         shell: bash
         run: |
           set -euo pipefail
-          shopt -s nullglob
-          files=("$RUNNER_TEMP/dsh-workflows-release"/*.tgz)
-          test "${#files[@]}" -eq 1
-          file="${files[0]}"
-          filename="${file##*/}"
-          sha256="$(sha256sum "$file" | cut -d' ' -f1)"
+          metadata="$RUNNER_TEMP/dsh-workflows-release/release-artifact.json"
+          test -f "$metadata"
+          read_field() { node -e 'const m=require(process.argv[1]); const v=m[process.argv[2]]; if (typeof v !== "string" && typeof v !== "boolean") process.exit(2); process.stdout.write(String(v))' "$metadata" "$1"; }
+          test "$(read_field package)" = "@zaalipro/dsh-workflows"
+          test "$(read_field version)" = "$(node -p "require('./package.json').version")"
+          filename="$(read_field filename)"
+          sha256="$(read_field sha256)"
+          dist_tag="$(read_field distTag)"
+          prerelease="$(read_field prerelease)"
+          expected_filename="zaalipro-dsh-workflows-$(read_field version).tgz"
+          test "$filename" = "$expected_filename"
+          test "${filename##*/}" = "$filename"
+          file="$RUNNER_TEMP/dsh-workflows-release/$filename"
+          test -f "$file"
+          test "$(sha256sum "$file" | cut -d' ' -f1)" = "$sha256"
           test -f "$file.sha256"
           (cd "${file%/*}" && sha256sum --check "$filename.sha256")
-          version="$(node -p "require('./package.json').version")"
-          if [[ "$version" == *-* ]]; then
-            dist_tag=next
-            prerelease=true
-          else
-            dist_tag=latest
-            prerelease=false
-          fi
+          if [[ "$prerelease" == true ]]; then test "$dist_tag" = next; else test "$dist_tag" = latest; fi
           printf 'filename=%s\nsha256=%s\ndist_tag=%s\nprerelease=%s\n' \
             "$filename" "$sha256" "$dist_tag" "$prerelease" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08
@@ -96,6 +98,7 @@ jobs:
           path: |
             ${{ runner.temp }}/dsh-workflows-release/${{ steps.artifact.outputs.filename }}
             ${{ runner.temp }}/dsh-workflows-release/${{ steps.artifact.outputs.filename }}.sha256
+            ${{ runner.temp }}/dsh-workflows-release/release-artifact.json
           if-no-files-found: error
           retention-days: 7
 
@@ -122,7 +125,17 @@ jobs:
         run: |
           set -euo pipefail
           file="artifact/${{ needs.pack.outputs.filename }}"
+          metadata="artifact/release-artifact.json"
           test -f "$file"
+          test -f "$metadata"
+          read_field() { node -e 'const m=require(process.argv[1]); const v=m[process.argv[2]]; if (typeof v !== "string" && typeof v !== "boolean") process.exit(2); process.stdout.write(String(v))' "$metadata" "$1"; }
+          test "$(read_field package)" = "@zaalipro/dsh-workflows"
+          test "$(read_field version)" = "${GITHUB_REF_NAME#v}"
+          test "$(read_field filename)" = "${{ needs.pack.outputs.filename }}"
+          test "$(read_field sha256)" = "${{ needs.pack.outputs.sha256 }}"
+          test "$(read_field distTag)" = "${{ needs.pack.outputs.dist_tag }}"
+          test "$(read_field prerelease)" = "${{ needs.pack.outputs.prerelease }}"
+          test "$(read_field publish)" = "npm publish ./${{ needs.pack.outputs.filename }} --access public --provenance --tag ${{ needs.pack.outputs.dist_tag }}"
           test "$(sha256sum "$file" | cut -d' ' -f1)" = "${{ needs.pack.outputs.sha256 }}"
           (cd artifact && sha256sum --check "${{ needs.pack.outputs.filename }}.sha256")
       - name: Publish the same file with npm provenance

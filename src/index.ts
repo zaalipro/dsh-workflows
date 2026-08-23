@@ -1,5 +1,8 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { readFileSync, realpathSync } from 'node:fs'
+import { basename, dirname, join, parse, resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import {
   resolveWorkflowPackageConfig,
@@ -26,7 +29,7 @@ import { registerWorkflowRemoteEvents } from './remote-events.js'
 export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvariant }
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode }
 export const name = 'dsh-workflows'
-export const version = '0.1.0-rc.2'
+export const version = '0.1.0-rc.3'
 
 /** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export const inject = [
@@ -34,21 +37,140 @@ export const inject = [
   'commands',
   'fs',
   'skills',
+  'subagents',
   'userQuestions',
   'workflowEngine',
 ] as const
 
-/** Manifest `dsh.compatibility` mirrored for the runtime marker check. */
+/** Exact package compatibility contract mirrored from package.json. */
 export const HOST_COMPATIBILITY = Object.freeze({
-  release: 'H',
-  reject: Object.freeze(['0.1.0-rc.8']),
-  verifiedLaterReleases: Object.freeze([] as readonly string[]),
+  host: '@deepseek-ai/dsh',
+  versions: Object.freeze(['0.1.1-rc.2'] as const),
+  evaluator: 'plugin-compat-engine-v1',
 })
 
 const INCOMPATIBLE_MESSAGE =
-  '@zaalipro/dsh-workflows requires a DeepSeek Harness release with the external workflow prerequisites; 0.1.0-rc.8 is not compatible'
+  '@zaalipro/dsh-workflows 0.1.0-rc.3 supports exactly official DeepSeek Harness 0.1.1-rc.2'
 
-const UNVERIFIED_DSH_RELEASE = /^0\.1\.\d+(?:-rc\.\d+)?$/u
+const require = createRequire(import.meta.url)
+
+type InstalledHostVersions = readonly [host: unknown, workflow: unknown]
+
+interface PackageManifest {
+  name?: unknown
+  version?: unknown
+  bin?: unknown
+}
+
+type ExecutableHostResolution =
+  | { kind: 'programmatic' }
+  | { kind: 'dsh'; versions?: InstalledHostVersions }
+
+export function isSupportedHostVersion(value: unknown): value is '0.1.1-rc.2' {
+  return typeof value === 'string'
+    && (HOST_COMPATIBILITY.versions as readonly string[]).includes(value)
+}
+
+/** Both official workflow seams are lockstep release witnesses. */
+export function isSupportedHostVersions(hostVersion: unknown, workflowVersion: unknown): boolean {
+  return isSupportedHostVersion(hostVersion) && isSupportedHostVersion(workflowVersion)
+}
+
+export function assertSupportedHostVersions(hostVersion: unknown, workflowVersion: unknown): void {
+  if (!isSupportedHostVersions(hostVersion, workflowVersion)) {
+    throw new WorkflowPackageError(INCOMPATIBLE_MESSAGE, 'WORKFLOW_INCOMPATIBLE_HOST')
+  }
+}
+
+function readPackageManifest(path: string): PackageManifest | undefined {
+  try {
+    const value: unknown = JSON.parse(readFileSync(path, 'utf8'))
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? value as PackageManifest
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function nearestPackage(entrypoint: string): { root: string; manifest: PackageManifest } | undefined {
+  let directory = dirname(entrypoint)
+  const filesystemRoot = parse(directory).root
+  while (true) {
+    const manifest = readPackageManifest(join(directory, 'package.json'))
+    if (manifest !== undefined) return { root: directory, manifest }
+    if (directory === filesystemRoot) return undefined
+    directory = dirname(directory)
+  }
+}
+
+function manifestBinTargets(manifest: PackageManifest): string[] {
+  if (typeof manifest.bin === 'string') return [manifest.bin]
+  if (typeof manifest.bin !== 'object' || manifest.bin === null || Array.isArray(manifest.bin)) return []
+  return Object.values(manifest.bin).filter((value): value is string => typeof value === 'string')
+}
+
+function isManifestBin(entrypoint: string, root: string, manifest: PackageManifest): boolean {
+  return manifestBinTargets(manifest).some(target => {
+    try { return realpathSync(resolve(root, target)) === entrypoint } catch { return false }
+  })
+}
+
+/**
+ * Resolve the Host from the executable Node actually launched, not from the
+ * plugin's own dependency graph. A real DSH entrypoint is authoritative even
+ * when it is unsupported or incomplete; only non-DSH programs (Vitest,
+ * embedders, direct imports) may use the package-local fallback below.
+ */
+function executableHostVersions(entrypoint: string | undefined): ExecutableHostResolution {
+  if (typeof entrypoint !== 'string' || entrypoint.trim().length === 0) return { kind: 'programmatic' }
+  let realEntrypoint: string
+  try { realEntrypoint = realpathSync(resolve(entrypoint)) } catch {
+    return /^dsh(?:\.[cm]?js)?$/u.test(basename(entrypoint)) ? { kind: 'dsh' } : { kind: 'programmatic' }
+  }
+  const owner = nearestPackage(realEntrypoint)
+  if (owner?.manifest.name !== HOST_COMPATIBILITY.host) {
+    return /^dsh(?:\.[cm]?js)?$/u.test(basename(entrypoint)) ? { kind: 'dsh' } : { kind: 'programmatic' }
+  }
+  if (!isManifestBin(realEntrypoint, owner.root, owner.manifest)) return { kind: 'dsh' }
+
+  try {
+    const executableRequire = createRequire(pathToFileURL(realEntrypoint))
+    const workflowPath = executableRequire.resolve('@deepseek-ai/dsh-workflow/package.json')
+    const workflowManifest = readPackageManifest(workflowPath)
+    if (workflowManifest?.name !== '@deepseek-ai/dsh-workflow') return { kind: 'dsh' }
+    return { kind: 'dsh', versions: [owner.manifest.version, workflowManifest.version] }
+  } catch {
+    return { kind: 'dsh' }
+  }
+}
+
+function packageLocalHostVersions(): InstalledHostVersions | undefined {
+  try {
+    const host = require('@deepseek-ai/dsh/package.json') as PackageManifest
+    const workflow = require('@deepseek-ai/dsh-workflow/package.json') as PackageManifest
+    if (host.name !== HOST_COMPATIBILITY.host || workflow.name !== '@deepseek-ai/dsh-workflow') return undefined
+    return [host.version, workflow.version]
+  } catch {
+    return undefined
+  }
+}
+
+/** Exported for executable-identity regression tests and embedders' diagnostics. */
+export function resolveInstalledHostVersions(entrypoint: string | undefined = process.argv[1]): InstalledHostVersions | undefined {
+  const executable = executableHostVersions(entrypoint)
+  return executable.kind === 'dsh' ? executable.versions : packageLocalHostVersions()
+}
+
+/**
+ * Verify both lockstep workflow packages exposed by the running CLI's module
+ * graph. Neither a context marker nor service method guessing can widen the
+ * package manifest's exact support window.
+ */
+export function isSupportedStockHost(): boolean {
+  const versions = resolveInstalledHostVersions()
+  return versions !== undefined && isSupportedHostVersions(...versions)
+}
 
 type AnyRecord = Record<PropertyKey, unknown>
 type Cleanup = () => void | Promise<void>
@@ -63,47 +185,21 @@ function optionalProperty(target: unknown, key: PropertyKey): unknown {
   try { return (target as AnyRecord)[key] } catch { return undefined }
 }
 
-function markerFromContext(ctx: unknown): AnyRecord | undefined {
-  // H may expose its declaration directly, on the workflow service, or under
-  // the package-compatible legacy spelling.  We never infer H from methods.
-  const direct = optionalProperty(ctx, 'workflowPrerequisites')
-  if (isRecord(direct)) return direct
-  const engine = optionalProperty(ctx, 'workflowEngine')
-  const fromEngine = optionalProperty(engine, 'prerequisites')
-  if (isRecord(fromEngine)) return fromEngine
-  const legacy = optionalProperty(ctx, 'dshWorkflowPrerequisites')
-  return isRecord(legacy) ? legacy : undefined
-}
-
-function isRejectedHostRelease(value: unknown): boolean {
-  if (typeof value === 'string') {
-    return !(HOST_COMPATIBILITY.verifiedLaterReleases as readonly string[]).includes(value)
-      && ((HOST_COMPATIBILITY.reject as readonly string[]).includes(value) || UNVERIFIED_DSH_RELEASE.test(value))
-  }
-  if (!isRecord(value)) return false
-  return ['version', 'hostVersion', 'harnessVersion', 'releaseVersion']
-    .some(key => isRejectedHostRelease(value[key]))
-}
-
-/** True when the Host declared the symbolic H workflow package contract. */
-export function isCompatibleHost(ctx: Context | any): boolean {
+/** True only for the exact official release supported by this artifact. */
+export function isCompatibleHost(_ctx?: Context | any): boolean {
   try {
-    assertCompatibleHost(ctx)
+    assertCompatibleHost()
     return true
   } catch {
     return false
   }
 }
 
-/** Verify H's explicit compatibility declaration before package I/O. */
-export function assertCompatibleHost(ctx: Context | any): void {
-  const marker = markerFromContext(ctx)
-  // Never infer H from method presence. Research 0.1.1-rc.1 is not H.
-  if (!marker || marker.release !== HOST_COMPATIBILITY.release || isRejectedHostRelease(marker)
-    || marker.compatible === false || marker.externalWorkflows === false
-    || marker.workflowPackage === false) {
-    throw new WorkflowPackageError(INCOMPATIBLE_MESSAGE, 'WORKFLOW_INCOMPATIBLE_HOST')
-  }
+/** Verify the installed official release before opening plugin storage. */
+export function assertCompatibleHost(_ctx?: Context | any): void {
+  const versions = resolveInstalledHostVersions()
+  if (versions === undefined) throw new WorkflowPackageError(INCOMPATIBLE_MESSAGE, 'WORKFLOW_INCOMPATIBLE_HOST')
+  assertSupportedHostVersions(...versions)
 }
 
 function expandHome(value: string): string {
@@ -165,12 +261,8 @@ function requireService(ctx: any, service: string): any {
 
 function requireFunction(value: unknown, member: string, service: string): void {
   if (typeof value !== 'function') {
-    throw new Error(`workflow package requires ${service}.${member} from Harness release H`)
+    throw new Error(`workflow package requires ${service}.${member} from official DeepSeek Harness 0.1.1-rc.2`)
   }
-}
-
-function requireHostFace(ctx: any, service: string, member: string): void {
-  requireFunction(optionalProperty(requireService(ctx, service), member), member, service)
 }
 
 function hasRemoteEventRegistry(ctx: any): boolean {
@@ -180,45 +272,24 @@ function hasRemoteEventRegistry(ctx: any): boolean {
   return true
 }
 
-/** Check prerequisite service faces before taking the global storage lease. */
-function assertHostFaces(ctx: any): void {
-  const agents = requireService(ctx, 'agents')
-  const commands = requireService(ctx, 'commands')
-  const fs = requireService(ctx, 'fs')
-  const skills = requireService(ctx, 'skills')
-  const questions = requireService(ctx, 'userQuestions')
-  const engine = requireService(ctx, 'workflowEngine')
-  requireFunction(optionalProperty(commands, 'register'), 'register', 'commands')
-  requireFunction(optionalProperty(commands, 'registerFallback'), 'registerFallback', 'commands')
-  requireFunction(optionalProperty(skills, 'registerTrustedPackageSkill'), 'registerTrustedPackageSkill', 'skills')
-  requireFunction(optionalProperty(questions, 'ask'), 'ask', 'userQuestions')
-  requireFunction(optionalProperty(engine, 'start'), 'start', 'workflowEngine')
-  requireFunction(optionalProperty(engine, 'validate'), 'validate', 'workflowEngine')
-  requireHostFace(ctx, 'tools', 'replace')
-  requireHostFace(ctx, 'systemPrompt', 'replaceSection')
-  // These are the H descriptor/no-follow faces.  The Host aggregate must not
-  // silently downgrade to the local fallback when a service is present.
-  for (const member of ['resolve', 'contains', 'lstat', 'listDir', 'readBytesNoFollow', 'openPrivateDirectory']) {
-    requireFunction(optionalProperty(fs, member), member, 'fs')
-  }
-  if (readService(ctx, 'agents') !== agents) throw new Error('workflow package received an unstable agents service')
-  // Headless may omit the Web Remote lane.  Fail closed only when the service
-  // is present without register(); skip event registration when it is absent.
-  hasRemoteEventRegistry(ctx)
-  if (optionalProperty(ctx, 'provide') === undefined
-    && optionalProperty(optionalProperty(ctx, 'reflect'), 'provide') === undefined) {
-    throw new Error('workflow package requires a Cordis service-registration context')
-  }
-}
-
-/** Faces that exist on stock dsh 0.1.1-rc.2. Missing H seams degrade, they do not hang boot. */
+/** Required service faces on official dsh 0.1.1-rc.2. */
 function assertStockFaces(ctx: any): void {
   requireService(ctx, 'agents')
   requireFunction(optionalProperty(requireService(ctx, 'commands'), 'register'), 'register', 'commands')
   requireService(ctx, 'fs')
-  requireService(ctx, 'skills')
+  const skills = requireService(ctx, 'skills')
+  if (typeof optionalProperty(skills, 'registerTrustedPackageSkill') !== 'function'
+    && typeof optionalProperty(skills, 'registerProvider') !== 'function') {
+    throw new Error('workflow package requires skills.registerProvider on official DeepSeek Harness 0.1.1-rc.2')
+  }
+  const subagents = requireService(ctx, 'subagents')
+  requireFunction(optionalProperty(subagents, 'getProvider'), 'getProvider', 'subagents')
+  requireFunction(optionalProperty(subagents, 'start'), 'start', 'subagents')
   requireService(ctx, 'userQuestions')
   requireFunction(optionalProperty(requireService(ctx, 'workflowEngine'), 'start'), 'start', 'workflowEngine')
+  // Headless may omit the Web Remote lane; a present partial service is a
+  // composition error and must fail before storage is opened.
+  hasRemoteEventRegistry(ctx)
   if (optionalProperty(ctx, 'provide') === undefined
     && optionalProperty(optionalProperty(ctx, 'reflect'), 'provide') === undefined) {
     throw new Error('workflow package requires a Cordis service-registration context')
@@ -279,6 +350,36 @@ interface OwnedResources {
   runsRemote?: unknown
   remotes?: Cleanup
   remoteEvents?: Cleanup
+  compatibilityEngine?: unknown
+}
+
+/** Load the private evaluator only on the verified stock host. */
+async function createCompatibilityEngine(ctx: any, config: ResolvedWorkflowPackageConfig): Promise<any> {
+  const subagents = readService(ctx, 'subagents')
+  if (subagents === undefined || typeof optionalProperty(subagents, 'getProvider') !== 'function'
+    || typeof optionalProperty(subagents, 'start') !== 'function') {
+    throw new WorkflowPackageError(
+      'official DeepSeek Harness 0.1.1-rc.2 requires the subagents service for plugin workflows',
+      'WORKFLOW_INCOMPATIBLE_HOST',
+    )
+  }
+  const asset = import.meta.url.endsWith('.ts')
+    ? new URL('../lib/compat-engine/index.js', import.meta.url)
+    : new URL('../compat-engine/index.js', import.meta.url)
+  const module = await import(asset.href)
+  return new module.default(ctx, {
+    provider: 'spawn',
+    maxConcurrentAgents: config.maxConcurrentAgents,
+    maxTotalAgents: config.maxAgentBudget,
+    maxJournalBytes: config.maxJournalBytes,
+    maxChildPromptBytes: config.maxPromptBytes,
+    maxEventTextBytes: config.maxEventTextBytes,
+    scratchMaxOperations: config.scratchMaxOperations,
+    scratchMaxPendingOperations: config.scratchMaxPendingOperations,
+    scratchMaxFiles: config.scratchMaxFiles,
+    scratchMaxFileBytes: config.scratchMaxFileBytes,
+    scratchMaxTotalBytes: config.scratchMaxTotalBytes,
+  })
 }
 
 /** Build an idempotent, supervisor-first/storage-last aggregate disposer. */
@@ -318,30 +419,33 @@ function makeTeardown(resources: OwnedResources): Cleanup {
 
 /** Compose the complete Host-side workflow product as one lifecycle unit. */
 export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Promise<void> {
-  const compatible = isCompatibleHost(ctx)
-  if (!compatible) {
-    const log = optionalProperty(ctx, 'logger') as { warn?(message: string): void } | undefined
-    log?.warn?.(INCOMPATIBLE_MESSAGE)
-  }
+  // Compatibility is checked before config/home inspection and before any
+  // plugin storage or package-asset I/O. Disabled is a supported-Host policy,
+  // not an escape hatch for loading this artifact on an unsupported release.
+  assertCompatibleHost()
   const config = resolveWorkflowPackageConfig(normalizeInputPaths(input), hostHome(ctx))
   if (config.enabled === false) return
 
   // Preflight faces before the process-global storage lease.
   // The Host never imports ./client here.
-  if (compatible) assertHostFaces(ctx)
-  else assertStockFaces(ctx)
+  assertStockFaces(ctx)
   await readPackagedSkill()
 
   const resources: OwnedResources = {}
   const teardown = makeTeardown(resources)
   try {
-    // The compatible Host's descriptor-rooted filesystem is authoritative for
-    // nested workflow storage.  The storage module retains a local-only seam
-    // for standalone fixtures when this argument is absent, never as a silent
-    // downgrade in a real Host context.
-    const hostFs = readService(ctx, 'fs')
-    const privateHostFs = typeof optionalProperty(hostFs, 'openPrivateDirectory') === 'function' ? hostFs : undefined
-    resources.storage = await openWorkflowStorage(config, privateHostFs)
+    // Import and construct the package evaluator before opening storage. The
+    // supported stock engine is never used for plugin workflow execution.
+    resources.compatibilityEngine = await createCompatibilityEngine(ctx, config)
+
+    // Official 0.1.1-rc.2 exposes fs.openPrivateDirectory(), but its production
+    // capability does not include the complete inventory/publication/removal
+    // face this retained run store requires. Keep the Host filesystem for
+    // workspace definitions and script_path authorization/path normalization;
+    // stock RC2 script_path content uses the package's bounded local
+    // O_NOFOLLOW compatibility reader. Persistent run storage uses the
+    // package-owned local descriptor implementation on this exact Host.
+    resources.storage = await openWorkflowStorage(config)
     resources.storageService = provideService(ctx, 'workflowStorage', resources.storage)
     resources.storeService = provideService(ctx, 'workflowStore', resources.storage.store)
     ownEffect(ctx, resources.storageService, 'dsh-workflows: workflowStorage')
@@ -351,7 +455,12 @@ export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Pro
     resources.registryService = provideService(ctx, 'workflows', resources.registry)
     ownEffect(ctx, resources.registryService, 'dsh-workflows: registry')
 
-    resources.supervisor = new WorkflowSupervisor(ctx, config as SupervisorConfig, resources.storage.store)
+    resources.supervisor = new WorkflowSupervisor(
+      ctx,
+      config as SupervisorConfig,
+      resources.storage.store,
+      resources.compatibilityEngine as any,
+    )
     resources.supervisorService = provideService(ctx, 'workflowSupervisor', resources.supervisor)
     await resources.supervisor.initialize()
     ownEffect(ctx, resources.supervisorService, 'dsh-workflows: supervisor')
@@ -365,10 +474,9 @@ export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Pro
     ownEffect(ctx, resources.questions, 'dsh-workflows: user-questions')
     ownEffect(ctx, resources.commands, 'dsh-workflows: commands')
 
-    // This is a protected H binding, not a low-rank ordinary skill.  The
-    // helper re-reads the asset to retain the standalone registration API;
+    // The helper re-reads the asset to retain the standalone registration API;
     // the pre-read above guarantees missing assets fail before storage.
-    resources.skill = asCleanup(registerTrustedWorkflowSkillSync(ctx, { required: compatible })) as Cleanup
+    resources.skill = asCleanup(registerTrustedWorkflowSkillSync(ctx)) as Cleanup
     ownEffect(ctx, resources.skill, 'dsh-workflows: create-workflow skill')
 
     resources.tool = asCleanup(applyToolShadow(ctx, {

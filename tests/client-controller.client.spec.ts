@@ -1,7 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { apply } from '../src/client/index.js'
-import { WorkflowRunsController } from '../src/client/controller.js'
+import { WORKFLOW_RUN_POLL_INTERVAL_MS, WorkflowRunsController } from '../src/client/controller.js'
 import {
   unwrapWorkflowRemoteResult,
   WorkflowRunsRemoteError,
@@ -103,6 +103,121 @@ async function flush(): Promise<void> {
 }
 
 describe('lazy revisioned Client run controller (RC9)', () => {
+  it('polls only the observed Session, serializes slow polls, and stops on close/dispose', async () => {
+    vi.useFakeTimers()
+    const probe = new DeferredRemote()
+    probe.abortTransport = false
+    const controller = new WorkflowRunsController(probe.face)
+    try {
+      controller.observe(SESSION)
+      probe.pending('list').deferred.resolve(page([row('initial', 1)], 1))
+      await flush()
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS - 1)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(2)
+      expect(controller.get(SESSION).phase).toBe('ready')
+
+      // A slow poll owns the cycle; elapsed intervals cannot accumulate more
+      // requests or promise reactions behind it.
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS * 5)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(2)
+      probe.pending('list', 1).deferred.resolve(page([row('polled', 2)], 2))
+      await flush()
+      expect(controller.get(SESSION).runs[0]?.runId).toBe('polled')
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(3)
+      probe.pending('list', 2).deferred.reject(new Error('transient polling failure'))
+      await flush()
+      expect(controller.get(SESSION)).toMatchObject({
+        phase: 'ready',
+        runs: [expect.objectContaining({ runId: 'polled' })],
+      })
+      expect(controller.get(SESSION).error).toBeUndefined()
+      controller.observe(undefined)
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS * 2)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(3)
+
+      controller.observe(SESSION)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(4)
+      probe.pending('list', 3).deferred.resolve(page([row('reopened', 4)], 4))
+      await flush()
+      controller.dispose()
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS * 2)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(4)
+    } finally {
+      controller.dispose()
+      probe.settleAll()
+      await flush()
+      vi.useRealTimers()
+    }
+  })
+
+  it('pauses polling while disconnected and fences an old poll across reconnect', async () => {
+    vi.useFakeTimers()
+    const probe = new DeferredRemote()
+    probe.abortTransport = false
+    const controller = new WorkflowRunsController(probe.face)
+    try {
+      controller.observe(SESSION)
+      probe.pending('list').deferred.resolve(page([row('initial', 1)], 1, undefined, 'epoch-1'))
+      await flush()
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS)
+      const stalePoll = probe.pending('list', 1)
+
+      controller.handleDisconnected()
+      expect(controller.get(SESSION).phase).toBe('reconnecting')
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS * 2)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(2)
+
+      controller.handleConnected()
+      const reconnected = probe.pending('list', 2)
+      reconnected.deferred.resolve(page([row('fresh', 3)], 3, undefined, 'epoch-2'))
+      await flush()
+      stalePoll.deferred.resolve(page([row('stale', 2)], 2, undefined, 'epoch-1'))
+      await flush()
+      expect(controller.get(SESSION)).toMatchObject({
+        epoch: 'epoch-2',
+        runs: [expect.objectContaining({ runId: 'fresh' })],
+      })
+
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS)
+      expect(probe.calls.filter(call => call.method === 'list')).toHaveLength(4)
+    } finally {
+      controller.dispose()
+      probe.settleAll()
+      await flush()
+      vi.useRealTimers()
+    }
+  })
+
+  it('surfaces an explicit refresh error when it joins a quiet background poll', async () => {
+    vi.useFakeTimers()
+    const probe = new DeferredRemote()
+    const controller = new WorkflowRunsController(probe.face)
+    try {
+      controller.observe(SESSION)
+      probe.pending('list').deferred.resolve(page([row('initial', 1)], 1))
+      await flush()
+      await vi.advanceTimersByTimeAsync(WORKFLOW_RUN_POLL_INTERVAL_MS)
+      const explicit = controller.refresh(SESSION)
+      probe.pending('list', 1).deferred.reject(new Error('explicit retry failed'))
+      await expect(explicit).rejects.toThrow('explicit retry failed')
+      expect(controller.get(SESSION)).toMatchObject({
+        phase: 'error',
+        error: 'explicit retry failed',
+        runs: [expect.objectContaining({ runId: 'initial' })],
+      })
+    } finally {
+      controller.dispose()
+      probe.settleAll()
+      await flush()
+      vi.useRealTimers()
+    }
+  })
+
   it('does not read until the first subscriber and single-flights refresh', async () => {
     const probe = new DeferredRemote()
     const controller = new WorkflowRunsController(probe.face)
@@ -268,7 +383,7 @@ describe('on-demand reads, controls, and child navigation (RC10)', () => {
     }
   })
 
-  it('preserves loaded rows when a later page fails and maps budget-limited Resume', async () => {
+  it('preserves a ready prefix without a duplicate source error when a later page fails', async () => {
     const probe = new DeferredRemote()
     const controller = new WorkflowRunsController(probe.face)
     try {
@@ -280,10 +395,11 @@ describe('on-demand reads, controls, and child navigation (RC10)', () => {
       probe.pending('list', 1).deferred.reject(new WorkflowRunsRemoteError('storage-unavailable', 'boom'))
       await expect(later).rejects.toMatchObject({ code: 'storage-unavailable' })
       expect(controller.get(SESSION)).toMatchObject({
-        phase: 'error',
+        phase: 'ready',
         runs: [expect.objectContaining({ runId: 'run-1' })],
         nextCursor: 'cursor-1',
       })
+      expect(controller.get(SESSION).error).toBeUndefined()
       const resume = controller.control(SESSION, 'run-1', 'resume', 1)
       probe.pending('control').deferred.reject(new WorkflowRunsRemoteError(
         'action-unavailable',
@@ -293,6 +409,36 @@ describe('on-demand reads, controls, and child navigation (RC10)', () => {
       await expect(resume).rejects.toMatchObject({
         message: 'workflow "review-run-1" requires a higher agent_budget to resume',
       })
+    } finally {
+      controller.dispose()
+      probe.settleAll()
+    }
+  })
+
+  it('recovers a stale continuation with a cursorless refresh and clears old errors', async () => {
+    const probe = new DeferredRemote()
+    const controller = new WorkflowRunsController(probe.face)
+    try {
+      controller.observe(SESSION)
+      probe.pending('list').deferred.resolve(page([row('run-1', 1)], 1, 'cursor-1'))
+      await probe.pending('list').deferred.promise
+      await flush()
+
+      const later = controller.loadMore(SESSION)
+      expect(probe.pending('list', 1).request).toEqual({ cursor: 'cursor-1', limit: 50 })
+      probe.pending('list', 1).deferred.reject(new WorkflowRunsRemoteError(
+        'stale-cursor',
+        'workflow page cursor is stale; refresh the collection',
+      ))
+      await flush()
+      expect(probe.pending('list', 2).request).toEqual({ limit: 50 })
+      probe.pending('list', 2).deferred.resolve(page([row('fresh', 2)], 2))
+      await expect(later).resolves.toMatchObject({
+        phase: 'ready',
+        runs: [expect.objectContaining({ runId: 'fresh' })],
+        sessionRevision: 2,
+      })
+      expect(controller.get(SESSION).error).toBeUndefined()
     } finally {
       controller.dispose()
       probe.settleAll()
@@ -332,6 +478,39 @@ describe('on-demand reads, controls, and child navigation (RC10)', () => {
 })
 
 describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () => {
+  it('rolls back a partially mounted client aggregate instead of leaving a dead slash action', async () => {
+    const pending: Promise<unknown>[] = []
+    const disposed: string[] = []
+    const warnings: string[] = []
+    const ctx: any = {
+      effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
+      remote: {},
+      sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
+      slots: { inject: () => () => undefined, register: () => undefined },
+      conversationEvents: { register: () => { throw new Error('renderer registry failed') } },
+      commandUi: {
+        register: () => () => { disposed.push('command') },
+        decorate: () => () => undefined,
+      },
+      inputTriggers: {
+        registerSource: () => () => { disposed.push('slash') },
+      },
+      locale: {
+        register: () => () => { disposed.push('locale') },
+        bind: () => (key: string) => key,
+      },
+      connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
+      logger: { warn: (message: string) => { warnings.push(message) } },
+      on: () => () => undefined,
+    }
+
+    apply(ctx)
+    await expect(Promise.all(pending)).rejects.toThrow('renderer registry failed')
+
+    expect(disposed).toEqual(['slash', 'locale'])
+    expect(warnings).toEqual([])
+  })
+
   it('still mounts when remote.$on is missing', async () => {
     const pending: Promise<unknown>[] = []
     const registered: any[] = []
@@ -343,10 +522,11 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         ActionCommandUiSpec: { kind: 'action' },
-        runAction() { /* H dispatch face */ },
+        runAction() { /* action-capable dispatch face */ },
         register(contribution: any) { registered.push(contribution); return () => undefined },
         decorate: () => () => undefined,
       },
+      inputTriggers: { registerSource: () => () => undefined },
       locale: { register: () => () => undefined, bind: () => (key: string) => key },
       connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
       on: () => () => undefined,
@@ -360,7 +540,7 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
     const pending: Promise<unknown>[] = []
     let snapshot: any = { ids: ['keep-me'], byId: { 'keep-me': {}, child: { parentId: 'keep-me' } }, phase: 'ready' }
     const listeners = new Set<() => void>()
-    const removed: string[] = []
+    const removeSession = vi.spyOn(WorkflowRunsController.prototype, 'removeSession')
     const ctx: any = {
       effect(fn: () => unknown) { pending.push(Promise.resolve().then(() => fn())) },
       remote: {
@@ -386,20 +566,24 @@ describe('Client apply Session fence and $on (Requirement 10.4/10.7/10.9)', () =
         register: () => () => undefined,
         decorate: () => () => undefined,
       },
+      inputTriggers: { registerSource: () => () => undefined },
       locale: { register: () => () => undefined, bind: () => (key: string) => key },
       connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
       on: () => () => undefined,
     }
-    apply(ctx)
-    await Promise.all(pending)
-    const original = ctx.workflowRunsController.removeSession.bind(ctx.workflowRunsController)
-    ctx.workflowRunsController.removeSession = (id: string) => { removed.push(id); original(id) }
-    snapshot = { ids: [], byId: { child: { parentId: 'keep-me' } }, phase: 'pending' }
-    for (const listener of listeners) listener()
-    expect(removed).toEqual([])
-    snapshot = { ids: [], byId: { child: {} }, phase: 'ready' }
-    for (const listener of listeners) listener()
-    expect(removed).toEqual(['keep-me'])
+    try {
+      apply(ctx)
+      await Promise.all(pending)
+      snapshot = { ids: [], byId: { child: { parentId: 'keep-me' } }, phase: 'pending' }
+      for (const listener of listeners) listener()
+      expect(removeSession).not.toHaveBeenCalled()
+      snapshot = { ids: [], byId: { child: {} }, phase: 'ready' }
+      for (const listener of listeners) listener()
+      expect(removeSession).toHaveBeenCalledOnce()
+      expect(removeSession).toHaveBeenCalledWith('keep-me')
+    } finally {
+      removeSession.mockRestore()
+    }
   })
 })
 

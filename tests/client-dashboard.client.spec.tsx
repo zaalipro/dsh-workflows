@@ -296,6 +296,29 @@ describe('WorkflowsDashboard (RC14-RC18)', () => {
     release(empty)
   })
 
+  it('does not retain a duplicate launch alert when post-launch refresh fails', async () => {
+    const refreshFailure = new Error('workflow page cursor is stale; refresh the collection')
+    const ops = operations([], {
+      listDefinitions: vi.fn(async () => [{
+        name: 'readonly-codebase-review',
+        description: 'Perform a read-only codebase review',
+        scope: 'project',
+      }]),
+      launchDefinition: vi.fn(async () => undefined),
+      refresh: vi.fn(async () => { throw refreshFailure }),
+    })
+    const empty = bench(source([]), ops)
+    await settle()
+    await act(async () => {
+      empty.node.querySelector<HTMLButtonElement>('button[aria-label="Start readonly-codebase-review"]')!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(empty.node.querySelectorAll('[role="alert"]')).toHaveLength(0)
+    expect(empty.node.textContent).toContain('Started readonly-codebase-review')
+    expect(empty.node.textContent).not.toContain(refreshFailure.message)
+  })
+
   it('renders compact status labels, Interrupted settlement, live phase, and budget explainer', async () => {
     const row = run('budget-limited', 'budget-limited', { phase: 'Review' })
     const ops = operations([row], {

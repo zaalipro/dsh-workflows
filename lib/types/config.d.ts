@@ -53,7 +53,6 @@ export interface Config {
     readonly completionNoticeMaxBytes?: number;
     readonly completionCohortMaxItems?: number;
     readonly completionCohortMaxBytes?: number;
-    readonly maxConsecutiveCompletionWakes?: number;
     readonly saveScope?: 'project' | 'user';
 }
 /** Fully defaulted, path-normalized configuration consumed by runtime components. */

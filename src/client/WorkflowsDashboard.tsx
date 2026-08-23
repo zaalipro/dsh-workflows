@@ -444,16 +444,26 @@ export function WorkflowsDashboard({
     setLaunchFeedback(undefined)
     try {
       await operations.launchDefinition(sessionId, name)
+      setLaunchFeedback({ kind: 'notice', message: labels.started(name) })
+    } catch (error) {
+      const reason = error instanceof Error && error.message.length > 0 ? error.message : labels.launchFailed
+      setLaunchFeedback({ kind: 'error', message: reason })
+      setStartingName(undefined)
+      return
+    }
+    try {
       const snap = await operations.refresh(sessionId)
       setSource(snap)
       const newest = [...snap.runs]
         .filter(run => run.name === name)
         .sort((left, right) => right.startedAt - left.startedAt)[0]
       if (newest !== undefined) selectRun(newest.runId)
-      setLaunchFeedback({ kind: 'notice', message: labels.started(name) })
     } catch (error) {
-      const reason = error instanceof Error && error.message.length > 0 ? error.message : labels.launchFailed
-      setLaunchFeedback({ kind: 'error', message: reason })
+      // The launch already succeeded. Refresh failures are represented by the
+      // controller source and its single Retry surface; reporting the same
+      // failure as launch feedback duplicates the alert and leaves a stale
+      // error behind after source retry succeeds.
+      if (isAbort(error)) return
     } finally {
       setStartingName(undefined)
     }
@@ -809,7 +819,11 @@ export function WorkflowsDashboard({
     if (sessionId === undefined || source.nextCursor === undefined || runPaging) return
     setRunPaging(true)
     setRunPageError(undefined)
-    void operations.loadMore(sessionId).then(() => {
+    void operations.loadMore(sessionId).then(snapshot => {
+      // Do not depend on an external-store subscription being mounted in
+      // exactly the same render. The operation's authoritative snapshot also
+      // clears any prior source/page error in one update.
+      setSource(snapshot)
       setRunPageError(undefined)
     }, error => {
       if (!isAbort(error)) setRunPageError(pageError(error))

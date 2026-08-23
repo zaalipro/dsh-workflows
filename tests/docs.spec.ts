@@ -51,7 +51,7 @@ describe('documentation verifier', () => {
     const readme = join(fixture, 'README.zh.md')
     mutate(readme, text => `${text.trimEnd()}\n\n0.1.0-rc.9 与本包兼容。\n`)
     refreshMapping(fixture, 'README.md')
-    expectFailure(fixture, /README\.zh\.md: names rc9/u)
+    expectFailure(fixture, /README\.zh\.md: names unverified rc9/u)
   }))
 
   it('checks required content in the Chinese companion', () => withFixture(fixture => {
@@ -78,12 +78,27 @@ describe('documentation verifier', () => {
     expect(ds).toContain('not the current runbook')
   })
 
-  it('documents the packed-consumer probe and the 141eb6f checkout without an H patch', () => {
+  it('documents the packed-consumer probe and exact official checkout without a Harness patch', () => {
     const testing = readFileSync(join(repository, 'docs/testing.md'), 'utf8')
-    expect(testing).toContain('official-h-probe')
-    expect(testing).toContain('does not apply an H prerequisite patch')
+    expect(testing).toContain('official-host-probe')
+    expect(testing).toContain('no Harness source patch')
+    expect(testing).toContain('b150a551b8d465e31e418e1b2eaf5e79bbb7d28e')
     expect(testing).toContain('ConversationNodeAssembler')
-    expect(testing).not.toMatch(/applies only the H prerequisite patch/u)
+    expect(testing).not.toContain('applies a Harness patch')
+  })
+
+  it('documents enforced inclusive array bounds in both user-guide languages', () => {
+    const english = readFileSync(join(repository, 'docs/user-guide.md'), 'utf8')
+    const chinese = readFileSync(join(repository, 'docs/user-guide.zh.md'), 'utf8')
+    expect(english).toContain('`minItems` and `maxItems` are inclusive array-length bounds')
+    expect(english).toContain('must satisfy `minItems <= maxItems`')
+    expect(english).toContain('is forbidden beside `oneOf`')
+    expect(english).toContain('post-validates the returned structured value')
+    expect(english).not.toContain('Bound array length in the prompt and in JavaScript')
+    expect(chinese).toContain('`minItems` 和 `maxItems` 是包含端点的 array-length bound')
+    expect(chinese).toContain('必须满足 `minItems <= maxItems`')
+    expect(chinese).toContain('不能与 `oneOf` 并列')
+    expect(chinese).not.toContain('Array 长度在 prompt 与 JavaScript 中限制')
   })
 })
 

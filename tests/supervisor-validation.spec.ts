@@ -57,20 +57,22 @@ function scratchLayout() {
   return { lease: { assertCurrent: async () => undefined }, runs: { openDirectory: async (name: string) => directory(join('/fake-runs', name)) } }
 }
 
-async function boot() {
+async function boot(native = false) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-validate-'))
   roots.push(root)
   const store = new MemoryStore()
   const requests: any[] = []
   let starts = 0
   const workflowEngine = {
+    ...(native ? { dshWorkflowsNative: true } : {}),
     start() {
       starts += 1
       throw new Error('validate must not start a live attempt')
     },
     async validate(request: any) {
       requests.push(request)
-      expect(request.parent).toBeUndefined()
+      if (native) expect(request.parent).toBeDefined()
+      else expect(request.parent).toBeUndefined()
       expect(request.validateOnly).toBeUndefined()
       expect(request.filename).toBeUndefined()
       expect(request.journal).toBeUndefined()
@@ -97,6 +99,18 @@ async function boot() {
 }
 
 describe('workflow supervisor validation', () => {
+  it('normalizes native await_user validation into one product pause message', async () => {
+    const { supervisor } = await boot(true)
+    const parent = { session: { id: 'native-validate', header: { cwd: '/tmp' } } }
+    try {
+      await expect(supervisor.validate({
+        script: "await await_user('user','continue')",
+        meta: { name: 'native', description: 'native' }, parent,
+        filename: '/tmp/native.workflow.json', args: { gate: 'would await_user (user): continue' },
+      })).resolves.toMatchObject({ ok: true, status: 'would-pause', value: 'would pause: continue' })
+    } finally { await supervisor.dispose() }
+  })
+
   it('requires a calling agent and never admits a run', async () => {
     const { supervisor, store, starts } = await boot()
     try {

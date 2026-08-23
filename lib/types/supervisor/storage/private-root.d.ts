@@ -30,7 +30,7 @@ export interface PrivateDirectory {
     close(): Promise<void>;
 }
 export type FsPrivateDirectory = PrivateDirectory;
-/** Minimal compatible H filesystem face used by the package.  It is kept
+/** Minimal compatible official filesystem face used by the package. It is kept
  * structural so the package does not duplicate the official DSH filesystem
  * runtime identity. */
 export interface HostPrivateDirectoryProvider {
@@ -38,7 +38,7 @@ export interface HostPrivateDirectoryProvider {
         readonly cwd?: string;
         readonly create?: boolean;
     }, signal?: AbortSignal): Promise<{
-        /** H's required relative child opener.  Future providers may expose an
+        /** Required relative child opener. Future providers may expose an
          * opaque target on the returned object; it is used for descriptor-rooted
          * listing and is never interpreted by the package. */
         openDirectory(name: string, signal?: AbortSignal, options?: {
@@ -78,7 +78,7 @@ export interface HostPrivateDirectoryProvider {
         readonly size?: number;
         readonly nlink?: number;
     }[]>;
-    /** Optional provider-level directory publication/removal seams.  H's
+    /** Optional provider-level directory publication/removal seams. The
      * minimum public capability does not expose these operations; callers must
      * fail closed when neither the capability nor one of these equivalent
      * provider primitives is present. */
@@ -93,7 +93,7 @@ export interface HostPrivateDirectoryProvider {
         readonly size?: number;
         readonly nlink?: number;
     } | undefined>;
-    /** Test-only compatibility switch for pre-H structural fixtures.  Real H
+    /** Test-only compatibility switch for legacy structural fixtures. Production
      * providers must expose an opaque child primitive instead. */
     readonly allowLegacyPathFallback?: boolean;
 }

@@ -9,7 +9,7 @@ export interface EngineResult {
   readonly agentsStarted: number
 }
 
-/** Replay journal captured after dispose. Empty on stock RC8 workers. */
+/** Replay journal captured after dispose. Unavailable on partial stock workers. */
 export interface WorkflowCheckpoint {
   readonly journal: readonly {
     readonly callId: readonly [number, ...number[]]
@@ -21,14 +21,20 @@ export interface WorkflowCheckpoint {
   readonly agentSeq: number
 }
 
-/** Supervisor-facing live attempt. Stock RC8 implements a subset. */
+/** Supervisor-facing live attempt. The stock worker handle implements a subset. */
 export interface EngineHandle {
   readonly id: string
   readonly result: Promise<EngineResult>
+  /**
+   * False only for a compatibility wrapper which cannot provide the replay
+   * authority required by Pause/Resume. Complete handles predate this hint, so
+   * an absent value means supported.
+   */
+  readonly supportsReplay?: boolean
   cancel(reason?: string): void
   resume(): void
   release(): void
-  checkpoint(): WorkflowCheckpoint
+  checkpoint(): WorkflowCheckpoint | undefined
   dispose(): Promise<void>
 }
 
@@ -40,7 +46,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null ? value as Record<string, unknown> : undefined
 }
 
-/** True when the engine already exposes H's deferred-start and replay face. */
+/** True when the engine exposes the complete deferred-start and replay face. */
 export function isCompleteEngineHandle(raw: unknown): raw is EngineHandle {
   const handle = asRecord(raw)
   if (handle === undefined) return false
@@ -67,9 +73,9 @@ function normalizeResult(value: unknown): EngineResult {
 }
 
 /**
- * Stock `@deepseek-ai/dsh-workflow` `WorkflowRun` is `id`/`result`/`cancel`/`dispose`.
- * H adds `release` (deferStart), `resume`, and `checkpoint`. Wrap the thin face
- * so the supervisor can admit a run instead of failing with "invalid run handle".
+ * Stock `@deepseek-ai/dsh-workflow` `WorkflowRun` may expose only
+ * `id`/`result`/`cancel`/`dispose`. Wrap that thin face so the supervisor can
+ * admit a run instead of failing with "invalid run handle".
  */
 export function adaptEngineHandle(raw: unknown): EngineHandle | undefined {
   if (isCompleteEngineHandle(raw)) return raw
@@ -81,11 +87,8 @@ export function adaptEngineHandle(raw: unknown): EngineHandle | undefined {
   const id = typeof handle.id === 'string' && handle.id.length > 0
     ? handle.id
     : randomBytes(16).toString('hex')
-  let settled: EngineResult | undefined
-  let disposed = false
   const result = Promise.resolve(handle.result).then(value => {
-    settled = normalizeResult(value)
-    return settled
+    return normalizeResult(value)
   })
   const cancel = handle.cancel as (reason?: string) => void
   const resume = typeof handle.resume === 'function' ? handle.resume as () => void : () => undefined
@@ -97,27 +100,36 @@ export function adaptEngineHandle(raw: unknown): EngineHandle | undefined {
   return {
     id,
     result,
-    cancel: (reason?: string) => { cancel(reason) },
-    resume: () => { resume() },
-    release: () => { release() },
+    // Stock methods are receiver-sensitive class methods.  Calling an
+    // extracted `cancel` caused `this` to be undefined and surfaced as
+    // `Cannot read properties of undefined (reading 'settled')` on Stop.
+    // A handle reaching this adapter is missing at least one required replay
+    // primitives; the set is atomic, so a partial subset is not authority.
+    supportsReplay: false,
+    cancel: (reason?: string) => { Reflect.apply(cancel, handle, [reason]) },
+    resume: () => { Reflect.apply(resume, handle, []) },
+    release: () => { Reflect.apply(release, handle, []) },
     async dispose() {
       try {
-        await disposeRaw()
+        await Reflect.apply(disposeRaw, handle, [])
       } catch {
         // Stock WorkerRun.dispose() can throw after the worker has already
         // died (`undefined.disposed`). The supervisor treats cleanup errors
         // as terminal, so contain them here and still allow checkpoint().
-      } finally {
-        disposed = true
       }
     },
     checkpoint() {
-      if (nativeCheckpoint !== undefined) return nativeCheckpoint()
-      if (settled === undefined || !disposed) throw new Error('workflow checkpoint is not ready')
-      const spend = settled.agentsStarted
-      return { journal: [], agentSpend: spend, agentSeq: spend }
+      // Never manufacture an empty journal.  It cannot prove which effects
+      // committed and would make a resumed stock run repeat them.
+      if (nativeCheckpoint === undefined) return undefined
+      return Reflect.apply(nativeCheckpoint, handle, [])
     },
   }
+}
+
+/** Whether Pause/Resume can be offered without replaying committed effects. */
+export function supportsEngineReplay(handle: EngineHandle): boolean {
+  return handle.supportsReplay !== false
 }
 
 /** Best-effort cancel/dispose of a handle the supervisor will not keep. */
@@ -125,10 +137,13 @@ export function rejectPartialEngineHandle(raw: unknown): void {
   const handle = asRecord(raw)
   if (handle === undefined) return
   if (typeof handle.cancel === 'function') {
-    try { (handle.cancel as (reason?: string) => void)('invalid workflow run handle') }
+    try { Reflect.apply(handle.cancel as (reason?: string) => void, handle, ['invalid workflow run handle']) }
     catch { /* contained */ }
   }
   if (typeof handle.dispose === 'function') {
-    void Promise.resolve((handle.dispose as () => unknown)()).catch(() => undefined)
+    let disposed: unknown
+    try { disposed = Reflect.apply(handle.dispose as () => unknown, handle, []) }
+    catch { return }
+    void Promise.resolve(disposed).catch(() => undefined)
   }
 }

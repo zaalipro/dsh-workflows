@@ -2,17 +2,17 @@
 
 English | [中文](architecture.zh.md)
 
-This reference describes the installed architecture of `@zaalipro/dsh-workflows`: one Host/Client bundle over the official DeepSeek Harness workflow engine. The [user guide](user-guide.md) owns operating procedures, the [testing reference](testing.md) owns release evidence, and the [architecture decision](../.agents/notes/implemented/architecture/2026-08-20-installable-workflows-package.md) owns rationale and rejected alternatives.
+This reference describes the installed architecture of `@zaalipro/dsh-workflows`: one Host/Client bundle for official DeepSeek Harness `0.1.1-rc.2`, with a package-owned MIT compatibility evaluator. The [user guide](user-guide.md) owns operating procedures, the [testing reference](testing.md) owns release evidence, and the [architecture decision](../.agents/notes/implemented/architecture/2026-08-20-installable-workflows-package.md) owns rationale and rejected alternatives.
 
 ## Scope and invariants
 
-The package owns definition discovery, logical-run supervision, retained storage, completion delivery, commands, an exact-Agent model-tool shadow, authorized Remote reads, and the Web dashboard. Release **H** owns the only JavaScript evaluator and child-agent engine. A Headless install evaluates no browser module. A Web install adds the Client aggregate without changing Host execution authority.
+The package owns definition discovery, logical-run supervision, retained storage, completion delivery, commands, Agent-scoped model-tool replacement, authorized Remote reads, the Web dashboard, and the private JavaScript compatibility evaluator. Official `0.1.1-rc.2` owns the Host, Agent, Session, provider, and Client services. A Headless install evaluates no browser module. A Web install adds the Client aggregate without changing Host execution authority.
 
-Current state: this document describes the package against symbolic **H**. Official worker-thread, remotes, `tools.replace`, `registerFallback`, trusted skill, and nested private-directory I/O have not shipped on `141eb6f`; activation fail-closes instead of loading on that incompatible baseline.
+Current state: plugin `0.1.0-rc.3` is verified against official `0.1.1-rc.2`. The plugin adapts the public Agent-scoped tool/prompt, filesystem, command, Remote, and provider faces and does not modify the stock `ctx.workflowEngine`.
 
 Four invariants organize every component:
 
-1. A start is durable before it is visible, and a deferred official engine attempt has an owner before it can execute.
+1. A start is durable before it is visible, and a deferred private evaluator attempt has an owner before it can execute.
 2. A same-process resume uses only the quiescent engine checkpoint; observe-only events never become replay authority.
 3. Protected run data moves through Agent-authorized, bounded Remote pages; broadcast events carry invalidation only.
 4. Teardown closes admission and drains owned work to a fixed point before releasing the storage lease.
@@ -23,9 +23,9 @@ Four invariants organize every component:
 
 ```mermaid
 flowchart LR
-  subgraph H[Official Harness H]
+  subgraph H[Official Harness 0.1.1-rc.2]
     Loader[Profile loader]
-    Engine[Official workflow engine]
+    Engine[Stock workflow service]
     Agent[Exact Agent context]
     Session[Session log]
     Gateway[Typert Gateway and ApiProxy]
@@ -63,11 +63,11 @@ The package's bundle patch mounts exactly one Host aggregate, advertises `lib/cl
 
 ```mermaid
 flowchart LR
-  Loader[Official H profile loader] --> Host[Package Host aggregate]
+  Loader[Official 0.1.1-rc.2 profile loader] --> Host[Package Host aggregate]
   Host --> Registry[Definition registry]
   Host --> Supervisor[Logical-run supervisor]
   Host --> Commands[Commands and tool shadow]
-  Supervisor --> Engine[Official worker-thread engine]
+  Supervisor --> Engine[Package compatibility evaluator]
   Supervisor --> Store[Version-2 retained store]
   Supervisor --> Recorder[Durable Session recorder]
   Host --> Remote[Generated Host Remote services]
@@ -81,14 +81,14 @@ The headless bundle has no import path to `./client`; commands, saved aliases, t
 
 ### Host components
 
-- **Aggregate and configuration** validate H before filesystem access, resolve every Schemastery default, load assets relative to `import.meta.url`, and mount children under effect ownership.
+- **Aggregate and configuration** validate official `0.1.1-rc.2` faces before filesystem access, resolve every Schemastery default, load assets relative to `import.meta.url`, and mount children under effect ownership.
 - **Definition registry (`ctx.workflows`)** observes bundled, project, and user roots; re-reads authoritative bytes; publishes only coalesced `workflows/change` hints; and owns safe save publication.
 - **Run store and native lease** own manifests, immutable detail sidecars, scripts, scratch files, retention, recovery, and one process-lifetime advisory lock.
 - **Supervisor (`ctx.workflowSupervisor`)** owns exact Agent/Session authorization, logical identities, attempts, status transitions, budgets, checkpoints, gates, controls, and lifecycle events.
-- **Completion notifier** owns the `none -> claimed -> delivered|abandoned` outbox and bounded owner wake cohorts.
+- **Completion notifier** owns the `none -> claimed -> delivered|abandoned` outbox and bounded direct Session-surface append cohorts. It never wakes the Agent or writes either inbox lane.
 - **Run recorder (`ctx.workflowRunRecorder`)** projects explicitly attributed top-level runs into the official Session vocabulary.
 - **Question bridge** maps an exact fenced `workflows/gate-request` to `ctx.userQuestions` and acknowledges only the current Agent/run/execution/gate tuple.
-- **Commands and trusted skill** own `/workflow`, `/workflows`, `/create-workflow`, dynamic aliases, and the protected packaged `create-workflow` definition. The Client owns the `/workflows` overlay.
+- **Commands and trusted skill** own `/workflow`, `/create-workflow`, dynamic aliases, and the protected packaged `create-workflow` definition. The Client input-trigger source exclusively owns bare `/workflows` and its overlay.
 - **Tool adapter** temporarily replaces the official `workflow` tool and `tool:workflow` prompt section only in the exact Agent context where both official identities match.
 - **Remote services** expose definition lists and paged run detail, members, logs, result, artifacts, chunks, and revision-checked controls.
 
@@ -110,19 +110,19 @@ The public export map is closed: `.`, `./registry`, `./supervisor`, `./run-recor
 
 The package root owns three compiler faces: solution `tsconfig.json`, Host `tsconfig.host.json`, and Client `tsconfig.client.json`. Build order is **Host TSC -> Typert -> Client TSC -> classic lazy CJS**. A temporary copied mini-workspace provides one staging-root Host aggregate and one copied-package staging `tsconfig.json`; it has no nested Host/Client aggregate files. Focused `WorkspaceTypertGenerator.generate()` returns artifacts, and the build writes exactly `lib/typert.host.js`, `lib/typert.host.d.ts`, `lib/typert.remote-client.js`, and `lib/typert.remote-client.d.ts`, plus a map only when returned.
 
-The final `lib/client.js` must call `window.__ModuleLoader__.load({ id: "@zaalipro/dsh-workflows", factory: (require) => ... })` with a non-empty factory. Optional-chaining `?.load` and `factory: () => ({})` placeholders fail the build and package verifier. The bundle keeps baseline Client dependencies external, inlines package Remote and `clsx` code, and lets Lightning CSS own module names and lifecycle. Skill, patch, and Client asset paths derive from `import.meta.url`, never the process cwd. The evaluator is the official worker-thread peer, not a worker packed in this tarball. Published and Git installs ship those prebuilt artifacts; `dsh plugin add` must not run a build.
+The final `lib/client.js` must call `window.__ModuleLoader__.load({ id: "@zaalipro/dsh-workflows", factory: (require) => ... })` with a non-empty factory. Optional-chaining `?.load` and `factory: () => ({})` placeholders fail the build and package verifier. The bundle keeps baseline Client dependencies external, inlines package Remote and `clsx` code, and lets Lightning CSS own module names and lifecycle. Skill, patch, and Client asset paths derive from `import.meta.url`, never the process cwd. The private evaluator is emitted from `vendor/workflow-engine` as `lib/compat-engine/index.js` and `worker.cjs`; it is instantiated only for the supervisor and never replaces stock `ctx.workflowEngine`. Published and Git installs ship those prebuilt artifacts; `dsh plugin add` must not run a build.
 
 ## Lifecycle authority
 
 ### Boot and startup recovery
 
-Activation first verifies every H capability. Storage then validates or creates only the owner-only runs root and permanent lock anchor, opens the anchor without following links, validates its stable identity, and acquires a nonblocking `fs-native-extensions` lifetime lease. Only the lease holder creates or validates the four store directories and performs one complete, bounded recovery before Session admission.
+Activation first verifies the supported official `0.1.1-rc.2` service faces. Storage then validates or creates only the owner-only runs root and permanent lock anchor, opens the anchor without following links, validates its stable identity, and acquires a nonblocking `fs-native-extensions` lifetime lease. Only the lease holder creates or validates the four store directories and performs one complete, bounded recovery before Session admission.
 
 Recovery validates every manifest and referenced sidecar before publishing any row. Persisted active rows become terminal `interrupted`, running member heads become `cancelled`, and orphaned notice claims become `abandoned`. Recovery keeps inspection facts and display ordinals but reconstructs no execution authority.
 
 ### Durable-before-visible launch
 
-Start validates ownership, source, args, budget, and capacity before reserving a display ordinal or path. It stages `script.js`, `scratch/`, and `details/`, publishes the single-component run directory, and commits the initial version-2 manifest row. That manifest transaction is durable admission. The supervisor then installs private starting authority, attaches all observers and a deferred official attempt, publishes the in-memory row and package lifecycle, releases execution once, and returns `started` without awaiting settlement.
+Start validates ownership, source, args, budget, and capacity before reserving a display ordinal or path. It stages `script.js`, `scratch/`, and `details/`, publishes the single-component run directory, and commits the initial version-2 manifest row. That manifest transaction is durable admission. The supervisor then installs private starting authority, attaches all observers and a deferred evaluator attempt, publishes the in-memory row and package lifecycle, releases execution once, and returns `started` without awaiting settlement.
 
 A caller abort before durable admission rolls back without a run directory or ordinal. After admission, the supervisor owns the detached run. A later attachment or execution failure terminalizes retained history instead of deleting it.
 
@@ -136,7 +136,7 @@ Ordinary Resume starts a new attempt over the immutable admitted script and args
 
 Stop closes admission, commits `stopping`, cancels the attempt and every admitted child/scratch operation, awaits paired member endings and disposal, discards resume authority, then atomically commits terminal `cancelled` and its notice claim. A clean or failed settlement follows the same dispose-before-terminal discipline.
 
-The terminal transaction changes `completionNotice` from `none` to `claimed` before the head becomes visible. One bounded enqueue attempt finalizes that claim as `delivered` or `abandoned`; neither state retries. Cohorts carry at most 20 notices and 262,144 UTF-8 bytes and may open at most three consecutive completion-driven turns before new human input.
+The terminal transaction changes `completionNotice` from `none` to `claimed` before the head becomes visible. One bounded append attempt finalizes that claim as `delivered` or `abandoned`; neither state retries. Cohorts carry at most 20 notices and 262,144 UTF-8 bytes. They append a plugin-sourced `user/message` directly to the owner Session with `surfaceOp: "append"`, making it durable and visible without opening a completion-driven model turn.
 
 ### Remote reconnect and HMR
 
@@ -152,7 +152,7 @@ The default root is `$DSH_HOME/workflow-runs` with permanent `.workflow-storage.
 
 The at-most-8-MiB manifest is a Session head/index: ownership, display ordinal high-water marks, bounded run heads, revisions, one-component directory ids, sidecar references, and notice state. It never carries absolute paths, full outputs, args, journals, gates, or Agent references. One fully fsynced detail snapshot holds bounded members, logs, result, and artifact indexes; each run has at most 32 MiB of referenced detail. Terminal retention keeps at most 256 rows per Session, and total committed storage is at most 512 MiB. Oldest eligible terminal rows evict deterministically; active and claimed-notice rows never evict, and display ordinal history remains.
 
-Every directory walk uses the H descriptor-rooted private-directory capability. Root and components must have the current owner, restrictive `0700`/`0600` modes, expected type, one link for regular files, no symlink or junction, and stable device/inode identity. Cleanup never recurses after identity changes. The permanent kernel lock has no PID, heartbeat, stale age, retry, takeover, or deletion protocol. It coordinates cooperating same-user processes, not a malicious same-UID actor that ignores the lease.
+Every run-storage directory walk uses the plugin-owned, fail-closed local descriptor implementation; the official filesystem service remains authoritative for definition discovery. A `script_path` read prefers a Host `readBytesNoFollow` capability. Published stock RC2 lacks that method, so only for its verified local filesystem shape the plugin authorizes and normalizes through the public Host `lstat`/`resolve`/`processPath` methods, then performs its own bounded `O_NOFOLLOW` descriptor read; unknown and remote providers fail closed. Root and components must have the current owner, restrictive `0700`/`0600` modes, expected type, one link for regular files, no symlink or junction, and stable device/inode identity. Cleanup never recurses after identity changes. The permanent kernel lock has no PID, heartbeat, stale age, retry, takeover, or deletion protocol. It coordinates cooperating same-user processes, not a malicious same-UID actor that ignores the lease.
 
 ## Replay and script containment
 
@@ -168,9 +168,9 @@ The dashboard has three panes at 1,200 px and wider, two-pane navigation below 1
 
 ## Compatibility provenance
 
-Exact-Agent tool/prompt shadowing is the selected temporary integration with official release H. H must supply identity-checked `ToolRuntime.replace`, `SystemPrompt.replaceSection`, external generated Remote mounting, bounded forwarded events, deferred workflow starts and quiescent checkpoints, descriptor-rooted storage, client command actions, and trusted packaged-skill precedence before package activation succeeds.
+Official `0.1.1-rc.2` integration uses Agent-scoped `tools.register` and `systemPrompt.section` only when the stock workflow contribution is identified; custom same-name contributions remain untouched. The package owns deferred execution, replay journal, checkpoints, gates, budget accounting, and scratch in its private compatibility evaluator.
 
-Official commit `141eb6f` and tag `dsh-v0.1.0-rc.8` are the patch-development base, not a compatible installed release. Development-fork commit `391c829` is a behavioral reference only. The package never copies its older RC5-derived files wholesale and never ships a second engine.
+Official `0.1.1-rc.2` is the only verified installed Host for plugin `0.1.0-rc.3`; `0.1.0-rc.8` is unsupported and later Hosts require re-verification. The compatibility evaluator is package-owned MIT source derived narrowly from the maintained workflow behavior, not a replacement for the process-global stock workflow service.
 
 ## Capacity bounds
 

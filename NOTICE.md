@@ -3,6 +3,14 @@
 Copyright (c) 2026 Zaali. This package is licensed under the MIT License in
 the adjacent `LICENSE` file.
 
+## workflow compatibility evaluator
+
+The package includes an adapted workflow evaluator derived from the DeepSeek
+Harness `workflow-worker-thread` implementation at behavioral reference commit
+`391c829343`. The vendored source is Copyright (c) 2026 DeepSeek and licensed
+under the MIT License. Its complete license and provenance summary are shipped
+as `vendor/workflow-engine/LICENSE` and `vendor/workflow-engine/README.md`.
+
 ## fs-native-extensions 1.5.0
 
 This package includes `fs-native-extensions` version 1.5.0, from

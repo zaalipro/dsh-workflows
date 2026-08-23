@@ -1,7 +1,7 @@
 ---
 name: create-workflow
 description: Author, smoke-check, and save a new saved workflow (invoke via /create-workflow).
-user-invocable: false
+user-invocable: true
 model-invocable: true
 ---
 
@@ -17,10 +17,10 @@ If `/create-workflow` already states a usable objective (what to do, and optiona
 
 In this same turn after the skill is loaded:
 
-1. Infer a kebab `meta.name`, project save scope (`.dsh/workflows/`), and a simple fan-out. If they named an agent count, stay at or under it (default 8). Add adversarial verification only when it still fits that budget; otherwise skip it and say so.
-2. Author the `{ meta, script }` envelope as **plain JavaScript** (commas in object/array literals, never semicolons — `{ a: 1, b: 2 }` not `{ a: 1; b: 2 }`). `Unexpected token ';'` means you put `;` inside `{ ... }`. Prefer `complete(value)`. Do not use `minItems`/`maxItems`.
-3. Call the workflow tool with inline `script` + `meta` only. Inline script **defaults to `validate_only`** (canned stubs, no live children) and **SAVES** `.dsh/workflows/<name>.workflow.json`. Do not pass `validate_only: false`. Do not launch `/workflow <name>` yet.
-4. If smoke fails with a parse error, fix commas and retry once. If the tool result has no `saved_path`, write `.dsh/workflows/<name>.workflow.json` yourself with exactly `{ meta, script }`.
+1. Infer a kebab `meta.name`, project save scope (`.dsh/workflows/`) unless the user asks for a global/user workflow, and a simple fan-out. If they named an agent count, stay at or under it (default 8). Add adversarial verification only when it still fits that budget; otherwise skip it and say so.
+2. Author the `{ meta, script }` envelope as **plain JavaScript** (commas in object/array literals, never semicolons — `{ a: 1, b: 2 }` not `{ a: 1; b: 2 }`). `Unexpected token ';'` means you put `;` inside `{ ... }`. Prefer `complete(value)`. When output cardinality matters, declare it with the supported inclusive `minItems`/`maxItems` array bounds instead of relying only on prompt wording or clipping.
+3. Call the workflow tool with inline `script` + `meta`. Inline script **defaults to `validate_only`** (canned stubs, no live children) and **SAVES** after a passing smoke. Omit `save_scope` for project scope, or pass `save_scope: "user"` for `<dshHome>/workflows/`; user scope works even when the Session has no cwd. Do not pass `validate_only: false`. Do not launch `/workflow <name>` yet.
+4. If smoke fails with a parse error, fix commas and retry once. A successful inline authoring result always includes `saved_path`. If validation or saving fails (including a missing project cwd), report the error and fix or retry it; do not claim success or write a second, unvalidated copy manually. Use `save_scope: "user"` when a cwd-independent save is intended.
 5. Report the path, smoke limits, and `/workflow <name>`. Offer a live launch; do not start children until the user agrees.
 
 Copy this call shape (plain JS, commas, no `validate_only: false`):
@@ -29,6 +29,7 @@ Copy this call shape (plain JS, commas, no `validate_only: false`):
 workflow({
   meta: { name: "review-changes", description: "Review a diff and verify findings" },
   script: "phase(\"Review\");\ncomplete({ ok: true });",
+  save_scope: "project",
 })
 ```
 
@@ -43,7 +44,7 @@ Use this only when the fast path cannot run because the objective is missing. Do
 3. **Design verification.** Add an adversarial or independent verification stage when the budget allows; missing, failed, or unusable verification is not a confirming vote. Require concrete evidence.
 4. **Choose the artifact and tolerance.** Decide whether results live inline or in scratch files and how `null` child failures affect the result. Optional advice may fail open; a proof gate fails closed.
 5. **Choose identity and scope.** Pick a lowercase kebab name (at most 64 UTF-16 code units, `^[a-z](?:[a-z0-9]*)(?:-[a-z0-9]+)*$`) and project (`.dsh/workflows/`, default, shareable) or user (`<dshHome>/workflows/`) save scope. Do not use `pause`, `resume`, `save`, `stop`, `workflow`, `workflows`, `create-workflow`, or a Windows device basename. When a name collides with another slash command, the existing command keeps `/<name>` and the saved workflow is advertised as `/workflow-<name>`; the host repeats the `workflow-` prefix if that name is also occupied. Canonical `/workflow <name>` always works.
-6. **Author and validate.** Write the strict envelope, then run `validate_only` with representative args. Validation parses the entire script, then executes one args-selected canned path; it does not exercise all branches, live tools, or every possible agent output. A gate ends the smoke as `would pause: <message>`.
+6. **Author and validate.** Write the strict envelope, then run inline `validate_only` with representative args and the chosen `save_scope` (`project` or `user`). Validation parses the entire script, then executes one args-selected canned path; it does not exercise all branches, live tools, or every possible agent output. A gate ends the smoke as `would pause: <message>`.
 7. **Publish and report.** Save only after validation succeeds. Report the file path, smoke result and its limits, launch syntax (`/<name>` or `/workflow <name> ...`), and maximum fan-out. Offer, but do not force, a real background launch watched in `/workflows`. If they decline, say only the path-specific smoke check ran.
 
 ## File format
@@ -76,7 +77,7 @@ A flat `<name>.workflow.json` file contains exactly `meta` and `script`. Metadat
 - `budget()` returns `{ total, spent, reserved: 0, remaining }`.
 - `write_scratch_file(name, content)` and `read_scratch_file(name)` use one safe filename.
 
-Supported schemas use `type`, `properties`, `required`, `additionalProperties`, `items`, `enum`, `const`, and `oneOf`. Do not use `minItems` or `maxItems` — stock schema validation rejects those keywords (this package strips them if a saved script still has them). Bound array length in the prompt and in JavaScript after the child returns.
+Supported schemas use `type`, `properties`, `required`, `additionalProperties`, `items`, `minItems`, `maxItems`, `enum`, `const`, and `oneOf`. `minItems` and `maxItems` are inclusive array-length bounds. Each must be a non-negative safe integer (not `-0`), may appear only on a `type: "array"` node, must satisfy `minItems <= maxItems`, and is forbidden beside `oneOf`. The package validates the authored schema before any child starts, removes only these two keywords from the provider-facing copy for stock RC2, and post-validates the returned structured value against the authored bounds.
 
 Replay uses immutable script, args, and a committed checkpoint. Replayed and schema-correction calls spend zero, but an external effect whose result was not committed can repeat. Keep prompts and external operations idempotent. Replay-capable scripts cannot use `Date`, `Math.random`, `Atomics`, `SharedArrayBuffer`, `WeakRef`, or `FinalizationRegistry`. There is no nested workflow hook.
 
@@ -103,7 +104,7 @@ Default scratch quotas are 4,096 operations, 64 pending operations, 64 files, 1 
 - Agents do not enforce invariants — the script does. Filter and assert in JavaScript.
 - A complete `/create-workflow` brief is enough — do not stall on `ask_user_question` or a repo walk.
 - Do not pass `validate_only: false` while authoring. That launches live children and the parent tool call can sit for tens of minutes. Inline script already defaults to smoke + save.
-- Do not put `minItems`/`maxItems` on schemas; bound counts in the prompt and clip in JavaScript.
+- When an array count is an invariant, use valid `minItems`/`maxItems`; prompt wording may guide generation but is not enforcement.
 - Do not put `meta` in JavaScript, use TypeScript/export syntax, add unsupported agent options such as `fork_context`, mix thunk and declarative parallel forms in one call, assume `null` is success, omit verification, hide truncation, use nondeterministic globals, use nested workflows, or claim validate-only exhaustively proves the workflow.
 
 ## Example (review-changes)
@@ -124,7 +125,7 @@ Meta is JSON data beside this body in the `{ "meta", "script" }` envelope:
 
 ```js
 const findingsSchema = { type: "object", required: ["findings"],
-  properties: { findings: { type: "array",
+  properties: { findings: { type: "array", maxItems: 8,
     items: { type: "object", required: ["file", "issue"],
       properties: { file: { type: "string" }, issue: { type: "string" } } } } } };
 const verdictSchema = { type: "object", required: ["real", "reason", "evidence"],

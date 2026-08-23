@@ -22,6 +22,13 @@ import {
 const DEFAULT_LIMIT = 50
 const ABORT_NAME = 'AbortError'
 
+/**
+ * Stock Harness does not expose the optional workflow invalidation event lane.
+ * Keep the currently observed dashboard Session live without allowing a slow
+ * request to build up an interval backlog.
+ */
+export const WORKFLOW_RUN_POLL_INTERVAL_MS = 2_000
+
 type Listener = () => void
 type Change =
   | { readonly kind: 'invalidate-all' }
@@ -149,25 +156,36 @@ function renderThrown(error: unknown): string {
 /** Lazy, revision-fenced browser source for retained workflow runs. */
 export class WorkflowRunsController implements WorkflowRunsOperations {
   private readonly states = new Map<string, SessionState>()
-  private readonly parentRemote: any
+  /** Exact workflowRuns namespace. The client plugin replaces its empty
+   * pre-mount transport with root.get('remote.workflowRuns'). */
+  private remoteNamespace: any
   private readonly agents?: ClientAgentCatalog
   private connectionGeneration = 0
   private connected = true
   private observed?: string
   private disposed = false
+  private pollTimer?: ReturnType<typeof setTimeout>
+  private pollGeneration = 0
+  private pollFlightGeneration?: number
 
   constructor(
     remote: WorkflowRemoteClient,
     agents?: ClientAgentCatalog,
     private readonly connection?: { readonly rpc?: { call(channel: string, endpoint: string, payload: unknown, signal?: AbortSignal): Promise<unknown> } },
   ) {
-    this.parentRemote = remote
+    this.remoteNamespace = remote
     this.agents = agents
   }
 
-  /** Resolve after typert $mount; construction may run before the namespace exists. */
+  /** Replace the transport with the exact mounted workflowRuns namespace. */
+  setRemote(remote: any): void {
+    this.remoteNamespace = remote
+  }
+
+  /** Access the exact namespace; never traverse remote.workflowRuns through a
+   * traced aggregate (Cordis requires an explicit nested inject for that). */
   private get remote(): any {
-    return this.parentRemote?.workflowRuns ?? this.parentRemote
+    return this.remoteNamespace
   }
 
   private state(sessionId: string): SessionState {
@@ -223,9 +241,14 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
 
   observe(sessionId: string | undefined): void {
     if (this.observed === sessionId) {
-      if (sessionId !== undefined && !this.disposed) void this.refresh(sessionId).catch(() => undefined)
+      if (sessionId !== undefined && !this.disposed) {
+        void this.refresh(sessionId).catch(() => undefined)
+        this.schedulePoll()
+      }
       return
     }
+    this.pollGeneration += 1
+    this.clearPollTimer()
     if (this.observed !== undefined) {
       const previous = this.states.get(this.observed)
       if (previous !== undefined && previous.listeners.size === 0) this.removeSession(this.observed)
@@ -235,6 +258,36 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
     const state = this.state(sessionId)
     state.subscribed = true
     void this.refresh(sessionId).catch(() => undefined)
+    this.schedulePoll()
+  }
+
+  private clearPollTimer(): void {
+    if (this.pollTimer === undefined) return
+    clearTimeout(this.pollTimer)
+    this.pollTimer = undefined
+  }
+
+  /**
+   * Chain polls after settlement rather than using setInterval: a hung or slow
+   * transport owns at most one poll wait, while refresh() still coalesces an
+   * event-driven invalidation landing during that wait.
+   */
+  private schedulePoll(): void {
+    const sessionId = this.observed
+    const generation = this.pollGeneration
+    if (sessionId === undefined || this.disposed || !this.connected
+      || this.pollTimer !== undefined || this.pollFlightGeneration === generation) return
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = undefined
+      if (this.disposed || !this.connected || this.observed !== sessionId
+        || this.pollGeneration !== generation) return
+      this.pollFlightGeneration = generation
+      void this.refreshWithMode(sessionId, undefined, true).catch(() => undefined).finally(() => {
+        if (this.pollFlightGeneration !== generation) return
+        this.pollFlightGeneration = undefined
+        if (this.observed === sessionId && this.pollGeneration === generation) this.schedulePoll()
+      })
+    }, WORKFLOW_RUN_POLL_INTERVAL_MS)
   }
 
   private publish(state: SessionState, patch: Partial<WorkflowRunsSourceSnapshot>): void {
@@ -285,6 +338,31 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
   }
 
   async refresh(sessionId: string, supplied?: AbortSignal): Promise<WorkflowRunsSourceSnapshot> {
+    try {
+      return await this.refreshWithMode(sessionId, supplied, false)
+    } catch (error) {
+      // A foreground caller may have joined a background poll's single-flight.
+      // In that case the shared operation intentionally preserved `ready`, but
+      // the explicit Retry/launch refresh still owns an error surface.
+      const state = this.states.get(sessionId)
+      if (state !== undefined && state.snapshot.phase === 'ready' && !state.removed
+        && !this.disposed && this.connected && !isAbort(error)) {
+        this.publish(state, {
+          phase: 'error',
+          runs: state.snapshot.runs,
+          total: state.snapshot.total,
+          error: renderThrown(error),
+        })
+      }
+      throw error
+    }
+  }
+
+  private async refreshWithMode(
+    sessionId: string,
+    supplied: AbortSignal | undefined,
+    background: boolean,
+  ): Promise<WorkflowRunsSourceSnapshot> {
     if (this.disposed) return this.get(sessionId)
     const state = this.state(sessionId)
     if (state.removed || !this.connected) return state.snapshot
@@ -294,7 +372,11 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
     const generation = request.generation
     let operation!: Promise<WorkflowRunsSourceSnapshot>
     operation = (async (): Promise<WorkflowRunsSourceSnapshot> => {
-      this.publish(state, { phase: 'loading', error: undefined })
+      // A periodic fallback must not flash a healthy dashboard through loading
+      // every two seconds. Initial/manual reads retain their explicit phase.
+      if (!background || state.snapshot.phase !== 'ready') {
+        this.publish(state, { phase: 'loading', error: undefined })
+      }
       try {
         const page = await this.call<any>('list', sessionId, { limit: DEFAULT_LIMIT }, request.signal)
         if (state.removed || this.disposed || generation !== this.connectionGeneration || request.signal.aborted) return state.snapshot
@@ -316,12 +398,17 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
         return state.snapshot
       } catch (error) {
         if (isAbort(error) || request.signal.aborted || generation !== this.connectionGeneration) return state.snapshot
-        this.publish(state, {
-          phase: 'error',
-          runs: state.snapshot.runs,
-          total: state.snapshot.total,
-          error: renderThrown(error),
-        })
+        // Preserve the last authoritative ready snapshot across a transient
+        // polling failure. Connection lifecycle signals own the reconnecting
+        // phase; an explicit Retry still surfaces its error normally.
+        if (!background || state.snapshot.phase !== 'ready') {
+          this.publish(state, {
+            phase: 'error',
+            runs: state.snapshot.runs,
+            total: state.snapshot.total,
+            error: renderThrown(error),
+          })
+        }
         throw error
       } finally {
         this.retire(state, request.controller)
@@ -348,10 +435,8 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
     if (state.removed || this.disposed || cursor === undefined || !this.connected) return state.snapshot
     if (state.pageFlight !== undefined) return waitWithAbort(state.pageFlight, supplied)
     // A later-page failure deliberately leaves the successful prefix and its
-    // cursor in the snapshot.  `phase` is `error` in that state so the pane can
-    // announce the failure; accepting the retained cursor here is what makes
-    // the inline Retry control useful.  Initial failures have no cursor and
-    // have already returned above.
+    // cursor ready. The caller owns the inline paging error; turning the whole
+    // source into `error` would create a second dashboard alert for one fault.
 
     const request = this.request(state, supplied)
     const generation = request.generation
@@ -391,7 +476,13 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
         return state.snapshot
       } catch (error) {
         if (isAbort(error) || request.signal.aborted || generation !== this.connectionGeneration) return state.snapshot
-        this.publish(state, { phase: 'error', runs: state.snapshot.runs, total: state.snapshot.total, error: renderThrown(error) })
+        // A live collection commonly advances while the user has an older
+        // continuation token. Recover with a fresh first page instead of
+        // surfacing a transient stale-cursor alert that Retry would merely
+        // turn into this same refresh.
+        if (error instanceof WorkflowRunsRemoteError && error.code === 'stale-cursor') {
+          return this.refresh(sessionId, supplied)
+        }
         throw error
       } finally {
         this.retire(state, request.controller)
@@ -520,6 +611,8 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
   handleDisconnected(): void {
     this.connected = false
     this.connectionGeneration += 1
+    this.pollGeneration += 1
+    this.clearPollTimer()
     for (const state of this.states.values()) {
       if (state.removed) continue
       state.generation = this.connectionGeneration
@@ -538,6 +631,8 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
     // the epoch baseline instead of no-op'ing inside refresh().
     this.connected = true
     this.connectionGeneration += 1
+    this.pollGeneration += 1
+    this.clearPollTimer()
     for (const state of this.states.values()) {
       if (state.removed) continue
       state.generation = this.connectionGeneration
@@ -551,17 +646,21 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
         void this.refresh(state.sessionId).catch(() => undefined)
       }
     }
+    this.schedulePoll()
   }
 
   handleConnected(): void {
     if (this.disposed) return
     this.connected = true
+    this.pollGeneration += 1
+    this.clearPollTimer()
     for (const state of this.states.values()) {
       if (state.removed || !state.subscribed) continue
       state.hintedRevision = undefined
       state.followup = false
       if (state.listeners.size > 0 || this.observed === state.sessionId) void this.refresh(state.sessionId).catch(() => undefined)
     }
+    this.schedulePoll()
   }
 
   removeSession(sessionId: string): void {
@@ -579,7 +678,11 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
     }
     state.listeners.clear()
     this.states.delete(sessionId)
-    if (this.observed === sessionId) this.observed = undefined
+    if (this.observed === sessionId) {
+      this.observed = undefined
+      this.pollGeneration += 1
+      this.clearPollTimer()
+    }
   }
 
   async resolveAndOpenChild(parentSessionId: string, childSessionId: string): Promise<boolean> {
@@ -617,6 +720,8 @@ export class WorkflowRunsController implements WorkflowRunsOperations {
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
+    this.pollGeneration += 1
+    this.clearPollTimer()
     this.connectionGeneration += 1
     for (const state of this.states.values()) {
       state.removed = true

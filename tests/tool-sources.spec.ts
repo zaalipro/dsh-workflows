@@ -1,4 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import type { Stats } from 'node:fs'
+import { lstat, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
+import { resolve as resolvePath } from 'node:path'
+import { tmpdir } from 'node:os'
+import { pathToFileURL } from 'node:url'
+import { Context } from '@deepseek-ai/cordis'
 
 import { parseWorkflowToolRequest } from '../src/tool/schema.js'
 import { resolveWorkflowSource } from '../src/tool/index.js'
@@ -24,6 +31,43 @@ function fsReturning(bytes: Uint8Array | unknown, error?: unknown) {
     },
   }
 }
+
+/** The public filesystem method/target shapes shipped by dsh 0.1.1-rc.2. */
+function publishedRc2LocalFs(hook?: (displayPath: string) => Promise<void>) {
+  const version = (info: Stats) =>
+    `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`
+  return {
+    async resolve(path: string, options?: { cwd?: string; signal?: AbortSignal }) {
+      options?.signal?.throwIfAborted()
+      const displayPath = resolvePath(options?.cwd ?? process.cwd(), path)
+      const targetKey = await realpath(displayPath)
+      await hook?.(displayPath)
+      options?.signal?.throwIfAborted()
+      return { displayPath, targetKey }
+    },
+    processPath(target: { targetKey: string }) { return target.targetKey },
+    fileUrl(target: { targetKey: string }) { return pathToFileURL(target.targetKey).href },
+    async lstat(path: string, options?: { cwd?: string }, signal?: AbortSignal) {
+      signal?.throwIfAborted()
+      try {
+        const info = await lstat(resolvePath(options?.cwd ?? process.cwd(), path))
+        return {
+          version: version(info),
+          type: info.isSymbolicLink() ? 'symlink' : info.isFile() ? 'file' : info.isDirectory() ? 'directory' : 'other',
+          size: info.size,
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+        throw error
+      }
+    },
+    // Present in published RC2. The fallback must not call it because its
+    // target-shaped read cannot atomically enforce no-follow on script_path.
+    async readBytes() { throw new Error('published RC2 readBytes must not be used for script_path') },
+  }
+}
+
+type HostRc2Fs = ReturnType<typeof publishedRc2LocalFs>
 
 describe('workflow tool sources (SH20)', () => {
   it('resolves a saved definition in Session cwd', async () => {
@@ -187,5 +231,104 @@ describe('workflow tool sources (SH20)', () => {
       parseWorkflowToolRequest({ script_path: 'C:\\tmp\\audit.js', meta: META }),
     )
     expect(resolved.script).toBe(SCRIPT)
+  })
+
+  it('reads through the published RC2 local fs shape without readBytesNoFollow', async () => {
+    const root = await mkdtemp(resolvePath(tmpdir(), 'dsh-workflow-source-'))
+    try {
+      await writeFile(resolvePath(root, 'audit.js'), SCRIPT)
+      const resolved = await resolveWorkflowSource(
+        { fs: publishedRc2LocalFs() },
+        parseWorkflowToolRequest({ script_path: 'audit.js', meta: META }),
+        { agent: agent(root) },
+      )
+      expect(resolved).toMatchObject({ script: SCRIPT, filename: 'audit.js', meta: META })
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('works with the actual published @deepseek-ai/dsh RC2 local fs service', async () => {
+    const root = await mkdtemp(resolvePath(tmpdir(), 'dsh-workflow-source-'))
+    const requireFromDsh = createRequire(createRequire(import.meta.url).resolve('@deepseek-ai/dsh/package.json'))
+    const localEntry = requireFromDsh.resolve('@deepseek-ai/dsh-fs-local')
+    const { LocalFileSystem } = await import(pathToFileURL(localEntry).href) as {
+      LocalFileSystem: new (ctx: Context, config: { cwd: string; diffBasisMaxBytes: number }) => HostRc2Fs
+    }
+    const ctx = new Context()
+    try {
+      await writeFile(resolvePath(root, 'audit.js'), SCRIPT)
+      const fs = new LocalFileSystem(ctx, { cwd: root, diffBasisMaxBytes: 1_048_576 })
+      expect('readBytesNoFollow' in fs).toBe(false)
+      const resolved = await resolveWorkflowSource(
+        { fs },
+        parseWorkflowToolRequest({ script_path: 'audit.js', meta: META }),
+        { agent: agent(root) },
+      )
+      expect(resolved.script).toBe(SCRIPT)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the RC2 fallback bounded, abortable, and final-component no-follow', async () => {
+    const root = await mkdtemp(resolvePath(tmpdir(), 'dsh-workflow-source-'))
+    const outside = resolvePath(root, 'outside.js')
+    try {
+      const path = resolvePath(root, 'audit.js')
+      await writeFile(path, SCRIPT)
+      await writeFile(outside, 'complete({ outside: true })')
+      await expect(resolveWorkflowSource(
+        { fs: publishedRc2LocalFs() },
+        parseWorkflowToolRequest({ script_path: path, meta: META }),
+        { definitionMaxBytes: 4 },
+      )).rejects.toThrow(/exceeds the 4-byte limit/u)
+
+      await rm(path)
+      await symlink(outside, path)
+      await expect(resolveWorkflowSource(
+        { fs: publishedRc2LocalFs() },
+        parseWorkflowToolRequest({ script_path: path, meta: META }),
+      )).rejects.toThrow(/must be a regular file/u)
+
+      await rm(path)
+      await writeFile(path, SCRIPT)
+      let swapped = false
+      await expect(resolveWorkflowSource(
+        { fs: publishedRc2LocalFs(async displayPath => {
+          if (swapped) return
+          swapped = true
+          await rm(displayPath)
+          await symlink(outside, displayPath)
+        }) },
+        parseWorkflowToolRequest({ script_path: path, meta: META }),
+      )).rejects.toThrow(/must be a regular file/u)
+
+      await rm(path)
+      await writeFile(path, SCRIPT)
+      const controller = new AbortController()
+      controller.abort()
+      await expect(resolveWorkflowSource(
+        { fs: publishedRc2LocalFs() },
+        parseWorkflowToolRequest({ script_path: path, meta: META }),
+        { signal: controller.signal },
+      )).rejects.toThrow()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('fails closed instead of applying the RC2 local fallback to a remote-shaped provider', async () => {
+    const remote = {
+      ...publishedRc2LocalFs(),
+      async resolve() { return { displayPath: '/workspace/audit.js', targetKey: 'remote://workspace/audit.js' } },
+      async lstat() { return { version: 'remote-v1', type: 'file', size: 1 } },
+      processPath() { return '/workspace/audit.js' },
+      fileUrl() { return 'file:///workspace/audit.js' },
+    }
+    await expect(resolveWorkflowSource(
+      { fs: remote },
+      parseWorkflowToolRequest({ script_path: '/workspace/audit.js', meta: META }),
+    )).rejects.toThrow(/published RC2 local filesystem capability/u)
   })
 })

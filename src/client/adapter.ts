@@ -39,6 +39,8 @@ export class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOperations
   private observedSessionId: string | undefined
   private observedSource: WorkflowRunsSource | undefined
   private unsubscribe: (() => void) | undefined
+  private readonly observationOwners = new Map<object, string>()
+  private readonly defaultObservationOwner = {}
   private disposed = false
   listDefinitions?: WorkflowCatalogOperations['listDefinitions']
   launchDefinition?: WorkflowCatalogOperations['launchDefinition']
@@ -65,6 +67,27 @@ export class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOperations
   }
 
   observe(sessionId: string | undefined): void {
+    this.observeFor(this.defaultObservationOwner, sessionId)
+  }
+
+  /**
+   * Keep independent dashboard renderers from releasing each other's live
+   * Session subscription during a shell/fallback ownership handoff.
+   */
+  observeFor(owner: object, sessionId: string | undefined): void {
+    if (this.disposed) return
+    if (sessionId === undefined) this.observationOwners.delete(owner)
+    else {
+      // Reinsert so the most recently active renderer is authoritative when
+      // different Session ids overlap briefly during navigation.
+      this.observationOwners.delete(owner)
+      this.observationOwners.set(owner, sessionId)
+    }
+    const active = [...this.observationOwners.values()].at(-1)
+    this.setObservedSession(active)
+  }
+
+  private setObservedSession(sessionId: string | undefined): void {
     if (this.disposed || sessionId === this.observedSessionId) return
     this.unsubscribe?.()
     this.unsubscribe = undefined
@@ -107,6 +130,7 @@ export class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOperations
     this.unsubscribe = undefined
     this.observedSource = undefined
     this.observedSessionId = undefined
+    this.observationOwners.clear()
     this.listeners.clear()
   }
 

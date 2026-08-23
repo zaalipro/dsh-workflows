@@ -26,7 +26,6 @@ export interface CompletionNoticeOptions {
   readonly maxBytes?: number
   readonly maxItems?: number
   readonly maxCohortBytes?: number
-  readonly maxConsecutiveWakes?: number
 }
 
 interface Reservation { readonly parent: any }
@@ -126,9 +125,6 @@ export class WorkflowCompletionNotifier {
   private readonly reservations = new Map<string | object, Reservation>()
   private readonly attempted = new Set<string | object>()
   private readonly owners = new Map<any, OwnerQueue>()
-  /** Survives an empty drain so a later completion cannot open a fourth wake. */
-  private readonly consecutiveWakes = new WeakMap<object, number>()
-  private readonly listeners: Array<() => void> = []
   private disposed = false
   private disposal?: Promise<void>
 
@@ -143,15 +139,10 @@ export class WorkflowCompletionNotifier {
       maxBytes: supplied.maxBytes ?? 16_384,
       maxItems: supplied.maxItems ?? 20,
       maxCohortBytes: supplied.maxCohortBytes ?? 262_144,
-      maxConsecutiveWakes: supplied.maxConsecutiveWakes ?? 3,
     }
     for (const [name, value] of Object.entries(this.options)) {
       if (!Number.isSafeInteger(value) || value < 1) throw new TypeError(`workflow completion ${name} must be a positive safe integer`)
     }
-    const remove = ctx?.on?.('agent/inbox/claimed', ({ agent, message }: any) => {
-      if (message?.source?.kind === 'user') this.humanInput(agent)
-    })
-    if (typeof remove === 'function') this.listeners.push(remove)
   }
 
   reserve(key: string | object, parent: any): void {
@@ -228,11 +219,6 @@ export class WorkflowCompletionNotifier {
         }
         continue
       }
-      const wakeKey = typeof parent === 'object' && parent !== null ? parent : undefined
-      const wakes = wakeKey === undefined ? 0 : (this.consecutiveWakes.get(wakeKey) ?? 0)
-      const canWake = wakes < this.options.maxConsecutiveWakes
-      if (canWake && wakeKey !== undefined) this.consecutiveWakes.set(wakeKey, wakes + 1)
-      const lane: 'followup'|'inject' = canWake ? 'followup' : 'inject'
       const text = cohort.map(item => item.text).join('\n\n')
       let delivered = false
       let failure: unknown
@@ -245,16 +231,29 @@ export class WorkflowCompletionNotifier {
             summary: boundContextSummary(`workflow ${first.input.displayName} ${statusClause(first.input.status)}`),
           },
         })
-        const append = parent?.[lane]
-        if (typeof append !== 'function') throw new Error('workflow owner inbox is unavailable')
-        await Promise.resolve(append.call(parent, message))
+        // A completion is a durable conversation notification, not a new
+        // prompt.  Agent.followup() wakes the model and Agent.inject() stays
+        // invisible while the Agent is idle.  Session.append() is the public
+        // stock-Harness seam that makes plugin context durable and visible
+        // immediately without touching either inbox lane.
+        const append = parent?.session?.append
+        if (typeof append !== 'function') throw new Error('workflow owner session is unavailable')
+        await Promise.resolve(append.call(
+          parent.session,
+          'user/message',
+          message,
+          { surfaceOp: 'append' },
+        ))
         delivered = true
       } catch (error) {
         failure = error
         this.ctx?.logger?.warn?.(`workflow-supervisor: completion notice delivery failed: ${renderThrown(error)}`)
       }
       for (const item of cohort) {
-        await this.finalize(item, delivered ? 'delivered' : 'abandoned', delivered ? lane : 'enqueue-failed', failure)
+        // The version-2 manifest calls its non-waking delivery lane `inject`.
+        // Keep that durable vocabulary compatible while delivering through
+        // the stronger immediately-visible Session append seam.
+        await this.finalize(item, delivered ? 'delivered' : 'abandoned', delivered ? 'inject' : 'enqueue-failed', failure)
         item.resolve(true)
       }
     }
@@ -297,10 +296,6 @@ export class WorkflowCompletionNotifier {
     }
   }
 
-  humanInput(agent: any): void {
-    if (typeof agent === 'object' && agent !== null) this.consecutiveWakes.set(agent, 0)
-  }
-
   async whenOwnerQuiescent(agent: any, signal?: AbortSignal): Promise<void> {
     for (;;) {
       signal?.throwIfAborted()
@@ -314,7 +309,6 @@ export class WorkflowCompletionNotifier {
   async dispose(): Promise<void> {
     if (this.disposal !== undefined) return this.disposal
     this.disposed = true
-    for (const remove of this.listeners.splice(0)) { try { remove() } catch { /* contained */ } }
     this.disposal = (async () => {
       // Once disposal starts no new owner turn may be opened.  Every queued
       // claim is nevertheless finalized so a terminal `claimed` row cannot

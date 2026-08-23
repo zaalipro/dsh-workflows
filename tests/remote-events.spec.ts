@@ -13,7 +13,7 @@ interface KeyedLatestPolicy {
   readonly invalidationArgs: readonly [WorkflowRemoteEvent]
 }
 
-/** H-shaped keyed-latest lane used to prove the package policy, not a local queue. */
+/** Host-shaped keyed-latest lane used to prove the package policy, not a local queue. */
 class FakeKeyedLatest {
   name?: string
   policy?: KeyedLatestPolicy
@@ -48,7 +48,7 @@ class FakeKeyedLatest {
   }
 }
 
-describe('bounded invalidation-only workflow events (RC8)', () => {
+describe('bounded invalidation-only workflow events', () => {
   it('registers keyed-latest workflows/run-change with invalidate-all overflow args', () => {
     const registry = new FakeKeyedLatest()
     const dispose = registerWorkflowRemoteEvents({ apiRemoteEvents: registry })

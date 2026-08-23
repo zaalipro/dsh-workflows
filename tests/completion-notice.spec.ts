@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
 
 import {
   renderWorkflowCompletionNotice,
@@ -72,13 +73,14 @@ describe('renderWorkflowCompletionNotice', () => {
 })
 
 describe('WorkflowCompletionNotifier', () => {
-  it('delivers one owner wake and ignores a duplicate run id', async () => {
-    const followup: any[] = []
+  it('appends one durable visible notice without waking the owner and ignores a duplicate run id', async () => {
+    const session = Session.create(SessionId('completion-notice'))
     const parent = {
-      followup: async (message: unknown) => { followup.push(message) },
+      session,
+      followup: async () => { throw new Error('must not wake') },
       inject: async () => { throw new Error('must not inject') },
     }
-    const notifier = new WorkflowCompletionNotifier({ on: () => () => undefined, logger: { warn: () => undefined } }, { maxBytes: 1_000, maxConsecutiveWakes: 3 })
+    const notifier = new WorkflowCompletionNotifier({ on: () => () => undefined, logger: { warn: () => undefined } }, { maxBytes: 1_000 })
     await expect(notifier.notify({
       runId: 'run-1', displayName: 'audit', status: 'completed', parent,
       result: { state: 'available', content: { kind: 'value', value: { answer: 42 } }, totalBytes: 16, truncated: false },
@@ -86,9 +88,15 @@ describe('WorkflowCompletionNotifier', () => {
     await expect(notifier.notify({
       runId: 'run-1', displayName: 'audit', status: 'completed', parent,
     })).resolves.toBe(false)
-    expect(followup).toHaveLength(1)
-    expect(noticeText(followup[0])).toContain('workflow "audit" completed.')
-    expect(noticeText(followup[0])).not.toContain('run-1')
+    expect(session.events).toHaveLength(1)
+    expect(session.events[0]).toMatchObject({
+      type: 'user/message',
+      surfaceOp: 'append',
+      data: { source: { kind: 'plugin', plugin: 'workflow-supervisor', form: 'notice' } },
+    })
+    expect(noticeText(session.events[0]?.data)).toContain('workflow "audit" completed.')
+    expect(noticeText(session.events[0]?.data)).not.toContain('run-1')
+    expect(session.events.some(event => event.type === 'turn/start' || event.type === 'agent/inbox/spliced')).toBe(false)
     await notifier.dispose()
   })
 })

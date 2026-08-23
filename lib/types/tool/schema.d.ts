@@ -5,6 +5,7 @@ export interface WorkflowToolArgs {
     readonly meta?: Record<string, unknown>;
     readonly args?: Record<string, unknown>;
     readonly validate_only?: boolean;
+    readonly save_scope?: 'project' | 'user';
     readonly resume_from_run_id?: string;
     readonly agent_budget?: number;
 }
@@ -24,6 +25,7 @@ export type ParsedWorkflowToolRequest = {
     };
     readonly args: Record<string, unknown>;
     readonly validateOnly: boolean;
+    readonly saveScope?: 'project' | 'user';
     readonly agentBudget?: number;
 } | {
     readonly kind: 'resume';
@@ -53,6 +55,10 @@ export declare const WORKFLOW_TOOL_SCHEMA: {
         };
         readonly validate_only: {
             readonly type: "boolean";
+        };
+        readonly save_scope: {
+            readonly type: "string";
+            readonly enum: readonly ["project", "user"];
         };
         readonly resume_from_run_id: {
             readonly type: "string";
@@ -134,6 +140,11 @@ export declare const WORKFLOW_TOOL_PARAMETERS: {
     readonly validate_only: {
         readonly type: "boolean";
         readonly description: "Smoke-check one canned-host path instead of starting a live run (no children, no run record). Defaults true for inline script (and then saves the definition); defaults false for name/script_path. Never launches children.";
+    };
+    readonly save_scope: {
+        readonly type: "string";
+        readonly enum: readonly ["project", "user"];
+        readonly description: "Where a successful inline validate-only authoring smoke is saved. Defaults to project; use user for $DSH_HOME/workflows. Invalid with name, script_path, resume, or validate_only:false.";
     };
     readonly resume_from_run_id: {
         readonly type: "string";

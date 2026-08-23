@@ -14,6 +14,7 @@ describe('workflow tool request schema', () => {
         agent_budget: { type: 'integer', minimum: 1, maximum: 1024 },
         args: { type: 'object' },
         validate_only: { type: 'boolean' },
+        save_scope: { type: 'string', enum: ['project', 'user'] },
       },
     })
   })
@@ -48,6 +49,7 @@ describe('workflow tool request schema', () => {
       },
       args: {},
       validateOnly: true,
+      saveScope: 'project',
       agentBudget: 1024,
     })
     expect(parseWorkflowToolRequest({ script_path: 'saved.workflow.json' })).toEqual({
@@ -97,6 +99,20 @@ describe('workflow tool request schema', () => {
     expect(() => parseWorkflowToolRequest({ script_path: 'audit.js' })).toThrow(/requires the meta object/u)
   })
 
+  it('allows save_scope only for an inline validate-only save', () => {
+    expect(parseWorkflowToolRequest({
+      script: 'return 1', meta: { name: 'inline', description: 'inline workflow' }, save_scope: 'user',
+    })).toMatchObject({ validateOnly: true, saveScope: 'user' })
+    for (const value of [
+      { name: 'audit', save_scope: 'user' },
+      { script_path: 'audit.workflow.json', save_scope: 'user' },
+      { script: 'return 1', meta: { name: 'inline', description: 'inline workflow' }, validate_only: false, save_scope: 'user' },
+    ]) expect(() => parseWorkflowToolRequest(value)).toThrow(/allowed only with an inline script validate-only save/u)
+    expect(() => parseWorkflowToolRequest({
+      resume_from_run_id: 'run-1', save_scope: 'user',
+    })).toThrow(/cannot be combined/u)
+  })
+
   it.each([null, [], 1, 'args'])('rejects non-object args %j with wrapping guidance', (args) => {
     expect(() => parseWorkflowToolRequest({ name: 'audit', args })).toThrow(/wrap arrays\/scalars in a field/u)
   })
@@ -133,6 +149,7 @@ describe('workflow tool request schema', () => {
     expect(() => parseWorkflowToolRequest({ name: 'audit', surprise: true })).toThrow(/unknown field "surprise"/u)
     expect(() => parseWorkflowToolRequest({ name: 'Bad_Name' })).toThrow(/is invalid/u)
     expect(() => parseWorkflowToolRequest({ name: 'audit', validate_only: 'yes' })).toThrow(/validate_only must be a boolean/u)
+    expect(() => parseWorkflowToolRequest({ script: 'return 1', meta: { name: 'audit', description: 'd' }, save_scope: 'global' })).toThrow(/project or user/u)
     expect(() => parseWorkflowToolRequest({ resume_from_run_id: '' })).toThrow(/non-empty string/u)
     expect(() => parseWorkflowToolRequest({ script: 1, meta: { name: 'audit', description: 'd' } })).toThrow(/script must be a string/u)
     expect(() => parseWorkflowToolRequest({ script_path: '' })).toThrow(/non-empty string/u)

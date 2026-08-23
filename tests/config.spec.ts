@@ -73,7 +73,6 @@ describe('workflow package configuration', () => {
       completionNoticeMaxBytes: 16_384,
       completionCohortMaxItems: 20,
       completionCohortMaxBytes: 262_144,
-      maxConsecutiveCompletionWakes: 3,
       saveScope: 'project',
     })
     expect(resolved.bundledDefinitionsDir).toBeUndefined()

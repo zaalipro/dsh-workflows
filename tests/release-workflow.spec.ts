@@ -5,14 +5,17 @@ import { describe, expect, it } from 'vitest'
 
 const root = resolve(import.meta.dirname, '..')
 const source = readFileSync(resolve(root, '.github/workflows/release.yml'), 'utf8')
+const checkerSource = readFileSync(resolve(root, 'scripts/check-release.mjs'), 'utf8')
 const workflow = parse(source) as any
-const officialCommit = '141eb6fef83422698aef7a981029e843e8161534'
+const officialCommit = 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e'
 
 describe('release workflow policy', () => {
   it('runs only for version tags and never cancels a release', () => {
     expect(workflow.name).toBe('Release')
     expect(workflow.on.push.tags).toEqual(['v*'])
     expect(workflow.concurrency['cancel-in-progress']).toBe(false)
+    expect(workflow.concurrency.group).toBe('release-zaalipro-dsh-workflows')
+    expect(workflow.concurrency.group).not.toContain('github.ref')
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })
 
@@ -40,6 +43,25 @@ describe('release workflow policy', () => {
     expect(source.match(/node scripts\/check-release\.mjs/gu) ?? []).toHaveLength(1)
     expect(source).not.toMatch(/git\s+apply/u)
     expect(source).not.toMatch(/H prerequisite patch/u)
+    expect(checkerSource).toContain('artifact directory must be empty')
+    expect(checkerSource).toContain('must report exactly one .tgz filename')
+    expect(checkerSource).toContain('const filename = basename(opts.tarball)')
+    expect(checkerSource).not.toContain('artifactPath:')
+    expect(checkerSource).toContain('npm publish ./${filename}')
+  })
+
+  it('binds a tagged release to clean tracked source and tracked generated package artifacts', () => {
+    expect(checkerSource).toContain("capture('git', ['rev-parse', `${tag}^{}`]")
+    expect(checkerSource).toContain("capture('git', ['rev-parse', 'HEAD']")
+    expect(checkerSource).toContain("'status', '--porcelain', '--untracked-files=no'")
+    expect(checkerSource).toContain('does not resolve to HEAD')
+    expect(checkerSource).toContain('tracked worktree must be clean')
+    expect(checkerSource).toContain("stage = 'tagged-generated-files'")
+    expect(checkerSource).toContain("capture('git', ['ls-files', '-z', '--', ...paths]")
+    expect(checkerSource).toContain('generated package artifacts must be tracked by git')
+    expect(checkerSource).toContain("stage = 'tagged-generated-tree'")
+    expect(checkerSource).toContain('release build changed tracked files; commit every generated package artifact before tagging')
+    expect(checkerSource.match(/'status', '--porcelain', '--untracked-files=no'/gu) ?? []).toHaveLength(2)
   })
 
   it('propagates the discovered filename, digest, dist tag, and prerelease state', () => {
@@ -51,12 +73,19 @@ describe('release workflow policy', () => {
       prerelease: '${{ steps.artifact.outputs.prerelease }}',
     })
     const record = pack.steps.find((step: any) => step.id === 'artifact')
+    expect(record.name).toContain('Consume')
+    expect(record.run).toContain('release-artifact.json')
+    expect(record.run).toContain('read_field')
     expect(record.run).toContain('sha256sum')
-    expect(record.run).toContain('dist_tag=next')
-    expect(record.run).toContain('dist_tag=latest')
-    expect(record.run).toContain('prerelease=true')
-    expect(record.run).toContain('prerelease=false')
+    expect(record.run).toContain('read_field distTag')
+    expect(record.run).toContain('read_field prerelease')
+    expect(record.run).toContain('expected_filename="zaalipro-dsh-workflows-$(read_field version).tgz"')
+    expect(record.run).toContain('test "${filename##*/}" = "$filename"')
+    expect(record.run).not.toContain('artifactPath')
+    expect(record.run).toContain('test "$dist_tag" = next')
+    expect(record.run).toContain('test "$dist_tag" = latest')
     const upload = pack.steps.find((step: any) => step.uses?.startsWith('actions/upload-artifact@'))
+    expect(upload.with.path).toContain('release-artifact.json')
     expect(upload.with['if-no-files-found']).toBe('error')
     expect(upload.with['retention-days']).toBe(7)
   })
@@ -69,6 +98,11 @@ describe('release workflow policy', () => {
     expect(download.with.name).toBe('dsh-workflows-release-artifact')
     const verify = publish.steps.find((step: any) => step.name?.includes('Verify downloaded bytes'))
     expect(verify.run).toContain('sha256sum')
+    expect(verify.run).toContain('read_field package')
+    expect(verify.run).toContain('read_field version')
+    expect(verify.run).toContain('read_field distTag')
+    expect(verify.run).toContain('read_field prerelease')
+    expect(verify.run).toContain('read_field publish')
     const npm = publish.steps.find((step: any) => step.name?.includes('npm provenance'))
     expect(npm.run).toContain('npm publish')
     expect(npm.run).toContain('--provenance')

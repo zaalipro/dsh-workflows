@@ -2,7 +2,7 @@
 
 Status: implemented
 
-本笔记记录 `@zaalipro/dsh-workflows` 中已实现的 package 架构。官方 Harness 版本 **H** 尚未发布：worker-thread evaluator、`tools.replace`、`registerFallback`、trusted packaged-skill binding、`ApiRemoteEventRegistry` 以及 production nested private-directory I/O 在 stock `141eb6f` / `dsh-v0.1.0-rc.8` 中仍然缺失。本包在该 baseline 上 fail-close，而不是 activation。
+本笔记记录 `@zaalipro/dsh-workflows` 当前已实现的 package 架构。Plugin `0.1.0-rc.3` 只支持官方 Harness `0.1.1-rc.2`；CLI 与 workflow package manifest 必须在 activation 前同时精确匹配。由于 stock evaluator 与 private-directory face 未暴露完整 workflow product contract，本包提供自己的 compatibility evaluator 与 retained-storage descriptor。
 
 [English](2026-08-20-installable-workflows-package.md) | 中文
 
@@ -12,27 +12,27 @@ Saved workflow 与 supervised retained run 跨越 engine、Agent、Session、fil
 
 ## Summary
 
-一个 MIT package `@zaalipro/dsh-workflows` 在兼容版本 H 的 DeepSeek Harness 官方 workflow engine 上安装完整 Host 产品和可选 Web Client。本包拥有 saved definition、logical-run supervision、version-2 retained inspection、command 与 exact-Agent tool integration、durable Chat recording、completion notice、generated Remote method 和 dashboard。它不发布第二个 evaluator、forked Harness distribution、Grok CLI code 或 Rhai runtime。
+一个 MIT package `@zaalipro/dsh-workflows` 在官方 Harness `0.1.1-rc.2` 上安装完整 Host 产品和可选 Web Client。本包拥有 compatibility evaluator、saved definition、logical-run supervision、version-2 retained inspection、command 与 exact-Agent tool integration、durable Chat recording、completion notice、generated Remote method 和 dashboard。它不发布 forked Harness distribution、Grok CLI code 或 Rhai runtime。
 
 ## Context
 
-官方 commit `141eb6f` 和 tag `dsh-v0.1.0-rc.8` 是 API reality 与 patch-development base。该 stock release 缺少所需 external workflow seam，因此被明确判定为不兼容。**H** 表示第一个包含完整 prerequisite set 的未来官方版本；不会把未验证的更晚 tag 指定为 H。
+官方 commit `141eb6f` 与 tag `dsh-v0.1.0-rc.8` 是最初的不兼容 API-reality baseline。当前 release evidence 改为固定官方 `0.1.1-rc.2`；未验证的更早或更晚版本都会在 exact manifest gate 失败。
 
 Development-fork commit `391c829` 只作为 behavioral donor。它的 durable-run experience 有助于确定 required outcome 与 regression，但不会 wholesale copy 其 RC5-derived substrate。本包消费狭窄的官方 capability：deferred workflow start、deterministic journal checkpoint 与 gate、descriptor-rooted private storage、exact-Agent tool/prompt replacement、trusted packaged-skill precedence、client-owned command action、generated external Remote mounting，以及 bounded event forwarding。
 
 ## Decision
 
-### 一个 distribution unit 使用一个官方 engine
+### 一个 distribution unit 使用 package compatibility evaluator
 
-npm package 是唯一 installable unit。其 bundle patch 在 Web 与 headless 中挂载一个 Host aggregate，并且只在 Web 中公布一个 Client aggregate。官方 worker-thread provider 仍是唯一 JavaScript workflow engine。Registry、supervisor、recorder、question bridge、command、tool adapter、Remote service、dashboard 与 durable renderer 共享一个 package version，并在一个 ownership tree 中 unwind。
+npm package 是唯一 installable unit。其 bundle patch 在 Web 与 headless 中挂载一个 Host aggregate，并且只在 Web 中公布一个 Client aggregate。Stock workflow service 为 stock consumer 保持挂载，而 plugin run 使用 package-private compatibility evaluator。Registry、supervisor、recorder、question bridge、command、tool adapter、Remote service、dashboard 与 durable renderer 共享一个 package version，并在一个 ownership tree 中 unwind。
 
-本包会在 filesystem initialization 或 Session admission 前检查 H 的 explicit prerequisite marker。Capability 缺失会使 activation 失败，而不会选择 degraded implementation。移除 package 会移除一个 dependency 与一个 bundle layer，并保持官方 profile composition 完整。
+本包会在 configuration、filesystem initialization 或 Session admission 前解析精确 CLI 与 workflow package version，然后 preflight 所需 stock service face。Version mismatch 或 capability 缺失会使 activation 失败，而不会选择 degraded implementation。移除 package 会移除一个 dependency 与一个 bundle layer，并保持官方 profile composition 完整。
 
 ### Exact-Agent integration，而不是并行 model tool
 
-本包绝不注册第二个 global `workflow` tool。对于每个 Agent，它检查 effective inherited entry 与 prompt section。只有与 H 导出官方 identity 的 reference equality 才允许通过 exact `agent.ctx` 执行同步 `ToolRuntime.replace` 与 `SystemPrompt.replaceSection`。Missing tool、custom same-name tool、identity change 或 preset omission 都不会获得 replacement。Partial installation 会立即 rollback，restoring disposer 确保 HMR 期间没有 duplicate schema 或 guidance。
+本包绝不注册第二个 global `workflow` tool。对于每个 Agent，它检查 effective inherited entry。在 stock `0.1.1-rc.2` 上，只有完整 official public workflow fingerprint 才允许 Agent-scoped `tools.register` 与 `systemPrompt.section`；未来 atomic seam 仍使用 exact identity/marker compare-and-swap。Missing tool、custom same-name tool、identity change 或 preset omission 都不会获得 replacement。Package-owned mutation 会 suppress unscoped `tools/change` fan-out，使多个 Agent shadow 安静收敛而不会重复注册循环。
 
-Packaged `create-workflow` skill 使用 H 针对该 reserved name 的 protected trusted contribution。其他所有名称的普通 project/user/global skill precedence 保持不变。
+Packaged `create-workflow` skill 从 installed asset 读取，并在该 seam 可用时使用官方 trusted contribution。其他所有名称的普通 project/user/global skill precedence 保持不变。
 
 ### `/workflows` 的 browser ownership
 
@@ -64,7 +64,7 @@ Forwarded `workflows/run-change` event 只包含 per-Session revision invalidati
 
 Host 与 Client 是 disjoint TypeScript program。Build 顺序是 Host TSC、在 copied temporary mini-workspace 中 focused Typert generation、Client TSC 消费 generated declaration，最后生成 classic lazy-CJS browser bundle。Staging root 拥有一个 aggregate Host config；copied package 拥有一个 staging `tsconfig.json`；不存在 hand-authored Remote descriptor 或 obsolete nested Host/Client face。Generated Typert artifact 从 `WorkspaceTypertGenerator.generate()` return value 消费。
 
-Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`scripts/packed-consumer.mjs` 以 scripts disabled 安装这些 byte，import 每个 public JavaScript/NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，并以对 stock `141eb6f` 的 `official-h-probe` 结束，probe 报告 `not-advertised`。Live `dsh plugin` add/remove、Web/headless profile boot 与 stock-profile restore 等待官方 H，并且只在 `DSH_RUN_PACKED_CONSUMER=1` 且 checkout 已 advertise H 时运行。Browser、stress、provider 与 final aggregate gate 都在同一 product boundary 上运行。执行 npm publication 与 GitHub Release 时，它们复用 tested byte，而不是 repack。
+Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`scripts/packed-consumer.mjs` 以 scripts disabled 安装这些 byte，import 每个 public JavaScript/NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，验证精确官方 `0.1.1-rc.2` Host，并在 isolated home 下执行 Web/headless plugin add、bounded boot、remove 与 restored stock boot。Browser、stress、provider 与 final aggregate gate 都在同一 product boundary 上运行。执行 npm publication 与 GitHub Release 时，它们复用 tested byte，而不是 repack。
 
 ## Rejected alternatives
 
@@ -72,7 +72,7 @@ Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`
 
 **发布多个 npm package。** 拆分 registry、supervisor、storage 与 UI 会暴露不兼容版本组合，并把 durable admission、teardown 与 asset compatibility 分裂到 independent install unit。一个 package 仍可拥有 disjoint Host/Client build face，而不拆分 runtime ownership。
 
-**发布第二个 workflow engine 或 wholesale copy donor file。** 另一 evaluator 会 fork hook、schema、cancellation、subagent 和 durable vocabulary behavior。Wholesale donor code 还会引入 RC5 assumption。H 的官方 engine 保持 authority；donor behavior 只贡献 test 与 requirement。
+**Wholesale copy donor file。** Wholesale donor code 会引入 RC5 assumption。狭窄且带 attribution 的 package evaluator 只维护所需 workflow behavior；其他 donor behavior 只贡献 test 与 requirement。
 
 **在 process death 后 resume execution。** 持久化足够 authority 要求重建 Agent identity、args/script authority、gate、child handle 和 external-effect claim。Journal 无法证明 uncommitted external effect 没有发生。Interrupted inspection 是诚实表达；new run 比 false continuation 更安全。
 
@@ -84,9 +84,9 @@ Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`
 
 ## Consequences
 
-本包可以作为一个 reversible profile layer 安装与移除，官方 H 继续拥有 script semantic、child execution 与 durable Chat vocabulary。Durable-before-visible launch 与 fixed-point teardown 让 supervisor 对每个 accepted attempt 负责直到 cleanup。Same-process replay 会 suppress committed matching effect，而 documentation 与 authoring pattern 必须让 uncommitted effect 保持幂等。
+本包可以作为一个 reversible profile layer 安装与移除；compatibility evaluator 拥有 plugin script semantic 与 child execution，官方 Session vocabulary 继续作为 durable Chat authority。Durable-before-visible launch 与 fixed-point teardown 让 supervisor 对每个 accepted attempt 负责直到 cleanup。Same-process replay 会 suppress committed matching effect，而 documentation 与 authoring pattern 必须让 uncommitted effect 保持幂等。
 
-该设计为严格 compatibility 付出代价：stock RC8 不能加载本包，而且只有每个 H prerequisite 与 package acceptance gate 都通过后，release 才兼容。Native locking 与 descriptor-rooted filesystem capability 是必需条件；unsupported platform 会失败，而不是静默弱化 storage。Retained data 与 browser read 有界，因此较旧 terminal detail 可变成明确 truncated 或 evicted 状态。
+该设计为严格 compatibility 付出代价：只有官方 `0.1.1-rc.2` 可以加载 plugin `0.1.0-rc.3`，更高版本需要新的 verified package release。Native locking 与 plugin-owned descriptor operation 是必需条件；unsupported platform 会失败，而不是静默弱化 storage。Retained data 与 browser read 有界，因此较旧 terminal detail 可变成明确 truncated 或 evicted 状态。
 
 Browser 获得更丰富 inspection，但不成为 execution authority。Generated Remote staging 与 tarball-first verification 增加 build complexity，却能在 publication 前发现 missing asset、source fallback、protocol drift 和 install-only failure。
 

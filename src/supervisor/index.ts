@@ -58,10 +58,11 @@ import {
 } from './types.js'
 import { WorkflowPackageError } from '../invariant.js'
 import { cannedStockValidate, repairObjectLiteralSemicolons } from './canned-validate.js'
-import { scriptWithJobMapParallel } from './parallel-compat.js'
+import { scriptWithJobMapParallel, unwrapStockCompatibilityResult } from './parallel-compat.js'
 import {
   adaptEngineHandle,
   rejectPartialEngineHandle,
+  supportsEngineReplay,
   type EngineHandle,
   type EngineResult,
 } from './engine-compat.js'
@@ -81,7 +82,6 @@ export interface SupervisorConfig {
   readonly completionNoticeMaxBytes?: number
   readonly completionCohortMaxItems?: number
   readonly completionCohortMaxBytes?: number
-  readonly maxConsecutiveCompletionWakes?: number
   readonly memberOutcomeMaxBytes?: number
   readonly maxRetainedRunsPerSession?: number
   readonly maxWorkflowNamesPerSession?: number
@@ -123,6 +123,7 @@ export interface WorkflowValidateSpec extends Omit<WorkflowLaunchSpec, 'definiti
   readonly filename: string
 }
 interface WorkflowJournalEntry {
+  readonly ordinal?: number
   readonly callId: readonly [number, ...number[]]
   readonly fingerprint: string
   readonly kind: string
@@ -174,6 +175,10 @@ interface InternalRun {
   tail: Promise<void>
   lifecycleTail: Promise<void>
   delivery?: Promise<unknown>
+  /** First terminal mutation failure which left the durable head active.  It
+   * is retained after the Attempt pointer is cleared so teardown can report
+   * the real failure instead of spinning on an apparently ownerless run. */
+  settlementFailure?: unknown
   /** Set synchronously at the owner/service teardown linearization point. */
   closing?: 'owner'|'supervisor'
   /** Whether this run currently owns one of the configured active slots. */
@@ -232,7 +237,7 @@ function rewriteValidationDiagnostic(message: string, filename: string, metaName
 /** Collapse every gate smoke-stop into one product string. */
 function productWouldPause(value: unknown, maxBytes: number): string {
   const raw = utf8Prefix(String(value ?? ''), maxBytes)
-  const message = raw.replace(/^would pause(?:\s*\([^)]*\))?:\s*/iu, '').trim()
+  const message = raw.replace(/^would (?:pause|await_user)(?:\s*\([^)]*\))?:\s*/iu, '').trim()
   return `would pause: ${message}`
 }
 function numericCursor(cursor: WorkflowRunCursor | undefined, total: number): number {
@@ -286,18 +291,6 @@ function headView(head: WorkflowRunHeadRecord): WorkflowRunHead {
     resultRevision: head.resultRevision, artifactsRevision: head.artifactsRevision,
   }
 }
-function checkpointCallCompare(left: WorkflowJournalEntry, right: WorkflowJournalEntry): number {
-  const size = Math.max(left.callId.length, right.callId.length)
-  for (let index = 0; index < size; index += 1) {
-    const a = left.callId[index]
-    const b = right.callId[index]
-    if (a === undefined) return -1
-    if (b === undefined) return 1
-    if (a !== b) return a - b
-  }
-  return 0
-}
-
 function isJsonRecord(value: unknown): value is Record<string, JsonValue> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -347,7 +340,12 @@ export class WorkflowSupervisor {
   private disposed = false
   private disposal?: Promise<void>
 
-  constructor(private readonly ctx: any, config: SupervisorConfig = {}, store?: WorkflowRunStore) {
+  constructor(
+    private readonly ctx: any,
+    config: SupervisorConfig = {},
+    store?: WorkflowRunStore,
+    private readonly workflowEngine: { start(request: any): unknown; validate?(request: any): Promise<unknown> } | undefined = undefined,
+  ) {
     this.config = {
       defaultAgentBudget: config.defaultAgentBudget ?? 128,
       maxAgentBudget: config.maxAgentBudget ?? 1_024,
@@ -358,7 +356,6 @@ export class WorkflowSupervisor {
       completionNoticeMaxBytes: config.completionNoticeMaxBytes ?? 16_384,
       completionCohortMaxItems: config.completionCohortMaxItems ?? 20,
       completionCohortMaxBytes: config.completionCohortMaxBytes ?? 262_144,
-      maxConsecutiveCompletionWakes: config.maxConsecutiveCompletionWakes ?? 3,
       memberOutcomeMaxBytes: config.memberOutcomeMaxBytes ?? 131_072,
       maxRetainedRunsPerSession: config.maxRetainedRunsPerSession ?? 256,
       maxWorkflowNamesPerSession: config.maxWorkflowNamesPerSession ?? 4_096,
@@ -394,7 +391,6 @@ export class WorkflowSupervisor {
       maxBytes: this.config.completionNoticeMaxBytes,
       maxItems: this.config.completionCohortMaxItems,
       maxCohortBytes: this.config.completionCohortMaxBytes,
-      maxConsecutiveWakes: this.config.maxConsecutiveCompletionWakes,
     })
     this.attachEngineObservers()
   }
@@ -786,18 +782,32 @@ export class WorkflowSupervisor {
   }
 
   private createAttempt(run: InternalRun): Attempt {
-    const engine = this.ctx?.workflowEngine
+    const engine = this.workflowEngine ?? this.ctx?.workflowEngine
     if (engine === undefined || typeof engine.start !== 'function') throw new WorkflowPackageError('workflow engine is unavailable', 'WORKFLOW_INVALID_STATE')
     const generation = run.generation + 1
     const checkpoint = run.checkpoint
+    const retainedSeq = (run.detail.members ?? []).reduce((maximum, member) => Math.max(maximum, member.seq), 0)
+    const replayCheckpoint = checkpoint === undefined ? undefined : {
+      journal: checkpoint.journal,
+      agentSpend: Math.max(checkpoint.agentSpend, run.head.budget.spent),
+      agentSeq: Math.max(checkpoint.agentSeq, checkpoint.agentSpend, run.head.budget.spent, retainedSeq),
+    }
     const scratch = run.scratch
+    const native = engine?.dshWorkflowsNative === true
+    const compatibleScript = native ? run.script : scriptWithJobMapParallel(run.script, {
+        agentBudget: run.head.budget.total,
+        scratchMaxOperations: this.config.scratchMaxOperations,
+        scratchMaxFiles: this.config.scratchMaxFiles,
+        scratchMaxFileBytes: this.config.scratchMaxFileBytes,
+        scratchMaxTotalBytes: this.config.scratchMaxTotalBytes,
+      })
     const request: any = {
-      script: scriptWithJobMapParallel(run.script), meta: run.meta, args: run.args,
+      script: compatibleScript, meta: run.meta, args: run.args,
       maxTotalAgents: run.head.budget.total,
       parent: run.parent,
       signal: run.ownerController.signal,
       deferStart: true,
-      ...(checkpoint === undefined ? { replay: {} } : { replay: { checkpoint } }),
+      ...(replayCheckpoint === undefined ? { replay: {} } : { replay: { checkpoint: replayCheckpoint } }),
       ...(scratch === undefined ? {} : {
         scratch: {
           read: (name: string, signal?: AbortSignal) => scratch.read(name, signal),
@@ -818,7 +828,17 @@ export class WorkflowSupervisor {
     const quiescent = (async () => {
       let result: EngineResult | undefined
       let resultFailure: unknown
-      try { result = await handle.result }
+      try {
+        result = await handle.result
+        if (result.stopReason === 'completed') {
+          const stock = unwrapStockCompatibilityResult(result.value)
+          if (stock !== undefined) {
+            if (scratch === undefined) throw new WorkflowPackageError('workflow scratch access is unavailable', 'WORKFLOW_STORAGE_UNSUPPORTED')
+            for (const [name, content] of Object.entries(stock.scratch)) await scratch.write(name, content, run.ownerController.signal)
+            result = { ...result, value: stock.value }
+          }
+        }
+      }
       catch (error) { resultFailure = error }
       let cleanupError: string | undefined
       try { await handle.dispose() } catch (error) { cleanupError = renderThrown(error) }
@@ -863,7 +883,10 @@ export class WorkflowSupervisor {
         result: { value: null, stopReason: 'error', error: renderThrown(error), agentsStarted: run.head.budget.spent },
       })),
     ).then(() => undefined)
-    void attempt.observation.catch(error => this.ctx?.logger?.warn?.('workflow attempt observer failed', error))
+    void attempt.observation.catch(error => {
+      run.settlementFailure ??= error
+      this.ctx?.logger?.warn?.('workflow attempt observer failed', error)
+    })
   }
 
   private async settleAttempt(run: InternalRun, attempt: Attempt, outcome: AttemptOutcome): Promise<void> {
@@ -926,13 +949,24 @@ export class WorkflowSupervisor {
     const agentSequences = new Set<number>()
     let agentEntries = 0
     let maximumSequence = 0
-    for (const entry of checkpoint.journal) {
+    const hasOrdinals = checkpoint.journal.some(entry => entry?.ordinal !== undefined)
+    if (hasOrdinals && checkpoint.journal.some(entry => entry?.ordinal === undefined)) {
+      throw new WorkflowPackageError('workflow checkpoint mixes ordinal and legacy entries', 'WORKFLOW_INVALID_STATE')
+    }
+    const orderedJournal = hasOrdinals
+      ? [...checkpoint.journal].sort((left, right) => Number(left.ordinal) - Number(right.ordinal))
+      : [...checkpoint.journal]
+    for (let index = 0; index < orderedJournal.length; index += 1) {
+      const entry = orderedJournal[index]!
       if (entry === null || typeof entry !== 'object'
         || !Array.isArray(entry.callId) || entry.callId.length === 0
         || entry.callId.some((part: number) => !Number.isSafeInteger(part) || part <= 0)
         || !/^[a-f0-9]{64}$/u.test(entry.fingerprint)
         || !['agent', 'phase', 'log', 'scratch-read', 'scratch-write', 'await-user'].includes(entry.kind)) {
         throw new WorkflowPackageError('workflow checkpoint is invalid', 'WORKFLOW_INVALID_STATE')
+      }
+      if (hasOrdinals && (!Number.isSafeInteger(entry.ordinal) || entry.ordinal !== index + 1)) {
+        throw new WorkflowPackageError('workflow checkpoint ordinals are not contiguous commit order', 'WORKFLOW_INVALID_STATE')
       }
       const address = entry.callId.join('.')
       if (callIds.has(address)) throw new WorkflowPackageError('workflow checkpoint contains a repeated call id', 'WORKFLOW_INVALID_STATE')
@@ -948,22 +982,30 @@ export class WorkflowSupervisor {
     if (checkpoint.agentSpend < agentEntries || checkpoint.agentSeq < maximumSequence) {
       throw new WorkflowPackageError('workflow checkpoint counters are inconsistent', 'WORKFLOW_INVALID_STATE')
     }
-    // The engine normally returns canonical order, but the supervisor owns
-    // the durable representation and therefore normalizes a detached copy
-    // instead of treating harmless observer/transport ordering as divergence.
-    const incoming = [...checkpoint.journal].sort(checkpointCallCompare)
+    // Array order is commit order. Concurrent calls can settle opposite their
+    // call-path order, so sorting by callId would destroy replay authority.
+    const incoming = orderedJournal.map(entry => ({
+      ...entry,
+      callId: [...entry.callId] as [number, ...number[]],
+    }))
+    const retainedMaximum = (run.detail.members ?? []).reduce(
+      (maximum, member) => Math.max(maximum, member.seq),
+      0,
+    )
+    const normalizedSpend = Math.max(checkpoint.agentSpend, run.head.budget.spent)
+    const normalizedSequence = Math.max(checkpoint.agentSeq, normalizedSpend, maximumSequence, retainedMaximum)
     if (run.checkpoint !== undefined) {
-      const previous = [...run.checkpoint.journal].sort(checkpointCallCompare)
+      const previous = run.checkpoint.journal
       if (incoming.length < previous.length
-        || checkpoint.agentSpend < run.checkpoint.agentSpend
-        || checkpoint.agentSeq < run.checkpoint.agentSeq) {
+        || normalizedSpend < run.checkpoint.agentSpend
+        || normalizedSequence < run.checkpoint.agentSeq) {
         throw new WorkflowPackageError('workflow replay journal diverged', 'WORKFLOW_INVALID_STATE')
       }
       for (let index = 0; index < previous.length; index += 1) {
         if (!isDeepStrictEqual(previous[index], incoming[index])) throw new WorkflowPackageError('workflow replay journal diverged', 'WORKFLOW_INVALID_STATE')
       }
     }
-    run.checkpoint = { journal: incoming, agentSpend: checkpoint.agentSpend, agentSeq: checkpoint.agentSeq }
+    run.checkpoint = { journal: incoming, agentSpend: normalizedSpend, agentSeq: normalizedSequence }
   }
 
   private clearGate(run: InternalRun): void {
@@ -975,8 +1017,11 @@ export class WorkflowSupervisor {
 
   private allowedActions(run: InternalRun, status: WorkflowRunStatus): readonly WorkflowRunAction[] {
     const save = !run.builtIn && !run.head.numberedHandle && status !== 'interrupted'
+    const pause = run.attempt === undefined || supportsEngineReplay(run.attempt.handle)
     switch (status) {
-      case 'running': return save ? ['pause', 'stop', 'save'] : ['pause', 'stop']
+      case 'running': return pause
+        ? save ? ['pause', 'stop', 'save'] : ['pause', 'stop']
+        : save ? ['stop', 'save'] : ['stop']
       case 'needs-input':
       case 'paused': return save ? ['resume', 'stop', 'save'] : ['resume', 'stop']
       case 'budget-limited': return save ? ['stop', 'save'] : ['stop']
@@ -1092,11 +1137,13 @@ export class WorkflowSupervisor {
     try {
       saved = await this.store.commitTerminalAndClaimNotice({ sessionId: run.sessionId, runId: run.id, expectedRevision: run.head.revision, head: durable, detail: run.detail })
     } catch (failure) {
+      run.settlementFailure ??= failure
       this.ctx?.logger?.warn?.('workflow terminal persistence failed', failure)
       // Do not expose a false terminal row as durable; retain the in-memory
       // state for teardown/retry and surface the storage failure to callers.
       throw failure
     }
+    run.settlementFailure = undefined
     run.head = saved
     run.active = false
     this.activeTotal = Math.max(0, this.activeTotal - 1)
@@ -1199,6 +1246,9 @@ export class WorkflowSupervisor {
     const owned = this.enqueue(run, async () => {
       if (run.head.status !== 'running' || run.attempt === undefined) throw new WorkflowPackageError(`workflow "${displayName}" is not running (${run.head.status})`, 'WORKFLOW_INVALID_STATE')
       const attempt = run.attempt
+      if (!supportsEngineReplay(attempt.handle)) {
+        throw new WorkflowPackageError(`workflow "${displayName}" cannot pause because replay checkpoints are unavailable`, 'WORKFLOW_INVALID_STATE')
+      }
       attempt.intent = 'pause'
       this.clearGate(run)
       await this.commitActive(run, { status: 'pausing' }, 'detail')
@@ -1906,11 +1956,26 @@ export class WorkflowSupervisor {
     this.closeAdmissionSync()
     this.disposed = true
     this.disposal = (async () => {
+      let first: unknown
+      const remember = (error: unknown): void => { first ??= error }
+      const settle = async (promises: readonly Promise<unknown>[], preserveFailures = false): Promise<void> => {
+        const outcomes = await Promise.allSettled(promises)
+        if (preserveFailures) {
+          for (const outcome of outcomes) if (outcome.status === 'rejected') remember(outcome.reason)
+        }
+      }
       // First make every pre-admission operation observe cancellation and wait
       // for its transaction promise.  No directory/ordinal can be published
       // after this point.
       await Promise.allSettled([...this.pendingStarts].map(item => item.done))
-      for (const run of [...this.runs.values()]) {
+      const runs = [...this.runs.values()]
+      // An observer may have failed before dispose was requested and already
+      // cleared run.attempt. Preserve that original persistence error before
+      // making a bounded terminalization retry below.
+      for (const run of runs) if (run.settlementFailure !== undefined) remember(run.settlementFailure)
+      const directTerminalizations: Promise<unknown>[] = []
+      const directlyTerminalized = new Set<InternalRun>()
+      for (const run of runs) {
         if (TERMINAL.has(run.head.status)) continue
         const attempt = run.attempt
         this.clearGate(run)
@@ -1918,34 +1983,54 @@ export class WorkflowSupervisor {
           attempt.intent = 'teardown'
           try { attempt.handle.cancel('workflow supervisor disposed') } catch { /* contained */ }
         } else {
-          await this.enqueue(run, () => this.terminalize(run, 'interrupted', 'Process exited before workflow settlement.')).catch(error => this.ctx?.logger?.warn?.('workflow teardown terminalization failed', error))
+          directlyTerminalized.add(run)
+          directTerminalizations.push(this.enqueue(run, () => this.terminalize(run, 'interrupted', 'Process exited before workflow settlement.')))
         }
       }
-      for (;;) {
-        const waits: Promise<unknown>[] = []
-        for (const run of this.runs.values()) {
-          waits.push(run.tail, run.lifecycleTail)
-          if (run.attempt !== undefined) waits.push(run.attempt.observation)
-          if (run.delivery !== undefined) waits.push(run.delivery)
+      await settle(directTerminalizations, true)
+
+      // Cancellation precedes all draining. Attempt observers own handle
+      // disposal/checkpointing and clear run.attempt before terminal commit.
+      const firstDrain: Promise<unknown>[] = []
+      for (const run of runs) {
+        firstDrain.push(run.tail, run.lifecycleTail)
+        if (run.attempt !== undefined) {
+          const observation = run.attempt.observation
+          void observation.catch(remember)
+          firstDrain.push(observation)
         }
-        if (waits.length > 0) await Promise.allSettled(waits)
-        const live = [...this.runs.values()].filter(run => !TERMINAL.has(run.head.status) || run.attempt !== undefined || run.delivery !== undefined)
-        if (live.length === 0) break
-        for (const run of live) {
-          if (run.attempt !== undefined) {
-            run.attempt.intent = 'teardown'
-            try { run.attempt.handle.cancel('workflow supervisor disposed') } catch { /* contained */ }
-          }
-        }
+        if (run.delivery !== undefined) firstDrain.push(run.delivery)
       }
-      await this.notifier.dispose()
+      await settle(firstDrain)
+      for (const run of runs) if (run.settlementFailure !== undefined) remember(run.settlementFailure)
+
+      // A failed observer leaves a deliberately nonterminal durable head and
+      // no Attempt. Retry that exact terminal commit once, then fail forward.
+      // Never use a fixed-point loop here: a permanent store failure cannot
+      // make progress and must not strand aggregate storage/lease teardown.
+      const retries = runs
+        .filter(run => !directlyTerminalized.has(run) && !TERMINAL.has(run.head.status) && run.attempt === undefined)
+        .map(run => this.enqueue(run, () => this.terminalize(run, 'interrupted', 'Process exited before workflow settlement.')))
+      await settle(retries, true)
+
+      const finalDrain: Promise<unknown>[] = []
+      for (const run of runs) {
+        finalDrain.push(run.tail, run.lifecycleTail)
+        if (run.delivery !== undefined) finalDrain.push(run.delivery)
+      }
+      await settle(finalDrain)
+
+      try { await this.notifier.dispose() } catch (error) { remember(error) }
       for (const remove of this.listenerDisposers.splice(0)) { try { remove() } catch { /* contained */ } }
-      if (this.ownsStore) await this.store.dispose()
+      if (this.ownsStore) {
+        try { await this.store.dispose() } catch (error) { remember(error) }
+      }
+      if (first !== undefined) throw first
     })()
     return this.disposal
   }
 
-  /** Side-effect-free one-path validation through H's dedicated API. */
+  /** Side-effect-free one-path validation through the configured evaluator API. */
   async validate(spec: WorkflowValidateSpec): Promise<WorkflowValidation> {
     if (!spec.parent) return { ok: false, status: 'error', error: 'validate_only requires a calling agent' }
     let metaName = typeof spec.meta?.name === 'string'
@@ -1957,12 +2042,20 @@ export class WorkflowSupervisor {
       const budget = this.resolveBudget(spec.agentBudget)
       const args = this.snapshotArgs(spec.args)
       const script = repairObjectLiteralSemicolons(source.script)
-      const engine = this.ctx?.workflowEngine
+      const engine = this.workflowEngine ?? this.ctx?.workflowEngine
+      const native = engine?.dshWorkflowsNative === true
       const result = typeof engine?.validate === 'function'
         ? await engine.validate({
-          script: scriptWithJobMapParallel(script),
+          script: native ? script : scriptWithJobMapParallel(script, {
+            agentBudget: budget,
+            scratchMaxOperations: this.config.scratchMaxOperations,
+            scratchMaxFiles: this.config.scratchMaxFiles,
+            scratchMaxFileBytes: this.config.scratchMaxFileBytes,
+            scratchMaxTotalBytes: this.config.scratchMaxTotalBytes,
+          }),
           meta: source.meta,
           args,
+          ...(native ? { parent: spec.parent } : {}),
           maxTotalAgents: budget,
           ...(spec.signal === undefined ? {} : { signal: spec.signal }),
         })

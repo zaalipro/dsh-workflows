@@ -6,14 +6,16 @@
 
 ## 1. 安装到兼容 Harness
 
-使用符号化官方版本 **H**，即第一个包含全部 external-workflow prerequisite 的版本。原版 `0.1.0-rc.8` 不兼容，activation 会在 storage 或 Session admission 前停止。
+使用官方 DeepSeek Harness `0.1.1-rc.2` 与 plugin `0.1.0-rc.3`。确保 service user 的 `PATH` 中有 `pnpm`；`0.1.0-rc.8` 与尚未验证的更高 Harness release 均不受支持。
 
-像其他 profile 插件一样安装：
+安装 pinned release tag，或 durable absolute path 下的 exact tested tarball：
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows
-dsh plugin --profile headless add github:zaalipro/dsh-workflows
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.3.tgz
 ```
+
+发布到 npm 后，`dsh plugin --profile <profile> add @zaalipro/dsh-workflows@0.1.0-rc.3` 与之等价。
 
 重启 profile。Web 除 Host behavior 外还获得 dashboard 与 durable Chat renderer；headless 获得 registry、supervisor、command、question、recorder 与 model tool，但不加载 browser code。移除见 [package README](../README.zh.md#安装)。
 
@@ -30,6 +32,8 @@ dsh plugin --profile headless add github:zaalipro/dsh-workflows
 ```text
 Opened the workflow authoring skill.
 ```
+
+该命令会 steer 同一条以 `/create-workflow` 开头的 user message。Packaged skill 是 user-invocable，因此兼容 Host 会确定性地把受信 instructions 注入下一次 model step，而不是依赖 model 从 catalog 中自行选择这个 skill。
 
 Packaged skill 会询问 intent、input、fan-out、evidence、failure tolerance、final artifact、maximum agent、lowercase kebab name 以及 project 或 user scope。选择 **project** 会把 `review-changes.workflow.json` 保存到最近 Git root 的 `.dsh/workflows` directory。没有 Git root 时，Session cwd 就是 project root。选择 **user** 会保存到 `$DSH_HOME/workflows`。
 
@@ -57,13 +61,18 @@ Definition 使用 first-wins precedence：configured bundled root、project root
 
 ## 3. 理解 validation smoke
 
-保存前，authoring skill 会用 representative args 请求 model-facing workflow tool 验证拟议 source：
+Authoring skill 会用 representative args 请求 model-facing workflow tool 验证并保存拟议 inline source。`save_scope` 默认为 `project`；要保存到 `$DSH_HOME/workflows` 则选择 `user`。User-scope save 不要求 Session cwd。
 
 ```json
 {
-  "script_path": ".dsh/workflows/review-changes.workflow.json",
+  "script": "<plain JavaScript workflow body>",
+  "meta": {
+    "name": "review-changes",
+    "description": "Review workspace changes and verify every finding"
+  },
   "args": { "targets": ["src", "tests"] },
-  "validate_only": true
+  "validate_only": true,
+  "save_scope": "project"
 }
 ```
 
@@ -127,7 +136,7 @@ Argument 必须是一个 JSON object。Array 与 scalar 会在 launch 前失败�
 /workflows
 ```
 
-该 Host command 打开 label 为 `Workflows` 的 dialog。Client 拥有 overlay。带 argument 或 attachment 的 `/workflows` 不会打开 overlay；它会保留在 composer command plane 中，draft 不变。Dashboard chrome 与 Chat label 跟随 host locale：本包注册 English 与 Chinese dictionary，English 为 fallback，关闭控件的可见文字与 accessible name 都是 `Close workflows`（中文 locale 下为 `关闭工作流`）。Inspector heading（`Pending`、`JSON outcome` 以及 criterion 11.4 的其余 heading）和 criterion 11.4/11.11 的精确 error string 保持英文。
+这个仅由浏览器处理的 slash action 会打开 label 为 `Workflows` 的 dialog；它既不执行 Host command，也不调用模型，并且不会创建 command Chat row。带 argument 或 attachment 的 `/workflows` 不会打开 overlay；它会在本地被拒绝，draft 与 attachment 均保持不变。Dashboard chrome 与 Chat label 跟随 host locale：本包注册 English 与 Chinese dictionary，English 为 fallback，关闭控件的可见文字与 accessible name 都是 `Close workflows`（中文 locale 下为 `关闭工作流`）。Inspector heading（`Pending`、`JSON outcome` 以及 criterion 11.4 的其余 heading）和 criterion 11.4/11.11 的精确 error string 保持英文。
 
 Dashboard 先列出已保存 definition 并提供 Start，然后是 run navigator（display name、status、current phase、agent spent/total、running 与 settled member count、bounded terminal summary，以及 retained-run loaded/total disclosure）。Active run 按最早优先排序，history 按最新 settlement 排序。`Load more` 获取下一个 authorized bounded page；只有 terminal row 可按确定性 oldest-first retention evict，active row 与 display ordinal history 永不 evict。
 
@@ -213,7 +222,9 @@ Host process exit 后，startup recovery 把所有 retained active run 改为 **
 
 ## 10. 编写 replay-safe JavaScript
 
-Worker 提供 `args`、`agent`、thunk/declarative `parallel`、`pipeline`、`phase`、`log`、`complete`、`budget`、`pause`、`await_user`、`read_scratch_file` 和 `write_scratch_file`。`agent(prompt, opts)` 准确接受 `label`、`phase`、`schema`、`provider` 和 `model`。Stock worker 没有原生 `complete`，并且拒绝 `minItems`/`maxItems`；本包会注入 `complete()`，并在 schema validation 前剥掉这些 keyword。`fork_context` 等 unsupported option、unsupported schema、invalid call 与 infrastructure failure 都是 fatal；普通 child failure 返回 `null`。Array 长度在 prompt 与 JavaScript 中限制。
+Worker 提供 `args`、`agent`、thunk/declarative `parallel`、`pipeline`、`phase`、`log`、`complete`、`budget`、`pause`、`await_user`、`read_scratch_file` 和 `write_scratch_file`。`agent(prompt, opts)` 准确接受 `label`、`phase`、`schema`、`provider` 和 `model`。Stock worker 没有原生 `complete`，因此本包会注入该 hook。
+
+Structured schema 支持 `type`、`properties`、`required`、`additionalProperties`、`items`、`minItems`、`maxItems`、`enum`、`const` 与 `oneOf`。`minItems` 和 `maxItems` 是包含端点的 array-length bound。每个 bound 都必须是非负 safe integer（负零、小数和非 number 均无效），只能出现在 `type: 'array'` 节点上，必须满足 `minItems <= maxItems`，并且不能与 `oneOf` 并列。Package 会在任何 child 启动前验证 authored schema，只从发送给 stock RC2 的副本中移除这两个 forward-compatible keyword，然后依据 authored bound 重新验证返回的 structured value。`fork_context` 等 unsupported option、unsupported schema、invalid call 与 infrastructure failure 都是 fatal；普通 child failure 或 schema-invalid child value 返回 `null`。
 
 以下完整 body guard nullable output，使 verification fail-closed，确定性 sort/filter，显式限制 log preview，同步 phase title，并发布 report：
 
@@ -237,6 +248,7 @@ const reviews = await parallel(targets.map(target => ({
     properties: {
       findings: {
         type: 'array',
+        maxItems: 20,
         items: {
           type: 'object',
           properties: {
@@ -313,7 +325,7 @@ P/R/X/S 只有在 dialog 拥有 focus、没有 modifier 或 key repeat、target 
 
 ### Harness 不兼容
 
-症状：activation 报告 `@zaalipro/dsh-workflows requires a DeepSeek Harness release with the external workflow prerequisites; 0.1.0-rc.8 is not compatible`。安装已验证的官方版本 H；不要绕过 capability check，也不要推断另一个 tag 就是 H。
+症状：activation 报告不受支持的 Host face 或 version。安装官方 `0.1.1-rc.2` 与 plugin `0.1.0-rc.3`；不要扩大 peer range，也不要假定更高 Harness version 已兼容。
 
 ### Storage 已被拥有
 

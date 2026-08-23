@@ -34,12 +34,12 @@ export interface PrivateDirectory {
 }
 export type FsPrivateDirectory = PrivateDirectory
 
-/** Minimal compatible H filesystem face used by the package.  It is kept
+/** Minimal compatible official filesystem face used by the package. It is kept
  * structural so the package does not duplicate the official DSH filesystem
  * runtime identity. */
 export interface HostPrivateDirectoryProvider {
   openPrivateDirectory(path: string, options: { readonly cwd?: string; readonly create?: boolean }, signal?: AbortSignal): Promise<{
-    /** H's required relative child opener.  Future providers may expose an
+    /** Required relative child opener. Future providers may expose an
      * opaque target on the returned object; it is used for descriptor-rooted
      * listing and is never interpreted by the package. */
     openDirectory(name: string, signal?: AbortSignal, options?: { readonly create?: boolean }): Promise<unknown>
@@ -60,7 +60,7 @@ export interface HostPrivateDirectoryProvider {
   openPrivateDirectoryChild?(parent: unknown, name: string, options?: { readonly create?: boolean }, signal?: AbortSignal): Promise<unknown>
   fileInfoChild?(parent: unknown, name: string, signal?: AbortSignal): Promise<PrivateFileIdentity | undefined>
   listDir?(target: unknown, signal?: AbortSignal): Promise<readonly { readonly name: string; readonly type: string; readonly version?: unknown; readonly size?: number; readonly nlink?: number }[]>
-  /** Optional provider-level directory publication/removal seams.  H's
+  /** Optional provider-level directory publication/removal seams. The
    * minimum public capability does not expose these operations; callers must
    * fail closed when neither the capability nor one of these equivalent
    * provider primitives is present. */
@@ -68,7 +68,7 @@ export interface HostPrivateDirectoryProvider {
   removeFile?(target: unknown, name: string, expected?: unknown, signal?: AbortSignal): Promise<void>
   removeDirectory?(target: unknown, name: string, expected?: unknown, signal?: AbortSignal): Promise<void>
   lstat?(path: string, options?: { readonly cwd?: string }, signal?: AbortSignal): Promise<{ readonly type: string; readonly version?: unknown; readonly size?: number; readonly nlink?: number } | undefined>
-  /** Test-only compatibility switch for pre-H structural fixtures.  Real H
+  /** Test-only compatibility switch for legacy structural fixtures. Production
    * providers must expose an opaque child primitive instead. */
   readonly allowLegacyPathFallback?: boolean
 }
@@ -497,7 +497,7 @@ class LocalPrivateDirectory implements PrivateDirectory {
   }
 }
 
-/** Adapter for the official H descriptor capability.  No operation below
+/** Adapter for an official descriptor capability. No operation below
  * opens a path with Node; the path is retained only for diagnostics and for
  * the provider's own `openPrivateDirectory` bootstrap seam. */
 class HostPrivateDirectory implements PrivateDirectory {
@@ -535,7 +535,7 @@ class HostPrivateDirectory implements PrivateDirectory {
         child = await this.provider.openPrivateDirectoryChild(this.delegate.target, name, { create: true }, signal)
       } else if (this.provider.allowLegacyPathFallback === true) {
         // This path-shaped adapter is retained only for explicitly marked
-        // pre-H test fixtures.  A real Host provider must expose an opaque
+        // legacy test fixtures. A production Host provider must expose an opaque
         // child primitive; never infer fixture status from the shape of a
         // target or silently reopen a lexical path after an absent result.
         child = await this.provider.openPrivateDirectory(join(this.path, name), { create: true }, signal)
@@ -570,7 +570,7 @@ class HostPrivateDirectory implements PrivateDirectory {
       signal?.throwIfAborted(); component(entry.name)
       const type = entry.type === 'file' ? 'file' : entry.type === 'directory' ? 'directory' : entry.type === 'symlink' ? 'symlink' : 'other'
       // Provider versions are opaque.  Do not manufacture dev/ino values for
-      // H entries: a zero identity is indistinguishable from a real identity
+      // Provider entries: a zero identity is indistinguishable from a real identity
       // and would turn an unverified cleanup into a false capability claim.
       // A provider version is opaque metadata, not a POSIX dev/ino pair.  Do
       // not manufacture NaN/zero fields and present them as an identity: the

@@ -124,9 +124,10 @@ interface FakeHandle {
   resolve(result?: { value: unknown; stopReason: 'completed' | 'cancelled' | 'error'; error?: string; errorCode?: string; agentsStarted: number }): void
 }
 
-function fakeEngine(handles: FakeHandle[]) {
+function fakeEngine(handles: FakeHandle[], native = false) {
   let next = 0
   return {
+    ...(native ? { dshWorkflowsNative: true } : {}),
     start(request: any) {
       expect(request.deferStart).toBe(true)
       expect(request.journal).toBeUndefined()
@@ -199,13 +200,13 @@ function parent(id = 'session-start') {
   return { session: { id, header: { cwd: '/tmp' } }, followup: async () => undefined }
 }
 
-async function fixture(handles: FakeHandle[] = []) {
+async function fixture(handles: FakeHandle[] = [], native = false) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-start-'))
   roots.push(root)
   const store = new MemoryStore(root)
   const bus = new EventBus()
   const supervisor = new WorkflowSupervisor({
-    workflowEngine: fakeEngine(handles),
+    workflowEngine: fakeEngine(handles, native),
     on: bus.on.bind(bus),
     emit: bus.emit.bind(bus),
     logger: { warn: () => undefined },
@@ -217,6 +218,22 @@ async function fixture(handles: FakeHandle[] = []) {
 }
 
 describe('workflow supervisor start', () => {
+  it('routes native scratch through the supervisor capability without an ambient directory', async () => {
+    const handles: FakeHandle[] = []
+    const { supervisor } = await fixture(handles, true)
+    try {
+      const source = "await write_scratch_file('report.md', 'safe'); return budget()"
+      await supervisor.start({
+        script: source,
+        meta: { name: 'native-scratch', description: 'native scratch fixture' },
+        parent: parent('native-scratch-session'),
+      })
+      expect(handles[0]?.request.script).toBe(source)
+      expect(handles[0]?.request.scratchDir).toBeUndefined()
+      expect(handles[0]?.request.scratch).toMatchObject({ read: expect.any(Function), write: expect.any(Function) })
+    } finally { await supervisor.dispose() }
+  })
+
   it('admits durably, attaches a deferred attempt, then releases after public maps', async () => {
     const handles: FakeHandle[] = []
     const { supervisor, store, bus } = await fixture(handles)
@@ -300,7 +317,7 @@ describe('workflow supervisor start', () => {
     }
   })
 
-  it('admits a stock RC8 handle that only exposes result/cancel/dispose', async () => {
+  it('admits a partial stock handle that only exposes result/cancel/dispose', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-supervisor-stock-handle-'))
     roots.push(root)
     const store = new MemoryStore(root)
@@ -312,7 +329,7 @@ describe('workflow supervisor start', () => {
         start: () => ({
           id: 'stock-execution',
           result,
-          cancel() { /* rc8 */ },
+          cancel() { /* partial stock handle */ },
           dispose: async () => undefined,
         }),
       },
@@ -326,7 +343,7 @@ describe('workflow supervisor start', () => {
     const agent = parent()
     try {
       const launched = await supervisor.start({
-        script: 'return 1', meta: { name: 'stock-engine', description: 'rc8' }, parent: agent, agentBudget: 2,
+        script: 'return 1', meta: { name: 'stock-engine', description: 'partial stock handle' }, parent: agent, agentBudget: 2,
       })
       expect(launched.displayName).toBe('stock-engine')
       expect((await store.readSession('session-start'))[0]?.status).toBe('running')

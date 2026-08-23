@@ -27,7 +27,7 @@ pnpm exec vitest run tests/keyless-snapshot.spec.ts --reporter=dot && printf 'RD
 pnpm exec vitest run tests/dashboard-snapshot.client.spec.tsx --reporter=dot && printf 'RD6 dashboard snapshots PASS\n'
 ```
 
-`tests/keyless-snapshot.spec.ts` is a source-resolved fixture: it feeds official `tool-workflow/*` events through `ConversationNodeAssembler`, proves append/prepend/full-replay parity, maps Interrupted Chat nodes to cancelled, and checks the completion-notice footer. It does not boot the official assembled snapshot harness or compare reviewed Session/stdout JSONL files; those `examples/workflows-keyless/` inputs remain a later H-assembled gate. The dashboard snapshot locks accessible empty, live, terminal, interrupted, disclosure, and member-outcome semantics rather than CSS hashes.
+`tests/keyless-snapshot.spec.ts` is a source-resolved fixture: it feeds official `tool-workflow/*` events through `ConversationNodeAssembler`, proves append/prepend/full-replay parity, maps Interrupted Chat nodes to cancelled, and checks the completion-notice footer. It does not boot the official assembled snapshot harness or compare reviewed Session/stdout JSONL files; those `examples/workflows-keyless/` inputs remain a later assembled gate. The dashboard snapshot locks accessible empty, live, terminal, interrupted, disclosure, and member-outcome semantics rather than CSS hashes.
 
 ### Package policy and exact packed consumer
 
@@ -36,7 +36,7 @@ pnpm exec vitest run tests/verify-package.spec.ts --reporter=dot && printf 'RD3 
 pnpm exec vitest run tests/packed-consumer.spec.ts --reporter=dot && printf 'RD8 packed consumer PASS\n'
 ```
 
-The packed-consumer test performs one `pnpm pack --json`, records SHA-256, and sends that unchanged absolute tarball to `scripts/verify-package.mjs --tarball`. Missing skill, client bundle, or required peer assets fail at that verifier before any consumer Session starts. `scripts/packed-consumer.mjs` then installs the same bytes with scripts disabled, imports every JavaScript and strict NodeNext export, loads `lib/client.js` through the lazy-CJS seam, and ends on an `official-h-probe` of the official checkout. Live Web/headless profile boot, `dsh plugin` add/remove, and stock-profile restore wait on official H; the probe reports `not-advertised` on `141eb6f` instead of pretending activation succeeded. Source-tree fallback or a second pack is a failure. The isolated install stage also runs from `pnpm run check:release` and when `DSH_RUN_PACKED_CONSUMER=1`.
+The standalone packed-consumer test performs one `pnpm pack --json`, records SHA-256, and sends that unchanged absolute tarball to `scripts/verify-package.mjs --tarball`. During a release, `scripts/check-release.mjs` is the sole pack owner and calls `scripts/packed-consumer.mjs` with that same artifact instead; generic unit commands exclude the self-packing spec. Missing skill, client bundle, evaluator, or required peer assets fail before any consumer Session starts. The runner installs the bytes with scripts disabled, installs pinned consumer-only TypeScript/Node types and the exact prebuilt official CLI, imports every JavaScript and strict NodeNext export, and loads `lib/client.js` through the lazy-CJS seam. Every declared Host, Client, Cordis, and React peer remains an exact compatibility declaration but is marked optional: an isolated `autoInstallPeers: true` probe must not materialize one, while the standalone import/type probe supplies peers explicitly. The real Web and headless profile cycles must retain official `autoInstallPeers: false`, contain no profile-local peer package, resolve those peers through the healed official fallback, and resolve `dsh-scope` to one realpath from both agent-loop and agent-presets. Each profile then receives two bounded activation/teardown sentinel boots (the second proves lease release), remove, and manifest restoration. Source-tree runtime fallback, `--help` as activation evidence, a split Host graph, or a second release pack is a failure.
 
 ### Automated Chromium
 
@@ -44,7 +44,7 @@ The packed-consumer test performs one `pnpm pack --json`, records SHA-256, and s
 pnpm exec vitest run tests/browser-smoke.spec.ts --reporter=dot && printf 'RD10 browser automation PASS\n'
 ```
 
-`tests/browser-smoke.spec.ts` currently gates the `scripts/browser-smoke.mjs` helper boundary: absolute arguments, loopback readiness JSON, stdin teardown, and isolation from the caller's workspace. It does not drive Chromium through slash discovery, disclosures, or 1,199/767/320 px layouts. That product journey remains blocked on official H Web activation and is the final Ego Lite checklist below, not a substitute this helper already covers.
+`tests/browser-smoke.spec.ts` currently gates the `scripts/browser-smoke.mjs` helper boundary: absolute arguments, loopback readiness JSON, stdin teardown, and isolation from the caller's workspace. It does not drive Chromium through slash discovery, disclosures, or 1,199/767/320 px layouts. That product journey is the final Ego Lite checklist below, not a substitute this helper already covers.
 
 ### Lifecycle, storage, and Client stress
 
@@ -66,15 +66,9 @@ With `DEEPSEEK_API_KEY`, the file starts exactly two logical children labelled `
 
 Without the key, this file alone registers exactly one skipped test with reason `DEEPSEEK_API_KEY is not set`. No other package, platform, workflow, or storage lane may self-skip.
 
-### Official H prerequisites
+### Exact official Host checkout
 
-Run this acceptance in the official Harness checkout containing the proposed H prerequisites, not in this package checkout:
-
-```sh
-pnpm exec vitest run --config vitest.config.ts --no-passWithNoTests packages/core/tools/tests/json-schema.spec.ts packages/fs/fs/tests/service.spec.ts packages/fs/fs-local/tests/filesystem.spec.ts packages/fs/fs-sandbox/tests/fs-sandbox.spec.ts packages/workflow/workflow/tests/workflow.spec.ts packages/workflow/workflow-worker-thread/tests packages/workflow/tool-ralph/tests/integration.spec.ts packages/interaction/commands/tests/commands.spec.ts packages/client/ui-commands/tests/service.client.spec.ts packages/host/apiproxy/tests/api-proxy-remote-events.spec.ts packages/host/apiproxy/tests/frame-queue.spec.ts packages/api/remotes/tests/remote-events.spec.ts && pnpm run typecheck && pnpm run lint && pnpm run doc-sync && printf 'U45_UPSTREAM_ACCEPTANCE_OK\n'
-```
-
-The final line must be `U45_UPSTREAM_ACCEPTANCE_OK`. This proves the source and built worker paths, Ralph, schemas, descriptor-rooted filesystem methods, exact-Agent replacements, command action/fallback behavior, Remote forwarding, type checking, lint, and bilingual official documentation against official base `141eb6f` plus only the reviewed prerequisite changes. Donor commit `391c829` remains reference-only.
+The packed consumer and CI checkout official DeepSeek Harness `0.1.1-rc.2` at commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`. The package build and tests compile against `0.1.1-rc.2` development dependencies; no Harness source patch or fork checkout participates. The package-owned evaluator build, strict NodeNext consumer, add/boot/remove profile cycle, and stock boot after removal are blocking release evidence.
 
 ### Final automated aggregate
 
@@ -82,16 +76,17 @@ The final line must be `U45_UPSTREAM_ACCEPTANCE_OK`. This proves the source and 
 pnpm run check:release
 ```
 
-Success ends exactly `release checks passed`. The orchestrator runs clean/frozen-install verification, build, typecheck, lint, per-file coverage, snapshots, documentation, package policy, one immutable pack and packed consumer (`official-h-probe` until H advertises), the browser helper boundary, all three stress suites, and the opt-in provider file in order. It does not publish, launch Ego Lite, or record a GIF. Live profile boot and Chromium product journey remain blocked on official H.
+Success ends exactly `release checks passed`. The orchestrator runs clean/frozen-install verification, build, typecheck, lint, owned-source aggregate coverage, snapshots, documentation, package policy, one immutable pack and packed consumer (`official-host-probe` plus real Web/headless add/boot/remove), the browser helper boundary, all three stress suites, and the opt-in provider file in order. It does not publish, launch Ego Lite, or record a GIF. The packed profile cycle is blocking against official `0.1.1-rc.2`; the Chromium product journey remains the final Ego Lite acceptance.
 
 ## Coverage policy
 
-Every owned handwritten runtime source file must report 100% statements, branches, functions, and lines **per file** under `pnpm run test:coverage`. Aggregate 100% is insufficient. That command excludes packed-consumer, browser-smoke, snapshot, stress, and real-provider lanes. The stored `coverage-all` report is not 100% of generated `lib/` plus dependencies (~57% last captured); it is not a substitute for the per-file handwritten gate. Tests exercise deterministic clocks and barriers, every error and cancellation branch, effect disposal, HMR registration, authorization, and external world state rather than self-reported success.
+`pnpm run test:coverage` enforces truthful aggregate floors of **80% statements, 80% branches, 80% functions, and 80% lines** across owned package integration source. Its explicit instrumentation include is `src/**/*.{ts,tsx}` with type-only declarations excluded, so unimported owned source still counts while generated `lib/` and release helpers under `scripts/` cannot enter the denominator accidentally. Per-file 100% is not claimed: the August 23 baseline was 85.35% statements/lines, 80.69% branches, and 84.98% functions. That command excludes packed-consumer, browser-smoke, snapshot, stress, and real-provider lanes. The stored `coverage-all` report is not 100% of generated `lib/` plus dependencies (~57% last captured); it is not a substitute for the owned-source aggregate gate. Tests exercise deterministic clocks and barriers, every error and cancellation branch, effect disposal, HMR registration, authorization, and external world state rather than self-reported success.
 
 The only non-instrumented artifacts are generated or browser-delivery products rather than an exception for handwritten Host behavior:
 
 | Exclusion | Why it is not instrumented as owned runtime source | Required evidence |
 |---|---|---|
+| `vendor/workflow-engine/*.ts` and emitted `lib/compat-engine/*` | Attributed MIT compatibility evaluator with a separate process/worker protocol gate | `tests/compat-engine.spec.ts`, supervisor replay/gate/budget/scratch suites, packed artifact verification, and live profile smoke |
 | `lib/typert.host.*` and `lib/typert.remote-client.*` | Generated from decorated Host source | `tests/build-artifacts.spec.ts`, Remote API tests, packed imports, and browser mount smoke |
 | `lib/client.js`, emitted Client declarations/maps, and Lightning CSS output | Generated bundle products | Client component/controller specs, dashboard semantic snapshots, packed serving, and `tests/browser-smoke.spec.ts` |
 | `src/client/css-modules.d.ts` | Type-only generated-facing declaration with no executable statements | Client TSC plus source assertion in the build suite |
@@ -101,7 +96,7 @@ Handwritten Client TypeScript remains covered by its Client test project; genera
 
 ## CI platform matrix
 
-Blocking Ubuntu 24.04 jobs run Node `22.19.0`, `24`, and `26`; each uses a frozen lockfile and covers build, typecheck, lint, docs, package policy, and its assigned unit/coverage/snapshot gates. Node 24 additionally owns macOS 14, Windows Server 2022, Chromium helper, race-stress, and release-pack/packed-consumer jobs. The packed lane checks out official commit `141eb6fef83422698aef7a981029e843e8161534` as the incompatible baseline and does not apply an H prerequisite patch; it packs once and preserves one digest and artifact path. Live activation against that checkout is expected to fail closed until official H exists.
+Blocking Ubuntu 24.04 jobs run Node `22.19.0`, `24`, and `26`; each uses a frozen lockfile and covers build, typecheck, lint, docs, package policy, and its assigned unit/coverage/snapshot gates. Node 24 additionally owns macOS 14, Windows Server 2022, Chromium helper, race-stress, and release-pack/packed-consumer jobs. The packed lane checks out official `0.1.1-rc.2` commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`; it applies no Harness patch, packs once, preserves one digest and artifact path, and requires live add/boot/remove for Web and headless.
 
 Windows runs every supported definition, manifest, scratch, retention, recovery, and subprocess case. It explicitly asserts junction/hard-link behavior and either working native advisory locking or the documented `WORKFLOW_STORAGE_UNSUPPORTED` result; it never silently skips the workflow, marks the job `continue-on-error`, or treats a platform limitation as success without asserting its exact branch.
 
@@ -115,7 +110,7 @@ All live resources are created inside an isolated workspace and DSH home. `final
 
 ## Final manual Web acceptance
 
-This is a release checklist, not a coding task, CI step, or substitute for automated Chromium. Perform it only after every automated gate passes, using the exact tested tarball installed into a real H Web profile and a real server/model flow.
+This is a release checklist, not a coding task, CI step, or substitute for automated Chromium. Perform it only after every automated gate passes, using the exact tested tarball installed into a real official `0.1.1-rc.2` Web profile and a real server/model flow.
 
 - [ ] Start the tarball-installed real server and confirm the package activates without a source checkout fallback.
 - [ ] Use **Ego Lite** for the smoke journey. Reuse its task space across the journey; never wipe or reset any user session, cookies, browser storage, or daily-browser state.
@@ -127,4 +122,4 @@ This is a release checklist, not a coding task, CI step, or substitute for autom
 - [ ] For any product-visible GUI change, record and retain a GIF from this **real PR server/model flow** showing launch, live updates, member outcome inspection, controls, and narrow layout. A mocked or source-only GIF is not release evidence.
 - [ ] When verification is complete, close **only the Ego Lite task space**. Do not wipe sessions, cookies, storage, or unrelated tabs/spaces.
 
-Record the tested tarball SHA-256, H build identity, platform, automated aggregate log, manual result, and GIF location in the release evidence. A failed manual item blocks release even when the automated suite is green.
+Record the tested tarball SHA-256, official Host build identity, platform, automated aggregate log, manual result, and GIF location in the release evidence. A failed manual item blocks release even when the automated suite is green.

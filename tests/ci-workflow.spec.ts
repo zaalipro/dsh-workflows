@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '..')
 const path = resolve(root, '.github/workflows/ci.yml')
 const source = readFileSync(path, 'utf8')
 const workflow = parse(source) as any
+const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as any
 
 describe('CI workflow policy', () => {
   it('uses least privilege and tag-safe pull-request cancellation', () => {
@@ -52,6 +53,7 @@ describe('CI workflow policy', () => {
     const chromium = workflow.jobs.chromium
     const stress = workflow.jobs.stress
     const packed = workflow.jobs['release-pack']
+    expect(packed.if).toBe("github.ref_type != 'tag'")
     for (const job of [chromium, stress, packed]) {
       expect(job['runs-on']).toBe('ubuntu-24.04')
       expect(job['timeout-minutes']).toBeGreaterThan(0)
@@ -62,10 +64,15 @@ describe('CI workflow policy', () => {
     expect(commands(stress)).toContain('pnpm run test:stress')
     expect(commands(packed).join('\n')).toContain('scripts/check-release.mjs')
     expect(commands(packed).join('\n')).toContain('--artifact-dir')
-    expect(officialCheckout(chromium).with.ref).toBe('141eb6fef83422698aef7a981029e843e8161534')
-    expect(officialCheckout(packed).with.ref).toBe('141eb6fef83422698aef7a981029e843e8161534')
+    expect(officialCheckout(chromium).with.ref).toBe('b150a551b8d465e31e418e1b2eaf5e79bbb7d28e')
+    expect(officialCheckout(packed).with.ref).toBe('b150a551b8d465e31e418e1b2eaf5e79bbb7d28e')
     expect(source).not.toMatch(/git\s+apply/u)
     expect(source).not.toMatch(/H prerequisite patch/u)
+  })
+
+  it('keeps generic unit commands from creating a second packed artifact', () => {
+    expect(manifest.scripts['test:unit']).toContain('--exclude="tests/packed-consumer.spec.ts"')
+    expect(manifest.scripts.test).toContain('--exclude="tests/packed-consumer.spec.ts"')
   })
 
   it('always invokes the real-provider file and lets the test self-skip', () => {

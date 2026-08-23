@@ -337,6 +337,9 @@ class FakeRuns {
   artifactIdentityRevision = 1
   resultValue: unknown = { ok: true }
   listCalls: Array<{ limit?: number; cursor?: unknown }> = []
+  memberCalls: Array<{ limit?: number; cursor?: unknown }> = []
+  logCalls: Array<{ limit?: number; cursor?: unknown }> = []
+  artifactListCalls: Array<{ limit?: number; cursor?: unknown }> = []
   throwOn?: { method: string; error: unknown }
   pauseImpl?: () => Promise<WorkflowRunHead>
   detailImpl?: () => Promise<WorkflowRunDetail>
@@ -371,6 +374,7 @@ class FakeRuns {
 
   async members(_agent: Agent, request: { runId: string; cursor?: unknown; limit?: number }) {
     this.fail('members')
+    this.memberCalls.push(request)
     const rows = this.memberRows.get(String(request.runId)) ?? []
     const offset = Number(request.cursor ?? 0)
     const limit = request.limit ?? 50
@@ -387,6 +391,7 @@ class FakeRuns {
 
   async logs(_agent: Agent, request: { runId: string; cursor?: unknown; limit?: number }) {
     this.fail('logs')
+    this.logCalls.push(request)
     const offset = Number(request.cursor ?? 0)
     const limit = request.limit ?? 50
     const items = this.logLines.slice(offset, offset + limit)
@@ -409,6 +414,7 @@ class FakeRuns {
 
   async artifacts(_agent: Agent, request: { runId: string; cursor?: unknown; limit?: number }) {
     this.fail('artifacts')
+    this.artifactListCalls.push(request)
     const offset = Number(request.cursor ?? 0)
     const limit = request.limit ?? 50
     const items = this.artifactsList.slice(offset, offset + limit)
@@ -485,6 +491,9 @@ describe('authorized run list and detail (RC3)', () => {
       },
     })
     if (!page.ok) throw new Error('expected page')
+    // Cursorless reads establish their snapshot from one backend read. This
+    // prevents active-run revisions racing an unnecessary baseline probe.
+    expect(backend.listCalls).toEqual([{ limit: 1 }])
     expect(page.value.nextCursor).toEqual(expect.any(String))
     const rest = await remote.list(agent('session-a'), { limit: 1, cursor: page.value.nextCursor }, signal)
     expect(rest).toMatchObject({ ok: true, value: { items: [{ runId: 'run-new' }], total: 2 } })
@@ -569,6 +578,7 @@ describe('member roster and outcome Remotes (RC4)', () => {
       value: { items: [{ label: 'alpha', phase: '' }], total: 2 },
     })
     if (!page.ok) throw new Error('expected members')
+    expect(backend.memberCalls).toEqual([{ runId: 'run-1', limit: 1 }])
     expect(page.value.nextCursor).toEqual(expect.any(String))
     expect(page.value.nextCursor).not.toBe('unsigned')
     const rest = await remote.members(agent('session-a'), { runId: 'run-1' as never, limit: 1, cursor: page.value.nextCursor }, signal)
@@ -624,6 +634,7 @@ describe('retained log and result Remotes (RC5)', () => {
       value: { items: [{ text: 'one' }], evicted: 100, total: 103 },
     })
     if (!first.ok) throw new Error('expected logs')
+    expect(backend.logCalls).toEqual([{ runId: 'run-1', limit: 1 }])
     expect(first.value.nextCursor).toEqual(expect.any(String))
     expect(first.value.nextCursor).not.toBe('unsigned-log')
     const second = await remote.logs(agent('session-a'), { runId: 'run-1' as never, limit: 1, cursor: first.value.nextCursor }, signal)
@@ -659,6 +670,7 @@ describe('scratch artifact Remotes (RC6)', () => {
       value: { items: [{ name: 'report.md' }], omitted: 5, total: 7 },
     })
     if (!page.ok) throw new Error('expected artifacts')
+    expect(backend.artifactListCalls).toEqual([{ runId: 'run-1', limit: 1 }])
     expect(page.value.nextCursor).toEqual(expect.any(String))
     expect(page.value.nextCursor).not.toBe('unsigned-artifacts')
     const rest = await remote.artifacts(agent('session-a'), { runId: 'run-1' as never, limit: 1, cursor: page.value.nextCursor }, signal)
@@ -871,12 +883,17 @@ describe('compare-and-set workflow controls (RC7)', () => {
     })
   })
 
-  it('treats a raced list epoch and a raced log revision as stale-cursor', async () => {
+  it('accepts cursorless snapshots in one read but rejects raced continuations', async () => {
     const backend = new FakeRuns()
     backend.runs = [
       runHead({ runId: 'a' as never, displayName: 'a', status: 'running' }),
       runHead({ runId: 'b' as never, displayName: 'b', status: 'running' }),
     ]
+    const remote = runsRemote(backend)
+    const signal = new AbortController().signal
+    const first = await remote.list(agent('session-a'), { limit: 1 }, signal)
+    if (!first.ok || first.value.nextCursor === undefined) throw new Error('expected run cursor')
+
     let listCalls = 0
     const originalList = backend.list.bind(backend)
     backend.list = (async (agentArg: Agent, request: { limit?: number; cursor?: unknown }) => {
@@ -884,19 +901,21 @@ describe('compare-and-set workflow controls (RC7)', () => {
       const page = await originalList(agentArg, request)
       return { ...page, epoch: listCalls === 1 ? 'e1' : 'e2' }
     }) as FakeRuns['list']
-    const remote = runsRemote(backend)
-    const signal = new AbortController().signal
-    await expect(remote.list(agent('session-a'), {}, signal)).resolves.toMatchObject({
+    await expect(remote.list(agent('session-a'), { limit: 1, cursor: first.value.nextCursor }, signal)).resolves.toMatchObject({
       ok: false, error: { code: 'stale-cursor' },
     })
     backend.logLines = [{ index: 0, text: 'keep' }, { index: 1, text: 'more' }]
+    const firstLogs = await remote.logs(agent('session-a'), { runId: 'a' as never, limit: 1 }, signal)
+    if (!firstLogs.ok || firstLogs.value.nextCursor === undefined) throw new Error('expected log cursor')
     const originalLogs = backend.logs.bind(backend)
     backend.logs = (async (agentArg: Agent, request: { runId: string; cursor?: unknown; limit?: number }) => {
       const page = await originalLogs(agentArg, request)
       backend.logRevision += 1
       return page
     }) as FakeRuns['logs']
-    await expect(remote.logs(agent('session-a'), { runId: 'a' as never }, signal)).resolves.toMatchObject({
+    await expect(remote.logs(agent('session-a'), {
+      runId: 'a' as never, limit: 1, cursor: firstLogs.value.nextCursor,
+    }, signal)).resolves.toMatchObject({
       ok: false, error: { code: 'stale-cursor' },
     })
   })

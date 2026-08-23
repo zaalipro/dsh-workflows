@@ -18,6 +18,8 @@ export declare class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOp
     private observedSessionId;
     private observedSource;
     private unsubscribe;
+    private readonly observationOwners;
+    private readonly defaultObservationOwner;
     private disposed;
     listDefinitions?: WorkflowCatalogOperations['listDefinitions'];
     launchDefinition?: WorkflowCatalogOperations['launchDefinition'];
@@ -26,6 +28,12 @@ export declare class DashboardWorkflowRunsAdapter implements Omit<WorkflowRunsOp
     get(sessionId: string): WorkflowRunsSourceSnapshot;
     subscribe(sessionId: string, listener: (snapshot: WorkflowRunsSourceSnapshot) => void): () => void;
     observe(sessionId: string | undefined): void;
+    /**
+     * Keep independent dashboard renderers from releasing each other's live
+     * Session subscription during a shell/fallback ownership handoff.
+     */
+    observeFor(owner: object, sessionId: string | undefined): void;
+    private setObservedSession;
     /** Compatibility aliases used by the initial package prototype. */
     show(sessionId: string): void;
     close(): void;

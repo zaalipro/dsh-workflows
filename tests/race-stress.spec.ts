@@ -190,7 +190,7 @@ function failIteration(iteration: number, error: unknown): never {
   throw new Error(`RD11 iteration ${iteration} seed ${SEED}: ${message}`)
 }
 
-/** H-shaped fake: deferStart, CHECKPOINT_NOT_READY until result+dispose, and
+/** Replay-capable fake: deferStart, CHECKPOINT_NOT_READY until result+dispose, and
  * release after cancel/settle is a no-op so a racing Go cannot restart. */
 function fakeEngine(handles: FakeHandle[]): { start(request: any): any } {
   let next = 0

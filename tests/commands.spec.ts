@@ -5,8 +5,6 @@ import {
   applyCommands,
   CREATE_WORKFLOW_COMMAND_DESCRIPTION,
   createWorkflowSteerText,
-  WORKFLOWS_COMMAND_DESCRIPTION,
-  WORKFLOWS_COMMAND_SUCCESS,
   WORKFLOW_COMMAND_HELP,
 } from '../src/commands/index.js'
 
@@ -203,30 +201,20 @@ async function execute(ctx: any, agent: any, line: string, signal = new AbortCon
 }
 
 describe('Host /workflow and /create-workflow (SH16)', () => {
-  it('registers Host /workflow, /workflows, and /create-workflow', async () => {
+  it('registers Host /workflow and /create-workflow but leaves /workflows to the browser', async () => {
     const { ctx, agent, commands } = createHost()
     const names = commands.list(agent).map((item: { name: string }) => item.name)
-    expect(names).toEqual(expect.arrayContaining(['workflow', 'workflows', 'create-workflow']))
+    expect(names).toEqual(expect.arrayContaining(['workflow', 'create-workflow']))
+    expect(names).not.toContain('workflows')
     expect(commands.find(agent, 'workflow')).toMatchObject({
       description: 'Launch a saved workflow or pause/resume/stop/save a run',
       input: { hint: '<name> [json-args] | pause|resume|stop|save <display-name>' },
     })
-    expect(commands.find(agent, 'workflows')).toMatchObject({
-      description: WORKFLOWS_COMMAND_DESCRIPTION,
-    })
-    expect(commands.find(agent, 'workflows')?.input).toBeUndefined()
     expect(commands.find(agent, 'create-workflow')).toMatchObject({
       description: CREATE_WORKFLOW_COMMAND_DESCRIPTION,
       input: { hint: '[what the workflow should do]' },
     })
-    await expect(execute(ctx, agent, '/workflows')).resolves.toMatchObject({
-      result: { kind: 'success', text: WORKFLOWS_COMMAND_SUCCESS },
-    })
-    const abort = new AbortController()
-    abort.abort()
-    await expect(commands.find(agent, 'workflows')!.handler({
-      agent, rawInput: '', signal: abort.signal,
-    })).resolves.toMatchObject({ kind: 'error' })
+    await expect(execute(ctx, agent, '/workflows')).resolves.toBeUndefined()
   })
 
   it('returns the exact help string for bare /workflow', async () => {
