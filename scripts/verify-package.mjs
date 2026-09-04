@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { gunzipSync } from 'node:zlib'
 
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const PACKAGE_VERSION = '0.1.0-rc.3'
+const PACKAGE_VERSION = '0.1.0-rc.4'
 const PACKAGE_LICENSE = 'MIT'
 const NODE_RANGE = '^22.19.0 || >=24.0.0'
 const PACKAGE_MANAGER = 'pnpm@11.7.0'
@@ -214,7 +214,7 @@ function verifyManifest(manifest) {
   if (!isRecord(manifest.dsh.compatibility)) throw new Error('dsh.compatibility must be an object')
   expectStringArrayEqual(Object.keys(manifest.dsh.compatibility), ['host', 'versions', 'evaluator'], 'dsh.compatibility keys')
   expectEqual(manifest.dsh.compatibility.host, '@deepseek-ai/dsh', 'dsh.compatibility.host')
-  expectStringArrayEqual(manifest.dsh.compatibility.versions, ['0.1.1-rc.2'], 'dsh.compatibility.versions')
+  expectStringArrayEqual(manifest.dsh.compatibility.versions, ['0.1.2-rc.1'], 'dsh.compatibility.versions')
   expectEqual(manifest.dsh.compatibility.evaluator, 'plugin-compat-engine-v1', 'dsh.compatibility.evaluator')
   verifyClientDeclaration(manifest.dsh.client)
 
@@ -371,12 +371,12 @@ function verifyDependencies(manifest, clientDeclaration) {
     if (!(name in sections.peerDependencies)) throw new Error(`${name} must be a peer dependency`)
     if (!(name in sections.devDependencies)) throw new Error(`${name} peer must also be a development dependency`)
     if (name.startsWith('@deepseek-ai/dsh-')) {
-      expectEqual(sections.peerDependencies[name], '0.1.1-rc.2', `peerDependencies.${name}`)
-      expectEqual(sections.devDependencies[name], '0.1.1-rc.2', `devDependencies.${name}`)
+      expectEqual(sections.peerDependencies[name], '0.1.2-rc.1', `peerDependencies.${name}`)
+      expectEqual(sections.devDependencies[name], '0.1.2-rc.1', `devDependencies.${name}`)
     }
   }
 
-  expectEqual(sections.devDependencies['@deepseek-ai/dsh'], '0.1.1-rc.2', 'devDependencies.@deepseek-ai/dsh')
+  expectEqual(sections.devDependencies['@deepseek-ai/dsh'], '0.1.2-rc.1', 'devDependencies.@deepseek-ai/dsh')
   for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
     if ('@deepseek-ai/dsh' in sections[field]) {
       throw new Error(`@deepseek-ai/dsh must be a development dependency only, not ${field}`)

@@ -1,8 +1,8 @@
 import { createElement, useSyncExternalStore, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import TYPERT_REMOTE from '@zaalipro/dsh-workflows/remote'
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { DashboardWorkflowRunsAdapter } from './adapter.js'
 import { WorkflowRunsController } from './controller.js'
 import { workflowRunDefinition } from './workflow-definition.js'
@@ -81,7 +81,7 @@ interface WorkflowActionCommandUi {
   readonly kind: 'action'
   run(session?: unknown): void | Promise<void>
   /**
-   * Stock dsh 0.1.1-rc.2 always opens a popupSelect shell for every client
+   * Stock dsh 0.1.2-rc.1 always opens a popupSelect shell for every client
    * contribution, including `kind: 'action'`. These extras open the dashboard
    * instead of hanging on "Loading options…".
    */
@@ -549,7 +549,7 @@ export function apply(ctx: ClientContext): Promise<void> {
     }
     addCleanup(asDisposer(registerSource.call(root.inputTriggers, actionSource)))
 
-    const remote = root.remote as TypertClientRemote & Record<string, any>
+    const remote = root.remote as unknown as TypertClientRemote & Record<string, any>
     const sessions = root.sessions as any
     // Dynamic namespaces do not exist until the contribution is mounted. Use
     // the RPC fallback until then rather than reading them via the traced

@@ -1,10 +1,9 @@
 import type {
-  ChatConversationViewNode,
   ConversationLocation,
   ConversationNodeContext,
   ConversationNodeDefinition,
-} from '@deepseek-ai/dsh-client-runtime/client'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 
 /** Status shown for a workflow, phase, or member in the durable Chat row. */
 export type WorkflowRunStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
@@ -67,7 +66,7 @@ export function workflowPhaseKey(phase: string | null): string {
   return phase === null ? 'missing' : `value:${phase.length}:${phase}`
 }
 
-function eventOf(event: SessionEvent): WorkflowEvent {
+function eventOf(event: unknown): WorkflowEvent {
   return event as unknown as WorkflowEvent
 }
 

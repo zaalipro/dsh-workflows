@@ -1,4 +1,4 @@
-import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-runtime/client';
+import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client';
 /** Status shown for a workflow, phase, or member in the durable Chat row. */
 export type WorkflowRunStatus = 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 /** One member that actually emitted an official agent-start event. */

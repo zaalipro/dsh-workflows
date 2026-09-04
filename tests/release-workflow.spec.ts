@@ -7,7 +7,7 @@ const root = resolve(import.meta.dirname, '..')
 const source = readFileSync(resolve(root, '.github/workflows/release.yml'), 'utf8')
 const checkerSource = readFileSync(resolve(root, 'scripts/check-release.mjs'), 'utf8')
 const workflow = parse(source) as any
-const officialCommit = 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e'
+const officialCommit = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
 
 describe('release workflow policy', () => {
   it('runs only for version tags and never cancels a release', () => {

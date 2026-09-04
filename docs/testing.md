@@ -68,7 +68,7 @@ Without the key, this file alone registers exactly one skipped test with reason 
 
 ### Exact official Host checkout
 
-The packed consumer and CI checkout official DeepSeek Harness `0.1.1-rc.2` at commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`. The package build and tests compile against `0.1.1-rc.2` development dependencies; no Harness source patch or fork checkout participates. The package-owned evaluator build, strict NodeNext consumer, add/boot/remove profile cycle, and stock boot after removal are blocking release evidence.
+The packed consumer and CI checkout official DeepSeek Harness `0.1.2-rc.1` at commit `a66e4702047846cdaa10c66c9d3df3951f5ea70d`. The package build and tests compile against `0.1.2-rc.1` development dependencies; no Harness source patch or fork checkout participates. The package-owned evaluator build, strict NodeNext consumer, add/boot/remove profile cycle, and stock boot after removal are blocking release evidence.
 
 ### Final automated aggregate
 
@@ -76,7 +76,7 @@ The packed consumer and CI checkout official DeepSeek Harness `0.1.1-rc.2` at co
 pnpm run check:release
 ```
 
-Success ends exactly `release checks passed`. The orchestrator runs clean/frozen-install verification, build, typecheck, lint, owned-source aggregate coverage, snapshots, documentation, package policy, one immutable pack and packed consumer (`official-host-probe` plus real Web/headless add/boot/remove), the browser helper boundary, all three stress suites, and the opt-in provider file in order. It does not publish, launch Ego Lite, or record a GIF. The packed profile cycle is blocking against official `0.1.1-rc.2`; the Chromium product journey remains the final Ego Lite acceptance.
+Success ends exactly `release checks passed`. The orchestrator runs clean/frozen-install verification, build, typecheck, lint, owned-source aggregate coverage, snapshots, documentation, package policy, one immutable pack and packed consumer (`official-host-probe` plus real Web/headless add/boot/remove), the browser helper boundary, all three stress suites, and the opt-in provider file in order. It does not publish, launch Ego Lite, or record a GIF. The packed profile cycle is blocking against official `0.1.2-rc.1`; the Chromium product journey remains the final Ego Lite acceptance.
 
 ## Coverage policy
 
@@ -96,7 +96,7 @@ Handwritten Client TypeScript remains covered by its Client test project; genera
 
 ## CI platform matrix
 
-Blocking Ubuntu 24.04 jobs run Node `22.19.0`, `24`, and `26`; each uses a frozen lockfile and covers build, typecheck, lint, docs, package policy, and its assigned unit/coverage/snapshot gates. Node 24 additionally owns macOS 14, Windows Server 2022, Chromium helper, race-stress, and release-pack/packed-consumer jobs. The packed lane checks out official `0.1.1-rc.2` commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`; it applies no Harness patch, packs once, preserves one digest and artifact path, and requires live add/boot/remove for Web and headless.
+Blocking Ubuntu 24.04 jobs run Node `22.19.0`, `24`, and `26`; each uses a frozen lockfile and covers build, typecheck, lint, docs, package policy, and its assigned unit/coverage/snapshot gates. Node 24 additionally owns macOS 14, Windows Server 2022, Chromium helper, race-stress, and release-pack/packed-consumer jobs. The packed lane checks out official `0.1.2-rc.1` commit `a66e4702047846cdaa10c66c9d3df3951f5ea70d`; it applies no Harness patch, packs once, preserves one digest and artifact path, and requires live add/boot/remove for Web and headless.
 
 Windows runs every supported definition, manifest, scratch, retention, recovery, and subprocess case. It explicitly asserts junction/hard-link behavior and either working native advisory locking or the documented `WORKFLOW_STORAGE_UNSUPPORTED` result; it never silently skips the workflow, marks the job `continue-on-error`, or treats a platform limitation as success without asserting its exact branch.
 
@@ -110,7 +110,7 @@ All live resources are created inside an isolated workspace and DSH home. `final
 
 ## Final manual Web acceptance
 
-This is a release checklist, not a coding task, CI step, or substitute for automated Chromium. Perform it only after every automated gate passes, using the exact tested tarball installed into a real official `0.1.1-rc.2` Web profile and a real server/model flow.
+This is a release checklist, not a coding task, CI step, or substitute for automated Chromium. Perform it only after every automated gate passes, using the exact tested tarball installed into a real official `0.1.2-rc.1` Web profile and a real server/model flow.
 
 - [ ] Start the tarball-installed real server and confirm the package activates without a source checkout fallback.
 - [ ] Use **Ego Lite** for the smoke journey. Reuse its task space across the journey; never wipe or reset any user session, cookies, browser storage, or daily-browser state.

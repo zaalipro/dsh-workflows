@@ -4,12 +4,12 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type {
-  ConversationEventInput,
   ConversationNodeAssembler as ConversationNodeAssemblerType,
   ConversationNodeDefinition,
   ConversationViewDefinition,
   ConversationViewNode,
-} from '@deepseek-ai/dsh-client-runtime/client'
+} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { SessionEventLikeEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { describe, expect, it } from 'vitest'
 
@@ -56,22 +56,27 @@ async function loadConversationNodeAssembler(): Promise<typeof ConversationNodeA
   try {
     // Deliberately dynamic: a static import would execute the browser artifact
     // before the test can install its loader sink (`window` would be absent).
-    await import('@deepseek-ai/dsh-client-runtime/client')
+    await import('@deepseek-ai/dsh-client-ui-conversation/client')
   } finally {
     if (previousWindow === undefined) delete (globalThis as { window?: unknown }).window
     else (globalThis as { window?: unknown }).window = previousWindow
   }
-  if (handoff === undefined || handoff.id !== '@deepseek-ai/dsh-client-runtime') {
-    throw new Error('client runtime did not register its loader handoff')
+  if (handoff === undefined || handoff.id !== '@deepseek-ai/dsh-client-ui-conversation') {
+    throw new Error('client conversation package did not register its loader handoff')
   }
   const cordis = require('@deepseek-ai/cordis')
   const exports = handoff.factory(specifier => {
     if (specifier === '@deepseek-ai/cordis') return cordis
+    if (specifier === '@deepseek-ai/dsh-client-store') return { createSnapshotStore: (value: unknown) => ({ getSnapshot: () => value, subscribe: () => () => undefined }) }
     if (specifier === '@deepseek-ai/dsh-client-ui-slots') return { SlotCore: class SlotCore {} }
-    throw new Error(`unexpected client runtime dependency: ${specifier}`)
+    if (specifier === '@deepseek-ai/dsh-client-ui-primitives') return {}
+    if (specifier === 'react') return require('react')
+    if (specifier === 'react-dom') return require('react-dom')
+    if (specifier === 'react/jsx-runtime') return require('react/jsx-runtime')
+    throw new Error(`unexpected client conversation dependency: ${specifier}`)
   })
   const assembler = exports.ConversationNodeAssembler
-  if (typeof assembler !== 'function') throw new Error('client runtime did not export ConversationNodeAssembler')
+  if (typeof assembler !== 'function') throw new Error('client conversation package did not export ConversationNodeAssembler')
   return assembler as typeof ConversationNodeAssemblerType
 }
 
@@ -97,8 +102,8 @@ function event(seq: number, type: string, data: Record<string, unknown>): Sessio
   } as SessionEvent
 }
 
-function input(value: SessionEvent): ConversationEventInput {
-  return { event: value, view: undefined }
+function input(value: SessionEvent): SessionEventLikeEntry {
+  return { type: 'event', event: value }
 }
 
 function viewDefinition(): ConversationViewDefinition<ConversationViewNode, readonly ConversationViewNode[]> {
@@ -135,6 +140,7 @@ function assembler(events: readonly SessionEvent[]): ConversationNodeAssembler {
     { entries: () => [viewDefinition()] },
   )
   instance.replaceWindow(events.map(input), false)
+  instance.activateTarget('chat')
   instance.flush()
   return instance
 }

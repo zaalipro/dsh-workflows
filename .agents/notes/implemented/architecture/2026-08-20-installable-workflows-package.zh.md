@@ -2,7 +2,7 @@
 
 Status: implemented
 
-本笔记记录 `@zaalipro/dsh-workflows` 当前已实现的 package 架构。Plugin `0.1.0-rc.3` 只支持官方 Harness `0.1.1-rc.2`；CLI 与 workflow package manifest 必须在 activation 前同时精确匹配。由于 stock evaluator 与 private-directory face 未暴露完整 workflow product contract，本包提供自己的 compatibility evaluator 与 retained-storage descriptor。
+本笔记记录 `@zaalipro/dsh-workflows` 当前已实现的 package 架构。Plugin `0.1.0-rc.4` 只支持官方 Harness `0.1.2-rc.1`；CLI 与 workflow package manifest 必须在 activation 前同时精确匹配。由于 stock evaluator 与 private-directory face 未暴露完整 workflow product contract，本包提供自己的 compatibility evaluator 与 retained-storage descriptor。
 
 [English](2026-08-20-installable-workflows-package.md) | 中文
 
@@ -12,11 +12,11 @@ Saved workflow 与 supervised retained run 跨越 engine、Agent、Session、fil
 
 ## Summary
 
-一个 MIT package `@zaalipro/dsh-workflows` 在官方 Harness `0.1.1-rc.2` 上安装完整 Host 产品和可选 Web Client。本包拥有 compatibility evaluator、saved definition、logical-run supervision、version-2 retained inspection、command 与 exact-Agent tool integration、durable Chat recording、completion notice、generated Remote method 和 dashboard。它不发布 forked Harness distribution、Grok CLI code 或 Rhai runtime。
+一个 MIT package `@zaalipro/dsh-workflows` 在官方 Harness `0.1.2-rc.1` 上安装完整 Host 产品和可选 Web Client。本包拥有 compatibility evaluator、saved definition、logical-run supervision、version-2 retained inspection、command 与 exact-Agent tool integration、durable Chat recording、completion notice、generated Remote method 和 dashboard。它不发布 forked Harness distribution、Grok CLI code 或 Rhai runtime。
 
 ## Context
 
-官方 commit `141eb6f` 与 tag `dsh-v0.1.0-rc.8` 是最初的不兼容 API-reality baseline。当前 release evidence 改为固定官方 `0.1.1-rc.2`；未验证的更早或更晚版本都会在 exact manifest gate 失败。
+官方 commit `141eb6f` 与 tag `dsh-v0.1.0-rc.8` 是最初的不兼容 API-reality baseline。当前 release evidence 改为固定官方 `0.1.2-rc.1`；未验证的更早或更晚版本都会在 exact manifest gate 失败。
 
 Development-fork commit `391c829` 只作为 behavioral donor。它的 durable-run experience 有助于确定 required outcome 与 regression，但不会 wholesale copy 其 RC5-derived substrate。本包消费狭窄的官方 capability：deferred workflow start、deterministic journal checkpoint 与 gate、descriptor-rooted private storage、exact-Agent tool/prompt replacement、trusted packaged-skill precedence、client-owned command action、generated external Remote mounting，以及 bounded event forwarding。
 
@@ -30,7 +30,7 @@ npm package 是唯一 installable unit。其 bundle patch 在 Web 与 headless �
 
 ### Exact-Agent integration，而不是并行 model tool
 
-本包绝不注册第二个 global `workflow` tool。对于每个 Agent，它检查 effective inherited entry。在 stock `0.1.1-rc.2` 上，只有完整 official public workflow fingerprint 才允许 Agent-scoped `tools.register` 与 `systemPrompt.section`；未来 atomic seam 仍使用 exact identity/marker compare-and-swap。Missing tool、custom same-name tool、identity change 或 preset omission 都不会获得 replacement。Package-owned mutation 会 suppress unscoped `tools/change` fan-out，使多个 Agent shadow 安静收敛而不会重复注册循环。
+本包绝不注册第二个 global `workflow` tool。对于每个 Agent，它检查 effective inherited entry。在 stock `0.1.2-rc.1` 上，只有完整 official public workflow fingerprint 才允许 Agent-scoped `tools.register` 与 `systemPrompt.section`；未来 atomic seam 仍使用 exact identity/marker compare-and-swap。Missing tool、custom same-name tool、identity change 或 preset omission 都不会获得 replacement。Package-owned mutation 会 suppress unscoped `tools/change` fan-out，使多个 Agent shadow 安静收敛而不会重复注册循环。
 
 Packaged `create-workflow` skill 从 installed asset 读取，并在该 seam 可用时使用官方 trusted contribution。其他所有名称的普通 project/user/global skill precedence 保持不变。
 
@@ -64,7 +64,7 @@ Forwarded `workflows/run-change` event 只包含 per-Session revision invalidati
 
 Host 与 Client 是 disjoint TypeScript program。Build 顺序是 Host TSC、在 copied temporary mini-workspace 中 focused Typert generation、Client TSC 消费 generated declaration，最后生成 classic lazy-CJS browser bundle。Staging root 拥有一个 aggregate Host config；copied package 拥有一个 staging `tsconfig.json`；不存在 hand-authored Remote descriptor 或 obsolete nested Host/Client face。Generated Typert artifact 从 `WorkspaceTypertGenerator.generate()` return value 消费。
 
-Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`scripts/packed-consumer.mjs` 以 scripts disabled 安装这些 byte，import 每个 public JavaScript/NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，验证精确官方 `0.1.1-rc.2` Host，并在 isolated home 下执行 Web/headless plugin add、bounded boot、remove 与 restored stock boot。Browser、stress、provider 与 final aggregate gate 都在同一 product boundary 上运行。执行 npm publication 与 GitHub Release 时，它们复用 tested byte，而不是 repack。
+Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`scripts/packed-consumer.mjs` 以 scripts disabled 安装这些 byte，import 每个 public JavaScript/NodeNext export，通过 lazy-CJS seam 加载 `lib/client.js`，验证精确官方 `0.1.2-rc.1` Host，并在 isolated home 下执行 Web/headless plugin add、bounded boot、remove 与 restored stock boot。Browser、stress、provider 与 final aggregate gate 都在同一 product boundary 上运行。执行 npm publication 与 GitHub Release 时，它们复用 tested byte，而不是 repack。
 
 ## Rejected alternatives
 
@@ -86,7 +86,7 @@ Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`
 
 本包可以作为一个 reversible profile layer 安装与移除；compatibility evaluator 拥有 plugin script semantic 与 child execution，官方 Session vocabulary 继续作为 durable Chat authority。Durable-before-visible launch 与 fixed-point teardown 让 supervisor 对每个 accepted attempt 负责直到 cleanup。Same-process replay 会 suppress committed matching effect，而 documentation 与 authoring pattern 必须让 uncommitted effect 保持幂等。
 
-该设计为严格 compatibility 付出代价：只有官方 `0.1.1-rc.2` 可以加载 plugin `0.1.0-rc.3`，更高版本需要新的 verified package release。Native locking 与 plugin-owned descriptor operation 是必需条件；unsupported platform 会失败，而不是静默弱化 storage。Retained data 与 browser read 有界，因此较旧 terminal detail 可变成明确 truncated 或 evicted 状态。
+该设计为严格 compatibility 付出代价：只有官方 `0.1.2-rc.1` 可以加载 plugin `0.1.0-rc.4`，更高版本需要新的 verified package release。Native locking 与 plugin-owned descriptor operation 是必需条件；unsupported platform 会失败，而不是静默弱化 storage。Retained data 与 browser read 有界，因此较旧 terminal detail 可变成明确 truncated 或 evicted 状态。
 
 Browser 获得更丰富 inspection，但不成为 execution authority。Generated Remote staging 与 tarball-first verification 增加 build complexity，却能在 publication 前发现 missing asset、source fallback、protocol drift 和 install-only failure。
 

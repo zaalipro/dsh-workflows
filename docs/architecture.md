@@ -2,13 +2,13 @@
 
 English | [中文](architecture.zh.md)
 
-This reference describes the installed architecture of `@zaalipro/dsh-workflows`: one Host/Client bundle for official DeepSeek Harness `0.1.1-rc.2`, with a package-owned MIT compatibility evaluator. The [user guide](user-guide.md) owns operating procedures, the [testing reference](testing.md) owns release evidence, and the [architecture decision](../.agents/notes/implemented/architecture/2026-08-20-installable-workflows-package.md) owns rationale and rejected alternatives.
+This reference describes the installed architecture of `@zaalipro/dsh-workflows`: one Host/Client bundle for official DeepSeek Harness `0.1.2-rc.1`, with a package-owned MIT compatibility evaluator. The [user guide](user-guide.md) owns operating procedures, the [testing reference](testing.md) owns release evidence, and the [architecture decision](../.agents/notes/implemented/architecture/2026-08-20-installable-workflows-package.md) owns rationale and rejected alternatives.
 
 ## Scope and invariants
 
-The package owns definition discovery, logical-run supervision, retained storage, completion delivery, commands, Agent-scoped model-tool replacement, authorized Remote reads, the Web dashboard, and the private JavaScript compatibility evaluator. Official `0.1.1-rc.2` owns the Host, Agent, Session, provider, and Client services. A Headless install evaluates no browser module. A Web install adds the Client aggregate without changing Host execution authority.
+The package owns definition discovery, logical-run supervision, retained storage, completion delivery, commands, Agent-scoped model-tool replacement, authorized Remote reads, the Web dashboard, and the private JavaScript compatibility evaluator. Official `0.1.2-rc.1` owns the Host, Agent, Session, provider, and Client services. A Headless install evaluates no browser module. A Web install adds the Client aggregate without changing Host execution authority.
 
-Current state: plugin `0.1.0-rc.3` is verified against official `0.1.1-rc.2`. The plugin adapts the public Agent-scoped tool/prompt, filesystem, command, Remote, and provider faces and does not modify the stock `ctx.workflowEngine`.
+Current state: plugin `0.1.0-rc.4` is verified against official `0.1.2-rc.1`. The plugin adapts the public Agent-scoped tool/prompt, filesystem, command, Remote, and provider faces and does not modify the stock `ctx.workflowEngine`.
 
 Four invariants organize every component:
 
@@ -23,7 +23,7 @@ Four invariants organize every component:
 
 ```mermaid
 flowchart LR
-  subgraph H[Official Harness 0.1.1-rc.2]
+  subgraph H[Official Harness 0.1.2-rc.1]
     Loader[Profile loader]
     Engine[Stock workflow service]
     Agent[Exact Agent context]
@@ -63,7 +63,7 @@ The package's bundle patch mounts exactly one Host aggregate, advertises `lib/cl
 
 ```mermaid
 flowchart LR
-  Loader[Official 0.1.1-rc.2 profile loader] --> Host[Package Host aggregate]
+  Loader[Official 0.1.2-rc.1 profile loader] --> Host[Package Host aggregate]
   Host --> Registry[Definition registry]
   Host --> Supervisor[Logical-run supervisor]
   Host --> Commands[Commands and tool shadow]
@@ -81,7 +81,7 @@ The headless bundle has no import path to `./client`; commands, saved aliases, t
 
 ### Host components
 
-- **Aggregate and configuration** validate official `0.1.1-rc.2` faces before filesystem access, resolve every Schemastery default, load assets relative to `import.meta.url`, and mount children under effect ownership.
+- **Aggregate and configuration** validate official `0.1.2-rc.1` faces before filesystem access, resolve every Schemastery default, load assets relative to `import.meta.url`, and mount children under effect ownership.
 - **Definition registry (`ctx.workflows`)** observes bundled, project, and user roots; re-reads authoritative bytes; publishes only coalesced `workflows/change` hints; and owns safe save publication.
 - **Run store and native lease** own manifests, immutable detail sidecars, scripts, scratch files, retention, recovery, and one process-lifetime advisory lock.
 - **Supervisor (`ctx.workflowSupervisor`)** owns exact Agent/Session authorization, logical identities, attempts, status transitions, budgets, checkpoints, gates, controls, and lifecycle events.
@@ -116,7 +116,7 @@ The final `lib/client.js` must call `window.__ModuleLoader__.load({ id: "@zaalip
 
 ### Boot and startup recovery
 
-Activation first verifies the supported official `0.1.1-rc.2` service faces. Storage then validates or creates only the owner-only runs root and permanent lock anchor, opens the anchor without following links, validates its stable identity, and acquires a nonblocking `fs-native-extensions` lifetime lease. Only the lease holder creates or validates the four store directories and performs one complete, bounded recovery before Session admission.
+Activation first verifies the supported official `0.1.2-rc.1` service faces. Storage then validates or creates only the owner-only runs root and permanent lock anchor, opens the anchor without following links, validates its stable identity, and acquires a nonblocking `fs-native-extensions` lifetime lease. Only the lease holder creates or validates the four store directories and performs one complete, bounded recovery before Session admission.
 
 Recovery validates every manifest and referenced sidecar before publishing any row. Persisted active rows become terminal `interrupted`, running member heads become `cancelled`, and orphaned notice claims become `abandoned`. Recovery keeps inspection facts and display ordinals but reconstructs no execution authority.
 
@@ -168,9 +168,9 @@ The dashboard has three panes at 1,200 px and wider, two-pane navigation below 1
 
 ## Compatibility provenance
 
-Official `0.1.1-rc.2` integration uses Agent-scoped `tools.register` and `systemPrompt.section` only when the stock workflow contribution is identified; custom same-name contributions remain untouched. The package owns deferred execution, replay journal, checkpoints, gates, budget accounting, and scratch in its private compatibility evaluator.
+Official `0.1.2-rc.1` integration uses Agent-scoped `tools.register` and `systemPrompt.section` only when the stock workflow contribution is identified; custom same-name contributions remain untouched. The package owns deferred execution, replay journal, checkpoints, gates, budget accounting, and scratch in its private compatibility evaluator.
 
-Official `0.1.1-rc.2` is the only verified installed Host for plugin `0.1.0-rc.3`; `0.1.0-rc.8` is unsupported and later Hosts require re-verification. The compatibility evaluator is package-owned MIT source derived narrowly from the maintained workflow behavior, not a replacement for the process-global stock workflow service.
+Official `0.1.2-rc.1` is the only verified installed Host for plugin `0.1.0-rc.4`; `0.1.0-rc.8` is unsupported and later Hosts require re-verification. The compatibility evaluator is package-owned MIT source derived narrowly from the maintained workflow behavior, not a replacement for the process-global stock workflow service.
 
 ## Capacity bounds
 

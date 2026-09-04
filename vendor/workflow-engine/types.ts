@@ -17,7 +17,7 @@ interface WorkflowJournalBase {
 
 /** Plugin-owned replay vocabulary, intentionally independent of the stock seam declarations. */
 export type WorkflowJournalEntry = WorkflowJournalBase & (
-  | { readonly kind: 'agent'; readonly seq: number; readonly result: import('@deepseek-ai/dsh-session').JsonValue }
+  | { readonly kind: 'agent'; readonly seq: number; readonly result: import('@deepseek-ai/dsh-util-values').JsonValue }
   | { readonly kind: 'phase'; readonly title: string }
   | { readonly kind: 'log'; readonly message: string }
   | { readonly kind: 'scratch-read'; readonly content?: string }

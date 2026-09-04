@@ -91,8 +91,8 @@ describe('package policy verifier', () => {
   it('rejects an unverified Harness peer range or compatibility declaration', () => withFixture(fixture => {
     const manifestPath = join(fixture, 'package.json')
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
-    manifest.peerDependencies['@deepseek-ai/dsh-workflow'] = '>=0.1.1-rc.2'
-    manifest.dsh.compatibility.versions = ['0.1.1-rc.2', '0.1.1']
+    manifest.peerDependencies['@deepseek-ai/dsh-workflow'] = '>=0.1.2-rc.1'
+    manifest.dsh.compatibility.versions = ['0.1.2-rc.1', '0.1.1']
     writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     expectFailure('--source', fixture)
   }))
@@ -199,12 +199,12 @@ function makeManifest() {
     './package.json': './package.json',
   }
   const peers = {
-    '@deepseek-ai/cordis': '>=4.0.1', '@deepseek-ai/dsh-client-connection': '0.1.1-rc.2',
-    '@deepseek-ai/dsh-client-ui-conversation': '0.1.1-rc.2',
-    '@deepseek-ai/dsh-workflow': '0.1.1-rc.2', '@deepseek-ai/dsh-workflow-worker-thread': '0.1.1-rc.2', react: '>=18',
+    '@deepseek-ai/cordis': '>=4.0.2', '@deepseek-ai/dsh-client-connection': '0.1.2-rc.1',
+    '@deepseek-ai/dsh-client-ui-conversation': '0.1.2-rc.1',
+    '@deepseek-ai/dsh-workflow': '0.1.2-rc.1', '@deepseek-ai/dsh-workflow-worker-thread': '0.1.2-rc.1', react: '>=18',
   }
   return {
-    name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.3', type: 'module', license: 'MIT',
+    name: '@zaalipro/dsh-workflows', version: '0.1.0-rc.4', type: 'module', license: 'MIT',
     engines: { node: '^22.19.0 || >=24.0.0' }, packageManager: 'pnpm@11.7.0', publishConfig: { access: 'public' },
     main: './lib/types/index.js', types: './lib/types/index.d.ts',
     files: [
@@ -217,8 +217,8 @@ function makeManifest() {
     dependencies: { chokidar: '4.0.3', clsx: '2.1.1', 'fs-native-extensions': '1.5.0' },
     peerDependencies: peers,
     peerDependenciesMeta: Object.fromEntries(Object.keys(peers).map(name => [name, { optional: true }])),
-    devDependencies: { ...peers, '@deepseek-ai/dsh': '0.1.1-rc.2' },
-    dsh: { compatibility: { host: '@deepseek-ai/dsh', versions: ['0.1.1-rc.2'], evaluator: 'plugin-compat-engine-v1' }, bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-conversation'] } },
+    devDependencies: { ...peers, '@deepseek-ai/dsh': '0.1.2-rc.1' },
+    dsh: { compatibility: { host: '@deepseek-ai/dsh', versions: ['0.1.2-rc.1'], evaluator: 'plugin-compat-engine-v1' }, bundle: { patch: './cordis.patch.yml' }, client: { platform: 'web', inject: ['@deepseek-ai/dsh-client-connection', '@deepseek-ai/dsh-client-ui-conversation'] } },
   }
 }
 

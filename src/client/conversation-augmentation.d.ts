@@ -1,3 +1,5 @@
+export {}
+
 /**
  * The official Web conversation package is a peer of the installed bundle.
  * Keep a minimal ambient contract so the package's standalone client face can

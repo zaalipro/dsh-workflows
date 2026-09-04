@@ -100,7 +100,7 @@ describe('workflow tool shadow (SH22)', () => {
     expect(isOfficialWorkflowTool(marked)).toBe(true)
   })
 
-  it('recognizes only the complete stock 0.1.1-rc.2 public workflow fingerprint', () => {
+  it('recognizes only the complete stock 0.1.2-rc.1 public workflow fingerprint', () => {
     const stock = stockOfficialTool()
     expect(isStockOfficialWorkflowTool(stock)).toBe(true)
     expect(isOfficialWorkflowTool(stock)).toBe(true)

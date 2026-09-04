@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { createRequire } from 'node:module'
@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process'
 import vm from 'node:vm'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const OFFICIAL_COMMIT = 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e'
+const OFFICIAL_COMMIT = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
 const OUTPUT_TAIL_BYTES = 1024 * 1024
 const activeChildren = new Set()
 let interruptedSignal
@@ -40,19 +40,33 @@ try {
   await mkdir(home, { recursive: true })
   await mkdir(cache, { recursive: true })
   await mkdir(store, { recursive: true })
-  const env = { ...process.env, HOME: home, DSH_HOME: home, npm_config_cache: cache, PNPM_HOME: join(workspace, 'pnpm-home'), PNPM_STORE_DIR: store, COREPACK_HOME: join(workspace, 'corepack') }
-  await writeFile(join(workspace, 'package.json'), JSON.stringify({ name: 'dsh-workflows-packed-consumer', private: true, type: 'module' }, null, 2) + '\n')
+  const env = {
+    ...process.env, HOME: home, DSH_HOME: home, npm_config_cache: cache,
+    PNPM_HOME: join(workspace, 'pnpm-home'), PNPM_STORE_DIR: store,
+    COREPACK_HOME: process.env.COREPACK_HOME ?? join(homedir(), '.cache/node/corepack'),
+  }
+  await writeFile(join(workspace, 'package.json'), JSON.stringify({
+    name: 'dsh-workflows-packed-consumer', private: true, type: 'module', packageManager: 'pnpm@11.7.0',
+  }, null, 2) + '\n')
   report('workspace', { path: keep ? workspace : '<temporary>' })
 
   stage = 'install'
-  await command('pnpm', ['add', '--save-dev', '--ignore-scripts', 'typescript@5.9.3', '@types/node@22.20.1', '@deepseek-ai/dsh@0.1.1-rc.2'], { cwd: workspace, env })
+  const officialSpecs = await officialRuntimeSpecs(options.official)
+  // The official release publishes its Typert registry under a prerelease
+  // dist-tag; pin it explicitly so pnpm does not try to resolve the invalid
+  // stable-only peer range emitted by the upstream package graph.
+  await command('pnpm', [
+    'add', '--config.dedupe-peer-dependents=true', '--save-dev', '--ignore-scripts',
+    'typescript@5.9.3', '@types/node@22.20.1', '@deepseek-ai/dsh@0.1.2-rc.1',
+    '@deepseek-ai/schemastery@3.18.2', ...officialSpecs,
+  ], { cwd: workspace, env })
   await command('pnpm', ['add', '--ignore-scripts', options.tarball], { cwd: workspace, env })
   const installedManifestPath = join(workspace, 'node_modules/@zaalipro/dsh-workflows/package.json')
   const installedManifest = JSON.parse(await readFile(installedManifestPath, 'utf8'))
-  if (installedManifest.version !== '0.1.0-rc.3'
+  if (installedManifest.version !== '0.1.0-rc.4'
     || installedManifest.dsh?.compatibility?.host !== '@deepseek-ai/dsh'
     || installedManifest.dsh?.compatibility?.evaluator !== 'plugin-compat-engine-v1'
-    || JSON.stringify(installedManifest.dsh?.compatibility?.versions) !== JSON.stringify(['0.1.1-rc.2'])) {
+    || JSON.stringify(installedManifest.dsh?.compatibility?.versions) !== JSON.stringify(['0.1.2-rc.1'])) {
     throw new Error('installed plugin version or compatibility metadata does not match the release contract')
   }
   await requireFile(join(dirname(installedManifestPath), 'lib/compat-engine/index.js'), 'installed compatibility evaluator')
@@ -61,7 +75,7 @@ try {
   // healed Host fallback. Supply its declared peers explicitly; the separate
   // probes below prove the artifact itself never auto-installs them.
   const peers = Object.entries(installedManifest.peerDependencies ?? {}).map(([name, range]) => `${name}@${range}`)
-  await command('pnpm', ['add', '--ignore-scripts', ...peers], { cwd: workspace, env })
+  await command('pnpm', ['add', '--config.auto-install-peers=false', '--ignore-scripts', ...peers], { cwd: workspace, env })
   report(stage)
 
   stage = 'optional-peer-isolation'
@@ -110,7 +124,7 @@ try {
   // version represented by this consumer checkout.
   stage = 'official-host-probe'
   const officialManifest = JSON.parse(await readFile(join(options.official, 'package.json'), 'utf8'))
-  if (officialManifest.version !== '0.1.1-rc.2') throw new Error(`official Harness 0.1.1-rc.2 is required, got ${String(officialManifest.version)}`)
+  if (officialManifest.version !== '0.1.2-rc.1') throw new Error(`official Harness 0.1.2-rc.1 is required, got ${String(officialManifest.version)}`)
   const revision = (await command('git', ['-C', options.official, 'rev-parse', 'HEAD'], { cwd: workspace, env, timeoutMs: 30_000 })).stdout.trim()
   if (revision !== OFFICIAL_COMMIT) throw new Error(`official Harness checkout must be ${OFFICIAL_COMMIT}, got ${revision}`)
   report(stage, { version: officialManifest.version, commit: revision, activation: 'verified' })
@@ -222,6 +236,12 @@ async function assertOfficialProfileIsolation(profile, env) {
   const requireFromFallback = createRequire(join(env.DSH_HOME, 'profiles', 'package.json'))
   for (const name of Object.keys(manifest.peerDependencies ?? {})) {
     const localManifest = join(profileDir, 'node_modules', ...name.split('/'), 'package.json')
+    // React is a UI framework peer, not a Host identity package. The official
+    // Web bundle may legitimately place it in the profile while headless
+    // profiles omit it entirely.
+    if (name === 'react') {
+      if (await exists(localManifest)) continue
+    }
     if (await exists(localManifest)) throw new Error(`${profile}: materialized profile-local Host peer ${name}`)
     let resolved
     try { resolved = requireFromPlugin.resolve(name) }
@@ -334,9 +354,48 @@ function command(file, args, options) {
       activeChildren.delete(child)
       if (timedOut) reject(new Error(`${file} exceeded ${String(timeoutMs)}ms: ${(stderr || stdout).trim().slice(-2000)}`))
       else if (code === 0) accept({ stdout, stderr })
-      else reject(new Error(`${file} exited ${String(code)}${signal ? ` (${signal})` : ''}: ${(stderr || stdout).trim().slice(-2000)}`))
+      else reject(new Error(`${file} exited ${String(code)}${signal ? ` (${signal})` : ''}: ${(stderr || stdout).trim().slice(-10000)}`))
     })
   })
+}
+
+async function officialRuntimeSpecs(root) {
+  const manifests = new Map()
+  await collectOfficialManifests(root, manifests)
+  const cli = manifests.get('@deepseek-ai/dsh')
+  if (!cli) throw new Error('official checkout is missing the CLI manifest')
+  const pending = [...Object.keys(cli.dependencies ?? {}), ...Object.keys(cli.devDependencies ?? {})]
+  const selected = new Set()
+  while (pending.length > 0) {
+    const name = pending.pop()
+    if (typeof name !== 'string' || selected.has(name)) continue
+    const manifest = manifests.get(name)
+    if (!manifest || (!name.startsWith('@deepseek-ai/dsh-') && !name.startsWith('@deepseek-ai/cordis-plugin-'))) continue
+    selected.add(name)
+    for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+      for (const dependency of Object.keys(manifest[field] ?? {})) pending.push(dependency)
+    }
+  }
+  return [...selected]
+    .filter(name => name !== '@deepseek-ai/dsh' && !name.includes('experimental-'))
+    .sort()
+    .map(name => `${name}@${manifests.get(name).version}`)
+}
+
+async function collectOfficialManifests(directory, result) {
+  let entries
+  try { entries = await readdir(directory, { withFileTypes: true }) } catch { return }
+  for (const entry of entries) {
+    if (entry.name === 'node_modules' || entry.name === '.git') continue
+    const path = join(directory, entry.name)
+    if (entry.isDirectory()) await collectOfficialManifests(path, result)
+    else if (entry.isFile() && entry.name === 'package.json') {
+      try {
+        const manifest = JSON.parse(await readFile(path, 'utf8'))
+        if (typeof manifest.name === 'string' && typeof manifest.version === 'string') result.set(manifest.name, manifest)
+      } catch { /* ignore non-package JSON */ }
+    }
+  }
 }
 
 function terminate(child, signal) {

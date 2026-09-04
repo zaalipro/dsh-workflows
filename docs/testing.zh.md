@@ -68,7 +68,7 @@ pnpm exec vitest run tests/real-provider.spec.ts --reporter=dot && printf 'RD14 
 
 ### 精确 official Host checkout
 
-Packed consumer 与 CI checkout 官方 DeepSeek Harness `0.1.1-rc.2` commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`。Package build 与 test 针对 `0.1.1-rc.2` development dependency 编译；不使用 Harness source patch 或 fork checkout。Package-owned evaluator build、strict NodeNext consumer、add/boot/remove profile cycle 与 removal 后的 stock boot 都是 blocking release evidence。
+Packed consumer 与 CI checkout 官方 DeepSeek Harness `0.1.2-rc.1` commit `a66e4702047846cdaa10c66c9d3df3951f5ea70d`。Package build 与 test 针对 `0.1.2-rc.1` development dependency 编译；不使用 Harness source patch 或 fork checkout。Package-owned evaluator build、strict NodeNext consumer、add/boot/remove profile cycle 与 removal 后的 stock boot 都是 blocking release evidence。
 
 ### 最终自动化 aggregate
 
@@ -76,7 +76,7 @@ Packed consumer 与 CI checkout 官方 DeepSeek Harness `0.1.1-rc.2` commit `b15
 pnpm run check:release
 ```
 
-成功时准确以 `release checks passed` 结束。Orchestrator 按顺序运行 clean/frozen-install verification、build、typecheck、lint、owned-source aggregate coverage、snapshot、documentation、package policy、一次 immutable pack 与 packed consumer（`official-host-probe` 加真实 Web/headless add/boot/remove）、browser helper boundary、三个 stress suite 和 opt-in provider file。它不会 publish、启动 Ego Lite 或录制 GIF。Packed profile cycle 针对官方 `0.1.1-rc.2` 是 blocking gate；Chromium product journey 仍是最终 Ego Lite acceptance。
+成功时准确以 `release checks passed` 结束。Orchestrator 按顺序运行 clean/frozen-install verification、build、typecheck、lint、owned-source aggregate coverage、snapshot、documentation、package policy、一次 immutable pack 与 packed consumer（`official-host-probe` 加真实 Web/headless add/boot/remove）、browser helper boundary、三个 stress suite 和 opt-in provider file。它不会 publish、启动 Ego Lite 或录制 GIF。Packed profile cycle 针对官方 `0.1.2-rc.1` 是 blocking gate；Chromium product journey 仍是最终 Ego Lite acceptance。
 
 ## Coverage policy
 
@@ -96,7 +96,7 @@ Handwritten Client TypeScript 仍由其 Client test project 覆盖；generated o
 
 ## CI platform matrix
 
-Blocking Ubuntu 24.04 job 运行 Node `22.19.0`、`24` 和 `26`；每个 job 使用 frozen lockfile，并覆盖 build、typecheck、lint、docs、package policy 以及分配的 unit/coverage/snapshot gate。Node 24 还拥有 macOS 14、Windows Server 2022、Chromium helper、race-stress 和 release-pack/packed-consumer job。Packed lane checkout 官方 `0.1.1-rc.2` commit `b150a551b8d465e31e418e1b2eaf5e79bbb7d28e`；不应用 Harness patch，只 pack 一次并保留一个 digest 和 artifact path，而且要求 Web 与 headless 的 live add/boot/remove。
+Blocking Ubuntu 24.04 job 运行 Node `22.19.0`、`24` 和 `26`；每个 job 使用 frozen lockfile，并覆盖 build、typecheck、lint、docs、package policy 以及分配的 unit/coverage/snapshot gate。Node 24 还拥有 macOS 14、Windows Server 2022、Chromium helper、race-stress 和 release-pack/packed-consumer job。Packed lane checkout 官方 `0.1.2-rc.1` commit `a66e4702047846cdaa10c66c9d3df3951f5ea70d`；不应用 Harness patch，只 pack 一次并保留一个 digest 和 artifact path，而且要求 Web 与 headless 的 live add/boot/remove。
 
 Windows 运行每个支持的 definition、manifest、scratch、retention、recovery 与 subprocess case。它明确断言 junction/hard-link behavior，以及可工作的 native advisory locking 或已记录的 `WORKFLOW_STORAGE_UNSUPPORTED` result；它绝不静默 skip workflow、把 job 标记为 `continue-on-error`，或在没有断言准确 branch 时把 platform limitation 当作成功。
 
@@ -110,7 +110,7 @@ CI 只在可用时把 `DEEPSEEK_API_KEY` 传给隔离的 provider job。Test 不
 
 ## Final manual Web acceptance
 
-这是 release checklist，不是 coding task、CI step 或 automated Chromium 的替代。只有全部自动化 gate 通过后，才使用安装了完全相同 tested tarball 的真实官方 `0.1.1-rc.2` Web profile 和 real server/model flow 执行。
+这是 release checklist，不是 coding task、CI step 或 automated Chromium 的替代。只有全部自动化 gate 通过后，才使用安装了完全相同 tested tarball 的真实官方 `0.1.2-rc.1` Web profile 和 real server/model flow 执行。
 
 - [ ] 启动 tarball-installed real server，确认 package activation 没有 source checkout fallback。
 - [ ] 使用 **Ego Lite** 完成 smoke journey。全程复用它的 task space；绝不 wipe 或 reset 任何 user session、cookie、browser storage 或 daily-browser state。

@@ -29,7 +29,7 @@ import { registerWorkflowRemoteEvents } from './remote-events.js'
 export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvariant }
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode }
 export const name = 'dsh-workflows'
-export const version = '0.1.0-rc.3'
+export const version = '0.1.0-rc.4'
 
 /** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export const inject = [
@@ -45,12 +45,12 @@ export const inject = [
 /** Exact package compatibility contract mirrored from package.json. */
 export const HOST_COMPATIBILITY = Object.freeze({
   host: '@deepseek-ai/dsh',
-  versions: Object.freeze(['0.1.1-rc.2'] as const),
+  versions: Object.freeze(['0.1.2-rc.1'] as const),
   evaluator: 'plugin-compat-engine-v1',
 })
 
 const INCOMPATIBLE_MESSAGE =
-  '@zaalipro/dsh-workflows 0.1.0-rc.3 supports exactly official DeepSeek Harness 0.1.1-rc.2'
+  '@zaalipro/dsh-workflows 0.1.0-rc.4 supports exactly official DeepSeek Harness 0.1.2-rc.1'
 
 const require = createRequire(import.meta.url)
 
@@ -66,7 +66,7 @@ type ExecutableHostResolution =
   | { kind: 'programmatic' }
   | { kind: 'dsh'; versions?: InstalledHostVersions }
 
-export function isSupportedHostVersion(value: unknown): value is '0.1.1-rc.2' {
+export function isSupportedHostVersion(value: unknown): value is '0.1.2-rc.1' {
   return typeof value === 'string'
     && (HOST_COMPATIBILITY.versions as readonly string[]).includes(value)
 }
@@ -261,7 +261,7 @@ function requireService(ctx: any, service: string): any {
 
 function requireFunction(value: unknown, member: string, service: string): void {
   if (typeof value !== 'function') {
-    throw new Error(`workflow package requires ${service}.${member} from official DeepSeek Harness 0.1.1-rc.2`)
+    throw new Error(`workflow package requires ${service}.${member} from official DeepSeek Harness 0.1.2-rc.1`)
   }
 }
 
@@ -272,7 +272,7 @@ function hasRemoteEventRegistry(ctx: any): boolean {
   return true
 }
 
-/** Required service faces on official dsh 0.1.1-rc.2. */
+/** Required service faces on official dsh 0.1.2-rc.1. */
 function assertStockFaces(ctx: any): void {
   requireService(ctx, 'agents')
   requireFunction(optionalProperty(requireService(ctx, 'commands'), 'register'), 'register', 'commands')
@@ -280,7 +280,7 @@ function assertStockFaces(ctx: any): void {
   const skills = requireService(ctx, 'skills')
   if (typeof optionalProperty(skills, 'registerTrustedPackageSkill') !== 'function'
     && typeof optionalProperty(skills, 'registerProvider') !== 'function') {
-    throw new Error('workflow package requires skills.registerProvider on official DeepSeek Harness 0.1.1-rc.2')
+    throw new Error('workflow package requires skills.registerProvider on official DeepSeek Harness 0.1.2-rc.1')
   }
   const subagents = requireService(ctx, 'subagents')
   requireFunction(optionalProperty(subagents, 'getProvider'), 'getProvider', 'subagents')
@@ -359,7 +359,7 @@ async function createCompatibilityEngine(ctx: any, config: ResolvedWorkflowPacka
   if (subagents === undefined || typeof optionalProperty(subagents, 'getProvider') !== 'function'
     || typeof optionalProperty(subagents, 'start') !== 'function') {
     throw new WorkflowPackageError(
-      'official DeepSeek Harness 0.1.1-rc.2 requires the subagents service for plugin workflows',
+      'official DeepSeek Harness 0.1.2-rc.1 requires the subagents service for plugin workflows',
       'WORKFLOW_INCOMPATIBLE_HOST',
     )
   }
@@ -438,7 +438,7 @@ export async function apply(ctx: Context | any, input: WorkflowConfig = {}): Pro
     // supported stock engine is never used for plugin workflow execution.
     resources.compatibilityEngine = await createCompatibilityEngine(ctx, config)
 
-    // Official 0.1.1-rc.2 exposes fs.openPrivateDirectory(), but its production
+    // Official 0.1.2-rc.1 exposes fs.openPrivateDirectory(), but its production
     // capability does not include the complete inventory/publication/removal
     // face this retained run store requires. Keep the Host filesystem for
     // workspace definitions and script_path authorization/path normalization;

@@ -33,7 +33,8 @@ const BASELINE_EXTERNALS = new Set([
   '@deepseek-ai/cordis',
   '@deepseek-ai/dsh-client-ui-slots',
   '@deepseek-ai/dsh-client-ui-primitives',
-  '@deepseek-ai/dsh-client-runtime/client',
+  '@deepseek-ai/dsh-client-ui-conversation/client',
+  '@deepseek-ai/dsh-client-ui-chat/client',
 ])
 
 const children = new Set()
@@ -119,9 +120,9 @@ export async function generateTypert(stagingRoot) {
   const hostConfig = JSON.parse(await readFile(resolve(ROOT, 'tsconfig.host.json'), 'utf8'))
   const compilerOptions = { ...hostConfig.compilerOptions }
   const analysisDependencies = await copyTypertAnalysisDependencies(stagingRoot)
-  const analysisPaths = Object.fromEntries(analysisDependencies.map(dependency => [
-    dependency.name,
-    [`./packages/${dependency.directory}/analysis/index.d.ts`],
+  const analysisPaths = Object.fromEntries(analysisDependencies.flatMap(dependency => [
+    [dependency.name, [`./packages/${dependency.directory}/analysis/index.d.ts`]],
+    [`${dependency.name}/*`, [`./packages/${dependency.directory}/analysis/*`]],
   ]))
   await writeJson(resolve(packageRoot, 'tsconfig.json'), {
     compilerOptions: {
@@ -209,6 +210,7 @@ async function copyTypertAnalysisDependencies(stagingRoot) {
     ['@deepseek-ai/dsh-session', 'dsh-session', sessionManifest],
     ['@deepseek-ai/dsh-agent', 'dsh-agent', require.resolve('@deepseek-ai/dsh-agent/package.json')],
     ['@deepseek-ai/dsh-brand', 'dsh-brand', createRequire(sessionManifest).resolve('@deepseek-ai/dsh-brand/package.json')],
+    ['@deepseek-ai/dsh-workflow', 'dsh-workflow', require.resolve('@deepseek-ai/dsh-workflow/package.json')],
   ].map(([name, directory, manifestPath]) => ({ name, directory, manifestPath }))
 
   for (const dependency of dependencies) {

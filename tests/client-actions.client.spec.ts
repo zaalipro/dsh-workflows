@@ -39,7 +39,7 @@ function officialInputTriggerController(): OfficialInputTriggerController {
   }
   const exports = registration.factory((id: string) => {
     if (id === '@deepseek-ai/cordis') return { Service: class {} }
-    if (id === '@deepseek-ai/dsh-client-runtime/client') return { createSnapshotStore }
+    if (id === '@deepseek-ai/dsh-client-store') return { createSnapshotStore }
     if (id === 'react/jsx-runtime') return { jsx: () => null, jsxs: () => null }
     if (id === 'react') return {
       Fragment: Symbol('Fragment'),
@@ -470,7 +470,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       nodeRequire.resolve('@deepseek-ai/dsh-client-ui-input-trigger/package.json'),
       'utf8',
     ))
-    expect(installed.version).toBe('0.1.1-rc.2')
+    expect(installed.version).toBe('0.1.2-rc.1')
     const Controller = officialInputTriggerController()
     const earlierCommandMiss = {
       trigger: '/',

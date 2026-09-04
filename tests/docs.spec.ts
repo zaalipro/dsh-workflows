@@ -82,7 +82,7 @@ describe('documentation verifier', () => {
     const testing = readFileSync(join(repository, 'docs/testing.md'), 'utf8')
     expect(testing).toContain('official-host-probe')
     expect(testing).toContain('no Harness source patch')
-    expect(testing).toContain('b150a551b8d465e31e418e1b2eaf5e79bbb7d28e')
+    expect(testing).toContain('a66e4702047846cdaa10c66c9d3df3951f5ea70d')
     expect(testing).toContain('ConversationNodeAssembler')
     expect(testing).not.toContain('applies a Harness patch')
   })

@@ -2,13 +2,13 @@
 
 [English](architecture.md) | 中文
 
-本参考说明 `@zaalipro/dsh-workflows` 的已安装架构：它是面向官方 DeepSeek Harness `0.1.1-rc.2` 的单一 Host/Client bundle，并包含 private compatibility evaluator（package-owned MIT source）。[用户指南](user-guide.zh.md)负责操作步骤，[测试参考](testing.zh.md)负责发布证据，[架构决策](../.agents/notes/implemented/architecture/2026-08-20-installable-workflows-package.zh.md)负责理由和被拒绝的替代方案。
+本参考说明 `@zaalipro/dsh-workflows` 的已安装架构：它是面向官方 DeepSeek Harness `0.1.2-rc.1` 的单一 Host/Client bundle，并包含 private compatibility evaluator（package-owned MIT source）。[用户指南](user-guide.zh.md)负责操作步骤，[测试参考](testing.zh.md)负责发布证据，[架构决策](../.agents/notes/implemented/architecture/2026-08-20-installable-workflows-package.zh.md)负责理由和被拒绝的替代方案。
 
 ## 范围与不变量
 
-本包拥有 definition discovery、logical-run supervision、retained storage、completion delivery、命令、Agent-scoped model-tool replacement、授权 Remote read、Web dashboard 与 private JavaScript compatibility evaluator。官方 `0.1.1-rc.2` 拥有 Host、Agent、Session、provider 与 Client service。Headless 安装不求值任何浏览器模块；Web 安装增加 Client aggregate，但不改变 Host execution authority。
+本包拥有 definition discovery、logical-run supervision、retained storage、completion delivery、命令、Agent-scoped model-tool replacement、授权 Remote read、Web dashboard 与 private JavaScript compatibility evaluator。官方 `0.1.2-rc.1` 拥有 Host、Agent、Session、provider 与 Client service。Headless 安装不求值任何浏览器模块；Web 安装增加 Client aggregate，但不改变 Host execution authority。
 
-当前状态：plugin `0.1.0-rc.3` 已针对官方 `0.1.1-rc.2` 验证。Plugin 适配 public Agent-scoped tool/prompt、filesystem、command、Remote 与 provider face，不修改 stock `ctx.workflowEngine`。
+当前状态：plugin `0.1.0-rc.4` 已针对官方 `0.1.2-rc.1` 验证。Plugin 适配 public Agent-scoped tool/prompt、filesystem、command、Remote 与 provider face，不修改 stock `ctx.workflowEngine`。
 
 四条不变量组织所有组件：
 
@@ -23,7 +23,7 @@
 
 ```mermaid
 flowchart LR
-  subgraph H[Official Harness 0.1.1-rc.2]
+  subgraph H[Official Harness 0.1.2-rc.1]
     Loader[Profile loader]
     Engine[Stock workflow service]
     Agent[Exact Agent context]
@@ -63,7 +63,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  Loader[Official 0.1.1-rc.2 profile loader] --> Host[Package Host aggregate]
+  Loader[Official 0.1.2-rc.1 profile loader] --> Host[Package Host aggregate]
   Host --> Registry[Definition registry]
   Host --> Supervisor[Logical-run supervisor]
   Host --> Commands[Commands and tool shadow]
@@ -81,7 +81,7 @@ headless bundle 没有通往 `./client` 的 import path；命令、保存的 ali
 
 ### Host 组件
 
-- **Aggregate 与配置**在访问 filesystem 前验证官方 `0.1.1-rc.2` 的 package version 与 service face，解析每个 Schemastery default，通过 `import.meta.url` 相对路径加载资产，并在 effect ownership 下挂载 child。
+- **Aggregate 与配置**在访问 filesystem 前验证官方 `0.1.2-rc.1` 的 package version 与 service face，解析每个 Schemastery default，通过 `import.meta.url` 相对路径加载资产，并在 effect ownership 下挂载 child。
 - **Definition registry (`ctx.workflows`)** 观察 bundled、project 和 user root；重新读取 authoritative byte；只发布合并后的 `workflows/change` hint；并拥有 safe save publication。
 - **Run store 与 native lease** 拥有 manifest、immutable detail sidecar、script、scratch file、retention、recovery 和一个 process-lifetime advisory lock。
 - **Supervisor (`ctx.workflowSupervisor`)** 拥有 exact Agent/Session authorization、logical identity、attempt、status transition、budget、checkpoint、gate、control 和 lifecycle event。
@@ -116,7 +116,7 @@ package root 拥有三个 compiler face：solution `tsconfig.json`、Host `tscon
 
 ### 启动与 startup recovery
 
-Activation 首先验证受支持的官方 `0.1.1-rc.2` service face。Storage 随后只验证或创建 owner-only runs root 和永久 lock anchor，以 no-follow 方式打开 anchor，验证稳定 identity，并取得非阻塞 `fs-native-extensions` lifetime lease。只有 lease holder 能创建或验证四个 store directory，并在 Session admission 前完成一次完整且有界的 recovery。
+Activation 首先验证受支持的官方 `0.1.2-rc.1` service face。Storage 随后只验证或创建 owner-only runs root 和永久 lock anchor，以 no-follow 方式打开 anchor，验证稳定 identity，并取得非阻塞 `fs-native-extensions` lifetime lease。只有 lease holder 能创建或验证四个 store directory，并在 Session admission 前完成一次完整且有界的 recovery。
 
 Recovery 会在发布任何 row 前验证所有 manifest 和引用的 sidecar。持久化的 active row 变成 terminal `interrupted`，running member head 变成 `cancelled`，orphaned notice claim 变成 `abandoned`。Recovery 保留 inspection fact 和 display ordinal，但不重建 execution authority。
 
@@ -168,9 +168,9 @@ Dashboard 在 1,200 px 及以上使用三 pane，低于 1,200 px 使用双 pane�
 
 ## 兼容性来源
 
-官方 `0.1.1-rc.2` integration 只在识别出 stock workflow contribution 时使用 Agent-scoped `tools.register` 与 `systemPrompt.section`；同名 custom contribution 保持不变。Deferred execution、replay journal、checkpoint、gate、budget accounting 与 scratch 由 package private compatibility evaluator 提供。
+官方 `0.1.2-rc.1` integration 只在识别出 stock workflow contribution 时使用 Agent-scoped `tools.register` 与 `systemPrompt.section`；同名 custom contribution 保持不变。Deferred execution、replay journal、checkpoint、gate、budget accounting 与 scratch 由 package private compatibility evaluator 提供。
 
-官方 `0.1.1-rc.2` 是 plugin `0.1.0-rc.3` 唯一已验证的 installed Host；`0.1.0-rc.8` 不受支持，更高 Host 必须重新验证。Compatibility evaluator 是 package-owned MIT source，只窄范围承载 maintained workflow behavior，绝不替换 stock `ctx.workflowEngine` 或 process-global stock workflow service。
+官方 `0.1.2-rc.1` 是 plugin `0.1.0-rc.4` 唯一已验证的 installed Host；`0.1.0-rc.8` 不受支持，更高 Host 必须重新验证。Compatibility evaluator 是 package-owned MIT source，只窄范围承载 maintained workflow behavior，绝不替换 stock `ctx.workflowEngine` 或 process-global stock workflow service。
 
 ## Capacity bound
 

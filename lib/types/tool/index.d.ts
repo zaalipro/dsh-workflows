@@ -2,7 +2,7 @@ import type { WorkflowRegistry } from '../registry/index.js';
 import type { WorkflowDefinitionEnvelope } from '../registry/types.js';
 import { VALIDATION_NOTE } from '../supervisor/index.js';
 import type { WorkflowSupervisor } from '../supervisor/index.js';
-import type { JsonValue } from '@deepseek-ai/dsh-session';
+import type { JsonValue } from '@deepseek-ai/dsh-util-values';
 import { parseWorkflowToolRequest } from './schema.js';
 export * from './schema.js';
 export { VALIDATION_NOTE };

@@ -1,5 +1,5 @@
 import { type ReactElement } from 'react';
-import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-runtime/client';
+import type { ChatConversationViewNode } from '@deepseek-ai/dsh-client-ui-chat/client';
 import type { WorkflowRunChatData, WorkflowRunStatus } from './workflow-definition.js';
 export interface WorkflowRunPanelProps {
     readonly node: ChatConversationViewNode & {

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConversationNodeDefinition } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { WorkflowRunPanel, type WorkflowRunPanelProps } from './WorkflowRunPanel.js'
 import { workflowRunDefinition, type WorkflowState } from './workflow-definition.js'
 

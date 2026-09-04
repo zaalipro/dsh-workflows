@@ -25,10 +25,10 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Compatibility', '## Installation', '## Removal',
       '## Saved definitions and authoring', '## Launch and operate',
       '## Replay, recovery, and security', '## Limitations',
-      'official DeepSeek Harness **`0.1.1-rc.2`**',
+      'official DeepSeek Harness **`0.1.2-rc.1`**',
       'Stock `0.1.0-rc.8`', 'unsupported',
-      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3',
-      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.3',
+      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.4',
+      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.4',
       'dsh plugin --profile headless remove @zaalipro/dsh-workflows',
       'same-process only', '.workflow-storage.lock', 'Interrupted',
       'no Grok CLI', 'no Rhai',
@@ -36,9 +36,9 @@ const REQUIRED_CONTENT = Object.freeze({
     chinese: [
       '## 兼容性', '## 安装', '## 移除', '## 已保存定义与创作',
       '## 启动与操作', '## Replay、恢复与安全', '## 限制',
-      '官方 DeepSeek Harness **`0.1.1-rc.2`**', '原版 `0.1.0-rc.8`', '不受支持',
-      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3',
-      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.3',
+      '官方 DeepSeek Harness **`0.1.2-rc.1`**', '原版 `0.1.0-rc.8`', '不受支持',
+      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.4',
+      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.4',
       'dsh plugin --profile headless remove @zaalipro/dsh-workflows',
       'same-process only', '.workflow-storage.lock', 'Interrupted',
       'Grok CLI', 'Rhai',
@@ -52,7 +52,7 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Manifest version 2 and secure storage',
       '## Replay and script containment', '## Bounded Remote',
       'temporary copied mini-workspace', 'fs-native-extensions',
-      'not a security sandbox for hostile code', 'official `0.1.1-rc.2`',
+      'not a security sandbox for hostile code', 'official `0.1.2-rc.1`',
       'private compatibility evaluator', 'never replaces stock `ctx.workflowEngine`',
     ],
     chinese: [
@@ -62,7 +62,7 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Manifest version 2 与安全存储', '## Replay 与 script containment',
       '## Bounded Remote', 'mini-workspace',
       'fs-native-extensions', 'hostile-code security sandbox',
-      '官方 `0.1.1-rc.2`',
+      '官方 `0.1.2-rc.1`',
       'private compatibility evaluator', '绝不替换 stock `ctx.workflowEngine`',
     ],
   },
@@ -117,7 +117,7 @@ const REQUIRED_CONTENT = Object.freeze({
       '141eb6f', 'dsh-v0.1.0-rc.8', '391c829',
       'Exact-Agent', 'quiescent checkpoint', 'fs-native-extensions@1.5.0',
       'invalidation-only', 'tarball-first',
-      'official Harness `0.1.1-rc.2`', 'compatibility evaluator',
+      'official Harness `0.1.2-rc.1`', 'compatibility evaluator',
     ],
     chinese: [
       'Status: implemented', '## Summary', '## Context', '## Decision',
@@ -125,7 +125,7 @@ const REQUIRED_CONTENT = Object.freeze({
       '141eb6f', 'dsh-v0.1.0-rc.8', '391c829',
       'Exact-Agent', 'quiescent checkpoint', 'fs-native-extensions@1.5.0',
       'invalidation-only', 'tarball-first',
-      '官方 Harness `0.1.1-rc.2`', 'compatibility evaluator',
+      '官方 Harness `0.1.2-rc.1`', 'compatibility evaluator',
     ],
   },
 })
@@ -259,7 +259,7 @@ function validateProse(relativePath, text) {
     fail(`${relativePath}: contains an absolute developer-machine path`)
   }
   if (/(?:\b0\.1\.0-rc\.9\b|\brc[\s._-]*9\b)/iu.test(text)) {
-    fail(`${relativePath}: names unverified rc9 as compatible with exact Host 0.1.1-rc.2`)
+    fail(`${relativePath}: names unverified rc9 as compatible with exact Host 0.1.2-rc.1`)
   }
   if (/stock\s+(?:Harness\s+)?(?:version\s+)?0\.1\.0-rc\.8\s+(?:is|as)\s+compatible/iu.test(text)) {
     fail(`${relativePath}: claims unmodified 0.1.0-rc.8 compatibility`)

@@ -15,12 +15,12 @@ vi.mock('node:module', async importOriginal => {
         apply(target, thisArg, args: [string]) {
           if (args[0] === '@deepseek-ai/dsh/package.json') {
             if (process.env.DSH_TEST_HOST_MISSING === '1') throw new Error('mock missing CLI host manifest')
-            return { name: '@deepseek-ai/dsh', version: process.env.DSH_TEST_HOST_VERSION ?? '0.1.1-rc.2' }
+            return { name: '@deepseek-ai/dsh', version: process.env.DSH_TEST_HOST_VERSION ?? '0.1.2-rc.1' }
           }
-          if (args[0] === '@deepseek-ai/dsh-workflow-worker-thread/package.json') return { version: '0.1.1-rc.2' }
+          if (args[0] === '@deepseek-ai/dsh-workflow-worker-thread/package.json') return { version: '0.1.2-rc.1' }
           if (args[0] === '@deepseek-ai/dsh-workflow/package.json') return {
             name: '@deepseek-ai/dsh-workflow',
-            version: process.env.DSH_TEST_WORKFLOW_VERSION ?? '0.1.1-rc.2',
+            version: process.env.DSH_TEST_WORKFLOW_VERSION ?? '0.1.2-rc.1',
           }
           return Reflect.apply(target, thisArg, args)
         },
@@ -186,14 +186,14 @@ async function provideHost(ctx: Context, options: { readonly remoteEvents?: bool
 describe('package identity and Host inject', () => {
   it('exports the package row identity without blocking boot on optional Remote events', () => {
     expect(name).toBe('dsh-workflows')
-    expect(version).toBe('0.1.0-rc.3')
+    expect(version).toBe('0.1.0-rc.4')
     expect([...inject]).toEqual([
       'agents', 'commands', 'fs', 'skills', 'subagents', 'userQuestions', 'workflowEngine',
     ])
     expect(apply).toHaveProperty('inject', inject)
     expect(HOST_COMPATIBILITY).toEqual({
       host: '@deepseek-ai/dsh',
-      versions: ['0.1.1-rc.2'],
+      versions: ['0.1.2-rc.1'],
       evaluator: 'plugin-compat-engine-v1',
     })
   })
@@ -209,26 +209,26 @@ describe('package identity and Host inject', () => {
 
 describe('exact official Host compatibility', () => {
   it('mirrors the manifest contract and rejects every unverified version', () => {
-    expect(isSupportedHostVersion('0.1.1-rc.2')).toBe(true)
+    expect(isSupportedHostVersion('0.1.2-rc.1')).toBe(true)
     for (const value of [undefined, null, 1, 'future', '0.1.0', '0.1.1', '0.1.1-rc.3']) {
       expect(isSupportedHostVersion(value)).toBe(false)
     }
-    expect(isSupportedHostVersions('0.1.1-rc.2', '0.1.1-rc.2')).toBe(true)
+    expect(isSupportedHostVersions('0.1.2-rc.1', '0.1.2-rc.1')).toBe(true)
     expect(isSupportedStockHost()).toBe(true)
-    expect(() => assertSupportedHostVersions('0.1.1-rc.2', '0.1.1-rc.2')).not.toThrow()
+    expect(() => assertSupportedHostVersions('0.1.2-rc.1', '0.1.2-rc.1')).not.toThrow()
   })
 
   it('requires both the CLI host and evaluator seam to have the exact version', () => {
     for (const versions of [
-      ['future', '0.1.1-rc.2'],
-      ['0.1.1-rc.2', 'future'],
-      ['0.1.1-rc.0', '0.1.1-rc.2'],
-      ['0.1.1-rc.2', '0.1.1-rc.3'],
+      ['future', '0.1.2-rc.1'],
+      ['0.1.2-rc.1', 'future'],
+      ['0.1.1-rc.0', '0.1.2-rc.1'],
+      ['0.1.2-rc.1', '0.1.1-rc.3'],
     ] as const) {
       expect(isSupportedHostVersions(...versions)).toBe(false)
       expect(() => assertSupportedHostVersions(...versions)).toThrowError(expect.objectContaining({
         code: 'WORKFLOW_INCOMPATIBLE_HOST',
-        message: '@zaalipro/dsh-workflows 0.1.0-rc.3 supports exactly official DeepSeek Harness 0.1.1-rc.2',
+        message: '@zaalipro/dsh-workflows 0.1.0-rc.4 supports exactly official DeepSeek Harness 0.1.2-rc.1',
       }))
     }
   })

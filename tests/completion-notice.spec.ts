@@ -88,15 +88,16 @@ describe('WorkflowCompletionNotifier', () => {
     await expect(notifier.notify({
       runId: 'run-1', displayName: 'audit', status: 'completed', parent,
     })).resolves.toBe(false)
-    expect(session.events).toHaveLength(1)
-    expect(session.events[0]).toMatchObject({
+    const events = session.snapshotEvents()
+    expect(events).toHaveLength(1)
+    expect(events[0]).toMatchObject({
       type: 'user/message',
       surfaceOp: 'append',
       data: { source: { kind: 'plugin', plugin: 'workflow-supervisor', form: 'notice' } },
     })
-    expect(noticeText(session.events[0]?.data)).toContain('workflow "audit" completed.')
-    expect(noticeText(session.events[0]?.data)).not.toContain('run-1')
-    expect(session.events.some(event => event.type === 'turn/start' || event.type === 'agent/inbox/spliced')).toBe(false)
+    expect(noticeText(events[0]?.data)).toContain('workflow "audit" completed.')
+    expect(noticeText(events[0]?.data)).not.toContain('run-1')
+    expect(events.some(event => event.type === 'turn/start' || event.type === 'agent/inbox/spliced')).toBe(false)
     await notifier.dispose()
   })
 })

@@ -6,16 +6,16 @@ This tutorial takes a Web or headless user from installation to one saved JavaSc
 
 ## 1. Install on a compatible Harness
 
-Use official DeepSeek Harness `0.1.1-rc.2` with plugin `0.1.0-rc.3`. Ensure `pnpm` is on the service user's `PATH`; `0.1.0-rc.8` and unverified later Harness releases are unsupported.
+Use official DeepSeek Harness `0.1.2-rc.1` with plugin `0.1.0-rc.4`. Ensure `pnpm` is on the service user's `PATH`; `0.1.0-rc.8` and unverified later Harness releases are unsupported.
 
 Install a pinned release tag, or the exact tested tarball from a durable absolute path:
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.3
-dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.3.tgz
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.4
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.4.tgz
 ```
 
-After npm publication, `dsh plugin --profile <profile> add @zaalipro/dsh-workflows@0.1.0-rc.3` is equivalent.
+After npm publication, `dsh plugin --profile <profile> add @zaalipro/dsh-workflows@0.1.0-rc.4` is equivalent.
 
 Restart the profile. Web gains the dashboard and durable Chat renderer in addition to Host behavior; headless gains registry, supervisor, commands, questions, recorder, and model tool without loading browser code. Removal is covered in the [package README](../README.md#installation).
 
@@ -325,7 +325,7 @@ P/R/X/S activate Pause/Resume/Stop/Save only when the dialog owns focus, no modi
 
 ### Incompatible Harness
 
-Symptom: activation reports an unsupported Host face or version. Install official `0.1.1-rc.2` with plugin `0.1.0-rc.3`; do not widen the peer range or assume a later Harness version is compatible.
+Symptom: activation reports an unsupported Host face or version. Install official `0.1.2-rc.1` with plugin `0.1.0-rc.4`; do not widen the peer range or assume a later Harness version is compatible.
 
 ### Storage is already owned
 

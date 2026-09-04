@@ -4,17 +4,17 @@ import { WorkflowPackageError, type WorkflowPackageErrorCode, applyInvariant } f
 export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvariant };
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode };
 export declare const name = "dsh-workflows";
-export declare const version = "0.1.0-rc.3";
+export declare const version = "0.1.0-rc.4";
 /** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export declare const inject: readonly ["agents", "commands", "fs", "skills", "subagents", "userQuestions", "workflowEngine"];
 /** Exact package compatibility contract mirrored from package.json. */
 export declare const HOST_COMPATIBILITY: Readonly<{
     host: "@deepseek-ai/dsh";
-    versions: readonly ["0.1.1-rc.2"];
+    versions: readonly ["0.1.2-rc.1"];
     evaluator: "plugin-compat-engine-v1";
 }>;
 type InstalledHostVersions = readonly [host: unknown, workflow: unknown];
-export declare function isSupportedHostVersion(value: unknown): value is '0.1.1-rc.2';
+export declare function isSupportedHostVersion(value: unknown): value is '0.1.2-rc.1';
 /** Both official workflow seams are lockstep release witnesses. */
 export declare function isSupportedHostVersions(hostVersion: unknown, workflowVersion: unknown): boolean;
 export declare function assertSupportedHostVersions(hostVersion: unknown, workflowVersion: unknown): void;

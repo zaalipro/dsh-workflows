@@ -8,16 +8,16 @@
 import { createHash } from 'node:crypto'
 import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawn } from 'node:child_process'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const PACKAGE_VERSION = '0.1.0-rc.3'
-const HOST_VERSION = '0.1.1-rc.2'
-const OFFICIAL_COMMIT = 'b150a551b8d465e31e418e1b2eaf5e79bbb7d28e'
+const PACKAGE_VERSION = '0.1.0-rc.4'
+const HOST_VERSION = '0.1.2-rc.1'
+const OFFICIAL_COMMIT = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
 const START_TIMEOUT_MS = 90_000
 const COMMAND_TIMEOUT_MS = 180_000
 const TERM_GRACE_MS = 10_000
@@ -76,7 +76,7 @@ try {
     npm_config_cache: join(temporaryRoot, 'cache'),
     PNPM_HOME: join(temporaryRoot, 'pnpm-home'),
     PNPM_STORE_DIR: join(temporaryRoot, 'store'),
-    COREPACK_HOME: join(temporaryRoot, 'corepack'),
+    COREPACK_HOME: process.env.COREPACK_HOME ?? join(homedir(), '.cache/node/corepack'),
   }
 
   if (options.server !== undefined) {

@@ -17,7 +17,7 @@ concurrency:
 env:
   CI: 'true'
   DSH_TELEMETRY_DISABLED: '1'
-  DSH_OFFICIAL_BASE_COMMIT: b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
+  DSH_OFFICIAL_BASE_COMMIT: a66e4702047846cdaa10c66c9d3df3951f5ea70d
 
 jobs:
   pack:
@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: b150a551b8d465e31e418e1b2eaf5e79bbb7d28e
+          ref: a66e4702047846cdaa10c66c9d3df3951f5ea70d
           path: official-harness
           persist-credentials: false
       - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c

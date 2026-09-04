@@ -9,7 +9,8 @@
  */
 
 import { Buffer } from 'node:buffer'
-import { snapshotJsonValue, type JsonValue } from '@deepseek-ai/dsh-session'
+import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type {
   WorkflowAgentEndInfo,
