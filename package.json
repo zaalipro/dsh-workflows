@@ -1,6 +1,6 @@
 {
   "name": "@zaalipro/dsh-workflows",
-  "version": "0.1.0-rc.4",
+  "version": "0.1.0-rc.5",
   "description": "Installable saved-workflow and supervised-run product for DeepSeek Harness",
   "type": "module",
   "license": "MIT",

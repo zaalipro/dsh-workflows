@@ -20,7 +20,7 @@ import { tmpdir } from 'node:os'
 import { gunzipSync } from 'node:zlib'
 
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const PACKAGE_VERSION = '0.1.0-rc.4'
+const PACKAGE_VERSION = '0.1.0-rc.5'
 const PACKAGE_LICENSE = 'MIT'
 const NODE_RANGE = '^22.19.0 || >=24.0.0'
 const PACKAGE_MANAGER = 'pnpm@11.7.0'

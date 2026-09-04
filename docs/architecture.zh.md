@@ -8,7 +8,7 @@
 
 本包拥有 definition discovery、logical-run supervision、retained storage、completion delivery、命令、Agent-scoped model-tool replacement、授权 Remote read、Web dashboard 与 private JavaScript compatibility evaluator。官方 `0.1.2-rc.1` 拥有 Host、Agent、Session、provider 与 Client service。Headless 安装不求值任何浏览器模块；Web 安装增加 Client aggregate，但不改变 Host execution authority。
 
-当前状态：plugin `0.1.0-rc.4` 已针对官方 `0.1.2-rc.1` 验证。Plugin 适配 public Agent-scoped tool/prompt、filesystem、command、Remote 与 provider face，不修改 stock `ctx.workflowEngine`。
+当前状态：plugin `0.1.0-rc.5` 已针对官方 `0.1.2-rc.1` 验证。Plugin 适配 public Agent-scoped tool/prompt、filesystem、command、Remote 与 provider face，不修改 stock `ctx.workflowEngine`。
 
 四条不变量组织所有组件：
 
@@ -170,7 +170,7 @@ Dashboard 在 1,200 px 及以上使用三 pane，低于 1,200 px 使用双 pane�
 
 官方 `0.1.2-rc.1` integration 只在识别出 stock workflow contribution 时使用 Agent-scoped `tools.register` 与 `systemPrompt.section`；同名 custom contribution 保持不变。Deferred execution、replay journal、checkpoint、gate、budget accounting 与 scratch 由 package private compatibility evaluator 提供。
 
-官方 `0.1.2-rc.1` 是 plugin `0.1.0-rc.4` 唯一已验证的 installed Host；`0.1.0-rc.8` 不受支持，更高 Host 必须重新验证。Compatibility evaluator 是 package-owned MIT source，只窄范围承载 maintained workflow behavior，绝不替换 stock `ctx.workflowEngine` 或 process-global stock workflow service。
+官方 `0.1.2-rc.1` 是 plugin `0.1.0-rc.5` 唯一已验证的 installed Host；`0.1.0-rc.8` 不受支持，更高 Host 必须重新验证。Compatibility evaluator 是 package-owned MIT source，只窄范围承载 maintained workflow behavior，绝不替换 stock `ctx.workflowEngine` 或 process-global stock workflow service。
 
 ## Capacity bound
 

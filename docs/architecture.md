@@ -8,7 +8,7 @@ This reference describes the installed architecture of `@zaalipro/dsh-workflows`
 
 The package owns definition discovery, logical-run supervision, retained storage, completion delivery, commands, Agent-scoped model-tool replacement, authorized Remote reads, the Web dashboard, and the private JavaScript compatibility evaluator. Official `0.1.2-rc.1` owns the Host, Agent, Session, provider, and Client services. A Headless install evaluates no browser module. A Web install adds the Client aggregate without changing Host execution authority.
 
-Current state: plugin `0.1.0-rc.4` is verified against official `0.1.2-rc.1`. The plugin adapts the public Agent-scoped tool/prompt, filesystem, command, Remote, and provider faces and does not modify the stock `ctx.workflowEngine`.
+Current state: plugin `0.1.0-rc.5` is verified against official `0.1.2-rc.1`. The plugin adapts the public Agent-scoped tool/prompt, filesystem, command, Remote, and provider faces and does not modify the stock `ctx.workflowEngine`.
 
 Four invariants organize every component:
 
@@ -170,7 +170,7 @@ The dashboard has three panes at 1,200 px and wider, two-pane navigation below 1
 
 Official `0.1.2-rc.1` integration uses Agent-scoped `tools.register` and `systemPrompt.section` only when the stock workflow contribution is identified; custom same-name contributions remain untouched. The package owns deferred execution, replay journal, checkpoints, gates, budget accounting, and scratch in its private compatibility evaluator.
 
-Official `0.1.2-rc.1` is the only verified installed Host for plugin `0.1.0-rc.4`; `0.1.0-rc.8` is unsupported and later Hosts require re-verification. The compatibility evaluator is package-owned MIT source derived narrowly from the maintained workflow behavior, not a replacement for the process-global stock workflow service.
+Official `0.1.2-rc.1` is the only verified installed Host for plugin `0.1.0-rc.5`; `0.1.0-rc.8` is unsupported and later Hosts require re-verification. The compatibility evaluator is package-owned MIT source derived narrowly from the maintained workflow behavior, not a replacement for the process-global stock workflow service.
 
 ## Capacity bounds
 

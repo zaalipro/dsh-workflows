@@ -2,7 +2,7 @@
 
 Status: implemented
 
-This note records the current package architecture as implemented in `@zaalipro/dsh-workflows`. Plugin `0.1.0-rc.4` supports exactly official Harness `0.1.2-rc.1`; both the CLI and workflow package manifests must match before activation. The package supplies its own compatibility evaluator and retained-storage descriptors because the stock evaluator and private-directory face do not expose the complete workflow product contract.
+This note records the current package architecture as implemented in `@zaalipro/dsh-workflows`. Plugin `0.1.0-rc.5` supports exactly official Harness `0.1.2-rc.1`; both the CLI and workflow package manifests must match before activation. The package supplies its own compatibility evaluator and retained-storage descriptors because the stock evaluator and private-directory face do not expose the complete workflow product contract.
 
 English | [中文](2026-08-20-installable-workflows-package.zh.md)
 
@@ -86,7 +86,7 @@ Release evidence starts with one prebuilt `npm pack` tarball and its SHA-256. `s
 
 The package can install and uninstall as one reversible profile layer, while the compatibility evaluator owns plugin script semantics and child execution and the official Session vocabulary remains authoritative for durable Chat. Durable-before-visible launch and fixed-point teardown make the supervisor responsible for every accepted attempt through cleanup. Same-process replay suppresses committed matching effects, while documentation and authoring patterns must keep uncommitted effects idempotent.
 
-The design pays for strict compatibility: only official `0.1.2-rc.1` can load plugin `0.1.0-rc.4`, and a later release requires a new verified package release. Native locking and plugin-owned descriptor operations are mandatory; unsupported platforms fail rather than silently weakening storage. Retained data and browser reads are bounded, so older terminal detail can become explicitly truncated or evicted.
+The design pays for strict compatibility: only official `0.1.2-rc.1` can load plugin `0.1.0-rc.5`, and a later release requires a new verified package release. Native locking and plugin-owned descriptor operations are mandatory; unsupported platforms fail rather than silently weakening storage. Retained data and browser reads are bounded, so older terminal detail can become explicitly truncated or evicted.
 
 The browser receives richer inspection without becoming an execution authority. Generated Remote staging and tarball-first verification add build complexity, but they detect missing assets, source fallback, protocol drift, and install-only failures before publication.
 

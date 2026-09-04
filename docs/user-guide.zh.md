@@ -6,16 +6,16 @@
 
 ## 1. 安装到兼容 Harness
 
-使用官方 DeepSeek Harness `0.1.2-rc.1` 与 plugin `0.1.0-rc.4`。确保 service user 的 `PATH` 中有 `pnpm`；`0.1.0-rc.8` 与尚未验证的更高 Harness release 均不受支持。
+使用官方 DeepSeek Harness `0.1.2-rc.1` 与 plugin `0.1.0-rc.5`。确保 service user 的 `PATH` 中有 `pnpm`；`0.1.0-rc.8` 与尚未验证的更高 Harness release 均不受支持。
 
 安装 pinned release tag，或 durable absolute path 下的 exact tested tarball：
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.4
-dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.4.tgz
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.5
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.5.tgz
 ```
 
-发布到 npm 后，`dsh plugin --profile <profile> add @zaalipro/dsh-workflows@0.1.0-rc.4` 与之等价。
+发布到 npm 后，`dsh plugin --profile <profile> add @zaalipro/dsh-workflows@0.1.0-rc.5` 与之等价。
 
 重启 profile。Web 除 Host behavior 外还获得 dashboard 与 durable Chat renderer；headless 获得 registry、supervisor、command、question、recorder 与 model tool，但不加载 browser code。移除见 [package README](../README.zh.md#安装)。
 
@@ -325,7 +325,7 @@ P/R/X/S 只有在 dialog 拥有 focus、没有 modifier 或 key repeat、target 
 
 ### Harness 不兼容
 
-症状：activation 报告不受支持的 Host face 或 version。安装官方 `0.1.2-rc.1` 与 plugin `0.1.0-rc.4`；不要扩大 peer range，也不要假定更高 Harness version 已兼容。
+症状：activation 报告不受支持的 Host face 或 version。安装官方 `0.1.2-rc.1` 与 plugin `0.1.0-rc.5`；不要扩大 peer range，也不要假定更高 Harness version 已兼容。
 
 ### Storage 已被拥有
 

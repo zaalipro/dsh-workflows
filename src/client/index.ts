@@ -31,7 +31,7 @@ export * from './workflow-definition.js'
 
 /** Services consumed by the browser half of the package. */
 export const inject = [
-  'connection', 'remote', 'sessions', 'slots', 'conversationEvents', 'commandUi', 'inputTriggers', 'locale',
+  'connection', 'remote', 'sessions', 'slots', 'uiConversation', 'commandUi', 'inputTriggers', 'locale',
 ] as const
 
 type AnyContext = ClientContext & Record<string, any>
@@ -569,12 +569,13 @@ export function apply(ctx: ClientContext): Promise<void> {
     slotOperations = scopedOperations(slotObservationOwner)
     if (pendingOpen) openDashboard()
 
-    addCleanup(root.conversationEvents?.register?.(workflowMessageDefinition))
-    if (root.conversationEvents !== undefined && root.conversationEvents.register !== undefined
+    const conversationEvents = root.uiConversation?.events ?? root.conversationEvents
+    addCleanup(conversationEvents?.register?.(workflowMessageDefinition))
+    if (conversationEvents !== undefined && conversationEvents.register !== undefined
       && workflowMessageDefinition !== workflowRunDefinition) {
       // Keep the named definition visible to older consumers that inspect the
       // package export rather than the keyed renderer registry.
-      addCleanup(root.conversationEvents.register(workflowRunDefinition))
+      addCleanup(conversationEvents.register(workflowRunDefinition))
     }
 
     const runChatComponent = (props: any): ReactElement => {

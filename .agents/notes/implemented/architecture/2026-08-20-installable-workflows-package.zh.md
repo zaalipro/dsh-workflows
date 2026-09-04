@@ -2,7 +2,7 @@
 
 Status: implemented
 
-本笔记记录 `@zaalipro/dsh-workflows` 当前已实现的 package 架构。Plugin `0.1.0-rc.4` 只支持官方 Harness `0.1.2-rc.1`；CLI 与 workflow package manifest 必须在 activation 前同时精确匹配。由于 stock evaluator 与 private-directory face 未暴露完整 workflow product contract，本包提供自己的 compatibility evaluator 与 retained-storage descriptor。
+本笔记记录 `@zaalipro/dsh-workflows` 当前已实现的 package 架构。Plugin `0.1.0-rc.5` 只支持官方 Harness `0.1.2-rc.1`；CLI 与 workflow package manifest 必须在 activation 前同时精确匹配。由于 stock evaluator 与 private-directory face 未暴露完整 workflow product contract，本包提供自己的 compatibility evaluator 与 retained-storage descriptor。
 
 [English](2026-08-20-installable-workflows-package.md) | 中文
 
@@ -86,7 +86,7 @@ Release evidence 从一个 prebuilt `npm pack` tarball 及其 SHA-256 开始。`
 
 本包可以作为一个 reversible profile layer 安装与移除；compatibility evaluator 拥有 plugin script semantic 与 child execution，官方 Session vocabulary 继续作为 durable Chat authority。Durable-before-visible launch 与 fixed-point teardown 让 supervisor 对每个 accepted attempt 负责直到 cleanup。Same-process replay 会 suppress committed matching effect，而 documentation 与 authoring pattern 必须让 uncommitted effect 保持幂等。
 
-该设计为严格 compatibility 付出代价：只有官方 `0.1.2-rc.1` 可以加载 plugin `0.1.0-rc.4`，更高版本需要新的 verified package release。Native locking 与 plugin-owned descriptor operation 是必需条件；unsupported platform 会失败，而不是静默弱化 storage。Retained data 与 browser read 有界，因此较旧 terminal detail 可变成明确 truncated 或 evicted 状态。
+该设计为严格 compatibility 付出代价：只有官方 `0.1.2-rc.1` 可以加载 plugin `0.1.0-rc.5`，更高版本需要新的 verified package release。Native locking 与 plugin-owned descriptor operation 是必需条件；unsupported platform 会失败，而不是静默弱化 storage。Retained data 与 browser read 有界，因此较旧 terminal detail 可变成明确 truncated 或 evicted 状态。
 
 Browser 获得更丰富 inspection，但不成为 execution authority。Generated Remote staging 与 tarball-first verification 增加 build complexity，却能在 publication 前发现 missing asset、source fallback、protocol drift 和 install-only failure。
 

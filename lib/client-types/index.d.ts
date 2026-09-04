@@ -9,7 +9,7 @@ export * from './WorkflowRunPanel.js';
 export * from './WorkflowMemberInspector.js';
 export * from './workflow-definition.js';
 /** Services consumed by the browser half of the package. */
-export declare const inject: readonly ["connection", "remote", "sessions", "slots", "conversationEvents", "commandUi", "inputTriggers", "locale"];
+export declare const inject: readonly ["connection", "remote", "sessions", "slots", "uiConversation", "commandUi", "inputTriggers", "locale"];
 /**
  * Register one complete browser aggregate.  The generated Remote is mounted
  * first; every consumer and listener is created in that mount's effect and

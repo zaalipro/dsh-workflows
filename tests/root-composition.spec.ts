@@ -186,7 +186,7 @@ async function provideHost(ctx: Context, options: { readonly remoteEvents?: bool
 describe('package identity and Host inject', () => {
   it('exports the package row identity without blocking boot on optional Remote events', () => {
     expect(name).toBe('dsh-workflows')
-    expect(version).toBe('0.1.0-rc.4')
+    expect(version).toBe('0.1.0-rc.5')
     expect([...inject]).toEqual([
       'agents', 'commands', 'fs', 'skills', 'subagents', 'userQuestions', 'workflowEngine',
     ])
@@ -228,7 +228,7 @@ describe('exact official Host compatibility', () => {
       expect(isSupportedHostVersions(...versions)).toBe(false)
       expect(() => assertSupportedHostVersions(...versions)).toThrowError(expect.objectContaining({
         code: 'WORKFLOW_INCOMPATIBLE_HOST',
-        message: '@zaalipro/dsh-workflows 0.1.0-rc.4 supports exactly official DeepSeek Harness 0.1.2-rc.1',
+        message: '@zaalipro/dsh-workflows 0.1.0-rc.5 supports exactly official DeepSeek Harness 0.1.2-rc.1',
       }))
     }
   })

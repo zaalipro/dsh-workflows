@@ -29,7 +29,7 @@ import { registerWorkflowRemoteEvents } from './remote-events.js'
 export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvariant }
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode }
 export const name = 'dsh-workflows'
-export const version = '0.1.0-rc.4'
+export const version = '0.1.0-rc.5'
 
 /** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export const inject = [
@@ -50,7 +50,7 @@ export const HOST_COMPATIBILITY = Object.freeze({
 })
 
 const INCOMPATIBLE_MESSAGE =
-  '@zaalipro/dsh-workflows 0.1.0-rc.4 supports exactly official DeepSeek Harness 0.1.2-rc.1'
+  '@zaalipro/dsh-workflows 0.1.0-rc.5 supports exactly official DeepSeek Harness 0.1.2-rc.1'
 
 const require = createRequire(import.meta.url)
 

@@ -2,11 +2,11 @@
 
 [English](README.md) | 中文
 
-`@zaalipro/dsh-workflows@0.1.0-rc.4` 是一个可安装的 DeepSeek Harness bundle，提供已保存的 JavaScript workflow、受监督的后台运行、保留记录检查、斜杠命令和 Web 仪表盘。它面向官方 DeepSeek Harness `0.1.2-rc.1`，并附带一个由本包拥有、采用 MIT 许可的 compatibility evaluator，以提供 replay-safe background execution；它不包含任何 Grok CLI 代码、账户、配额、二进制文件、协议或运行时依赖，也不包含 Rhai 解析器或求值器。
+`@zaalipro/dsh-workflows@0.1.0-rc.5` 是一个可安装的 DeepSeek Harness bundle，提供已保存的 JavaScript workflow、受监督的后台运行、保留记录检查、斜杠命令和 Web 仪表盘。它面向官方 DeepSeek Harness `0.1.2-rc.1`，并附带一个由本包拥有、采用 MIT 许可的 compatibility evaluator，以提供 replay-safe background execution；它不包含任何 Grok CLI 代码、账户、配额、二进制文件、协议或运行时依赖，也不包含 Rhai 解析器或求值器。
 
 ## 兼容性
 
-已验证的 Host 是官方 DeepSeek Harness **`0.1.2-rc.1`**。Plugin `0.1.0-rc.4` 针对该精确版本编译并完成 smoke test，其直接 Harness peer dependency 也精确锁定在该版本。原版 `0.1.0-rc.8` 仍不受支持；更高 Harness 版本需要新的已验证 plugin release。
+已验证的 Host 是官方 DeepSeek Harness **`0.1.2-rc.1`**。Plugin `0.1.0-rc.5` 针对该精确版本编译并完成 smoke test，其直接 Harness peer dependency 也精确锁定在该版本。原版 `0.1.0-rc.8` 仍不受支持；更高 Harness 版本需要新的已验证 plugin release。
 
 本包要求 Node `^22.19.0 || >=24.0.0`，使用 `pnpm@11.7.0`，并按 [MIT license](LICENSE) 发布。原生锁依赖的归属信息见 [NOTICE.md](NOTICE.md)。
 
@@ -15,22 +15,22 @@
 先确保 service user 的 `PATH` 中有 `pnpm`。像其他 profile plugin 一样安装固定 release tag；它增加一个依赖和一个名为 `@zaalipro/dsh-workflows` 的 bundle 层，无需手动 profile patch 或 install-time build。
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.4
-dsh plugin --profile headless add github:zaalipro/dsh-workflows#v0.1.0-rc.4
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.5
+dsh plugin --profile headless add github:zaalipro/dsh-workflows#v0.1.0-rc.5
 ```
 
 也可以把 exact tested tarball 复制到 durable path（不要使用 `/tmp`）后安装：
 
 ```sh
-dsh plugin --profile web add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.4.tgz
-dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.4.tgz
+dsh plugin --profile web add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.5.tgz
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.5.tgz
 ```
 
-`0.1.0-rc.4` 在 npm 公开发布后，可以使用等价的 registry install：
+`0.1.0-rc.5` 在 npm 公开发布后，可以使用等价的 registry install：
 
 ```sh
-dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.4
-dsh plugin --profile headless add @zaalipro/dsh-workflows@0.1.0-rc.4
+dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.5
+dsh plugin --profile headless add @zaalipro/dsh-workflows@0.1.0-rc.5
 ```
 
 Web 会加载 Host 产品和浏览器 Client；headless 只加载 Host 产品，绝不求值浏览器代码。Plugin 不修改 stock `ctx.workflowEngine`。Supervisor 私下使用本包拥有的 compatibility evaluator，其产物为 `lib/compat-engine/index.js` 与 `worker.cjs`。

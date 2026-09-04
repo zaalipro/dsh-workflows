@@ -4,7 +4,7 @@ import { WorkflowPackageError, type WorkflowPackageErrorCode, applyInvariant } f
 export { Config, resolveWorkflowPackageConfig, WorkflowPackageError, applyInvariant };
 export type { WorkflowConfig, ResolvedWorkflowPackageConfig, WorkflowPackageErrorCode };
 export declare const name = "dsh-workflows";
-export declare const version = "0.1.0-rc.4";
+export declare const version = "0.1.0-rc.5";
 /** Host services the loader must wait for. Remote events are optional (absent on stock dsh). */
 export declare const inject: readonly ["agents", "commands", "fs", "skills", "subagents", "userQuestions", "workflowEngine"];
 /** Exact package compatibility contract mirrored from package.json. */
