@@ -1,6 +1,6 @@
 {
   "name": "@zaalipro/dsh-workflows",
-  "version": "0.1.0-rc.7",
+  "version": "0.1.0-rc.8",
   "description": "Installable saved-workflow and supervised-run product for DeepSeek Harness",
   "type": "module",
   "license": "MIT",
@@ -91,9 +91,9 @@
   },
   "sideEffects": false,
   "scripts": {
-    "typecheck:host": "tsc -p tsconfig.host.json --noEmit",
-    "typecheck": "tsc -b --pretty false && tsc -p tsconfig.compat-engine.json --pretty false",
-    "lint": "tsc -b --pretty false",
+    "typecheck:host": "node node_modules/typescript/bin/tsc -p tsconfig.host.json --noEmit",
+    "typecheck": "node node_modules/typescript/bin/tsc -b --pretty false && node node_modules/typescript/bin/tsc -p tsconfig.compat-engine.json --pretty false",
+    "lint": "node node_modules/typescript/bin/tsc -b --pretty false",
     "test:unit": "vitest run --exclude=\"tests/packed-consumer.spec.ts\"",
     "test": "vitest run --exclude=\"tests/packed-consumer.spec.ts\"",
     "test:browser": "vitest run tests/browser-smoke.spec.ts --reporter=dot",

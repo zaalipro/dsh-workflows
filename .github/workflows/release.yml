@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - name: Check out the read-only official Harness base
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -51,6 +52,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "tag=$GITHUB_REF_NAME objecttype=$(git for-each-ref --format='%(objecttype)' "refs/tags/$GITHUB_REF_NAME")"
+          echo "package-version=$(node -p "require('./package.json').version")"
+          echo "official-head=$(git -C official-harness rev-parse HEAD) pin=$DSH_OFFICIAL_BASE_COMMIT"
           test "$(git for-each-ref --format='%(objecttype)' "refs/tags/$GITHUB_REF_NAME")" = tag
           test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
           test "$(git -C official-harness rev-parse HEAD)" = "$DSH_OFFICIAL_BASE_COMMIT"
