@@ -63,7 +63,7 @@ try {
   await command('pnpm', ['add', '--ignore-scripts', options.tarball], { cwd: workspace, env })
   const installedManifestPath = join(workspace, 'node_modules/@zaalipro/dsh-workflows/package.json')
   const installedManifest = JSON.parse(await readFile(installedManifestPath, 'utf8'))
-  if (installedManifest.version !== '0.1.0-rc.10'
+  if (installedManifest.version !== '0.1.0-rc.11'
     || installedManifest.dsh?.compatibility?.host !== '@deepseek-ai/dsh'
     || installedManifest.dsh?.compatibility?.evaluator !== 'plugin-compat-engine-v1'
     || JSON.stringify(installedManifest.dsh?.compatibility?.versions) !== JSON.stringify(['0.1.6-alpha.1'])) {

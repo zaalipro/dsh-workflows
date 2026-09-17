@@ -2,11 +2,11 @@
 
 English | [中文](README.zh.md)
 
-`@zaalipro/dsh-workflows@0.1.0-rc.10` is one installable DeepSeek Harness bundle for saved JavaScript workflows, supervised background runs, retained inspection, slash commands, and the Web dashboard. It targets official DeepSeek Harness `0.1.6-alpha.1` and ships one package-owned MIT compatibility evaluator for replay-safe background execution; it contains no Grok CLI code, account, quota, binary, protocol, or runtime dependency, and no Rhai parser or evaluator.
+`@zaalipro/dsh-workflows@0.1.0-rc.11` is one installable DeepSeek Harness bundle for saved JavaScript workflows, supervised background runs, retained inspection, slash commands, and the Web dashboard. It targets official DeepSeek Harness `0.1.6-alpha.1` and ships one package-owned MIT compatibility evaluator for replay-safe background execution; it contains no Grok CLI code, account, quota, binary, protocol, or runtime dependency, and no Rhai parser or evaluator.
 
 ## Compatibility
 
-The verified Host is official DeepSeek Harness **`0.1.6-alpha.1`**. Plugin `0.1.0-rc.10` is compiled and smoke-tested against that exact release, and its direct Harness peer dependencies are pinned to that exact version. Stock `0.1.0-rc.10` remains unsupported, and later Harness versions require a new verified plugin release.
+The verified Host is official DeepSeek Harness **`0.1.6-alpha.1`**. Plugin `0.1.0-rc.11` is compiled and smoke-tested against that exact release, and its direct Harness peer dependencies are pinned to that exact version. Stock `0.1.0-rc.11` remains unsupported, and later Harness versions require a new verified plugin release.
 
 This release enables the alpha Host’s `workflow-ptc` provider instead of the removed `workflow-worker-thread` provider. Supervised plugin runs still use the package-owned replay evaluator; this release does not change its isolation model or retained-run format. Keep plugin `0.1.0-rc.6` when running Harness `0.1.5-rc.1`.
 
@@ -17,22 +17,22 @@ The package requires Node `^22.19.0 || >=24.0.0`, uses `pnpm@11.7.0`, and is dis
 Ensure `pnpm` is on the service user's `PATH`. Install the pinned release tag like any other profile plugin; it adds one dependency and one bundle layer named `@zaalipro/dsh-workflows`, with no manual profile patch or install-time build.
 
 ```sh
-dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.10
-dsh plugin --profile headless add github:zaalipro/dsh-workflows#v0.1.0-rc.10
+dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.11
+dsh plugin --profile headless add github:zaalipro/dsh-workflows#v0.1.0-rc.11
 ```
 
 For an exact tested tarball copied to a durable path (not `/tmp`):
 
 ```sh
-dsh plugin --profile web add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.10.tgz
-dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.10.tgz
+dsh plugin --profile web add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.11.tgz
+dsh plugin --profile headless add /absolute/path/zaalipro-dsh-workflows-0.1.0-rc.11.tgz
 ```
 
-After `0.1.0-rc.10` is publicly published on npm, the equivalent registry install is:
+After `0.1.0-rc.11` is publicly published on npm, the equivalent registry install is:
 
 ```sh
-dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.10
-dsh plugin --profile headless add @zaalipro/dsh-workflows@0.1.0-rc.10
+dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.11
+dsh plugin --profile headless add @zaalipro/dsh-workflows@0.1.0-rc.11
 ```
 
 Web loads the Host product and browser Client; headless loads only the Host product and never evaluates browser code. The plugin leaves the stock `ctx.workflowEngine` untouched. Its supervisor privately uses the package-owned compatibility evaluator emitted as `lib/compat-engine/index.js` and `worker.cjs`.

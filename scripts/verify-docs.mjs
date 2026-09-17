@@ -26,9 +26,9 @@ const REQUIRED_CONTENT = Object.freeze({
       '## Saved definitions and authoring', '## Launch and operate',
       '## Replay, recovery, and security', '## Limitations',
       'official DeepSeek Harness **`0.1.6-alpha.1`**',
-      'Stock `0.1.0-rc.10`', 'unsupported',
-      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.10',
-      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.10',
+      'Stock `0.1.0-rc.11`', 'unsupported',
+      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.11',
+      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.11',
       'dsh plugin --profile headless remove @zaalipro/dsh-workflows',
       'same-process only', '.workflow-storage.lock', 'Interrupted',
       'no Grok CLI', 'no Rhai',
@@ -36,9 +36,9 @@ const REQUIRED_CONTENT = Object.freeze({
     chinese: [
       '## 兼容性', '## 安装', '## 移除', '## 已保存定义与创作',
       '## 启动与操作', '## Replay、恢复与安全', '## 限制',
-      '官方 DeepSeek Harness **`0.1.6-alpha.1`**', '原版 `0.1.0-rc.10`', '不受支持',
-      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.10',
-      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.10',
+      '官方 DeepSeek Harness **`0.1.6-alpha.1`**', '原版 `0.1.0-rc.11`', '不受支持',
+      'dsh plugin --profile web add github:zaalipro/dsh-workflows#v0.1.0-rc.11',
+      'dsh plugin --profile web add @zaalipro/dsh-workflows@0.1.0-rc.11',
       'dsh plugin --profile headless remove @zaalipro/dsh-workflows',
       'same-process only', '.workflow-storage.lock', 'Interrupted',
       'Grok CLI', 'Rhai',
@@ -258,11 +258,11 @@ function validateProse(relativePath, text) {
   if (/(?:^|[\s(`'"])(?:\/Users\/[^\s)`'"]+|\/home\/[^\s/]+\/|[A-Za-z]:[\\/]Users[\\/])/mu.test(text)) {
     fail(`${relativePath}: contains an absolute developer-machine path`)
   }
-  if (/(?:\b0\.1\.0-rc\.11\b|\brc[\s._-]*11\b)/iu.test(text)) {
-    fail(`${relativePath}: names unverified rc11 as compatible with exact Host 0.1.6-alpha.1`)
+  if (/(?:\b0\.1\.0-rc\.12\b|\brc[\s._-]*12\b)/iu.test(text)) {
+    fail(`${relativePath}: names unverified rc12 as compatible with exact Host 0.1.6-alpha.1`)
   }
-  if (/stock\s+(?:Harness\s+)?(?:version\s+)?0\.1\.0-rc\.10\s+(?:is|as)\s+compatible/iu.test(text)) {
-    fail(`${relativePath}: claims unmodified 0.1.0-rc.10 compatibility`)
+  if (/stock\s+(?:Harness\s+)?(?:version\s+)?0\.1\.0-rc\.11\s+(?:is|as)\s+compatible/iu.test(text)) {
+    fail(`${relativePath}: claims unmodified 0.1.0-rc.11 compatibility`)
   }
 }
 
