@@ -1,4 +1,4 @@
 # Bilingual-pair consistency record: git blob hash of each side at the last
 # confirmed-consistent state. Both languages carry equal authority.
-user-guide.md: 26791c104fe3b102fcdf318a9059e4a7ed1fdea5
-user-guide.zh.md: aab92b8f62ed1d3a9fc4855c94bfbe3a14695d28
+user-guide.md: ca16b06071e21bce89c51305e10ea01ec989bfa8
+user-guide.zh.md: 0a51c3ee994ef9be155aacd8557d409d7bd7804c

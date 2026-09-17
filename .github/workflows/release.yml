@@ -144,7 +144,7 @@ jobs:
           test "$(sha256sum "$file" | cut -d' ' -f1)" = "${{ needs.pack.outputs.sha256 }}"
           (cd artifact && sha256sum --check "${{ needs.pack.outputs.filename }}.sha256")
       - name: Publish the same file with npm provenance
-        run: npm publish "artifact/${{ needs.pack.outputs.filename }}" --access public --provenance --tag "${{ needs.pack.outputs.dist_tag }}"
+        run: npm publish "./artifact/${{ needs.pack.outputs.filename }}" --access public --provenance --tag "${{ needs.pack.outputs.dist_tag }}"
       - name: Create the matching GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
