@@ -142,7 +142,7 @@ describe('installable bundle patch', () => {
   it('add/remove round-trips a profile manifest to one dependency and one bundle', () => {
     const stock = {
       name: 'dsh-profile-web',
-      dependencies: { '@deepseek-ai/dsh-bundle-web-app': '0.1.0-rc.9' },
+      dependencies: { '@deepseek-ai/dsh-bundle-web-app': '0.1.0-rc.10' },
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-bundle-web-app'] } },
     }
     const added = structuredClone(stock)

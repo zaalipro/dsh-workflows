@@ -47,11 +47,11 @@ describe('documentation verifier', () => {
     expectFailure(fixture, /README\.md: contains an absolute developer-machine path/u)
   }))
 
-  it('rejects a guessed rc10 compatibility claim in either language', () => withFixture(fixture => {
+  it('rejects a guessed rc11 compatibility claim in either language', () => withFixture(fixture => {
     const readme = join(fixture, 'README.zh.md')
-    mutate(readme, text => `${text.trimEnd()}\n\n0.1.0-rc.10 与本包兼容。\n`)
+    mutate(readme, text => `${text.trimEnd()}\n\n0.1.0-rc.11 与本包兼容。\n`)
     refreshMapping(fixture, 'README.md')
-    expectFailure(fixture, /README\.zh\.md: names unverified rc10/u)
+    expectFailure(fixture, /README\.zh\.md: names unverified rc11/u)
   }))
 
   it('checks required content in the Chinese companion', () => withFixture(fixture => {
