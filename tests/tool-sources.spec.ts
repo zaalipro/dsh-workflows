@@ -32,7 +32,7 @@ function fsReturning(bytes: Uint8Array | unknown, error?: unknown) {
   }
 }
 
-/** The public filesystem method/target shapes shipped by dsh 0.1.5-rc.1. */
+/** The public filesystem method/target shapes shipped by dsh 0.1.6-alpha.1. */
 function publishedRc2LocalFs(hook?: (displayPath: string) => Promise<void>) {
   const version = (info: Stats) =>
     `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`

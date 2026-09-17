@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: ${{ matrix.node }}
       - name: Install pinned pnpm
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
       - name: Install pinned pnpm
@@ -94,7 +94,7 @@ jobs:
           retention-days: 3
 
   chromium:
-    name: Browser helper / Node 24 / official 0.1.5-rc.1
+    name: Browser helper / Node 24 / official 0.1.6-alpha.1
     runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
@@ -104,10 +104,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: a66e4702047846cdaa10c66c9d3df3951f5ea70d
+          ref: 0a15e36e7f82b6ed45af6fa9759f29b40dcd965d
           path: official-harness
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
       - name: Install pinned pnpm
@@ -138,7 +138,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
       - name: Install pinned pnpm
@@ -158,7 +158,7 @@ jobs:
 
   release-pack:
     if: github.ref_type != 'tag'
-    name: Pack once / official 0.1.5-rc.1 / Node 24
+    name: Pack once / official 0.1.6-alpha.1 / Node 24
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -168,10 +168,10 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: a66e4702047846cdaa10c66c9d3df3951f5ea70d
+          ref: 0a15e36e7f82b6ed45af6fa9759f29b40dcd965d
           path: official-harness
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
       - name: Install pinned pnpm
@@ -203,7 +203,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
       - name: Install pinned pnpm

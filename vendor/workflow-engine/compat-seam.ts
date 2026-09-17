@@ -1,4 +1,4 @@
-/** Local extensions deliberately absent from the official 0.1.5-rc.1 seam. */
+/** Local extensions deliberately absent from the official 0.1.6-alpha.1 seam. */
 import { WorkflowError as StockWorkflowError } from '@deepseek-ai/dsh-workflow'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { WorkflowMeta } from '@deepseek-ai/dsh-workflow'

@@ -81,7 +81,7 @@ interface WorkflowActionCommandUi {
   readonly kind: 'action'
   run(session?: unknown): void | Promise<void>
   /**
-   * Stock dsh 0.1.5-rc.1 always opens a popupSelect shell for every client
+   * Stock dsh 0.1.6-alpha.1 always opens a popupSelect shell for every client
    * contribution, including `kind: 'action'`. These extras open the dashboard
    * instead of hanging on "Loading options…".
    */

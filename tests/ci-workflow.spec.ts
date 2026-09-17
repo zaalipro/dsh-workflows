@@ -8,6 +8,7 @@ const path = resolve(root, '.github/workflows/ci.yml')
 const source = readFileSync(path, 'utf8')
 const workflow = parse(source) as any
 const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as any
+const setupNodeCommit = '1e60f620b9541d16bece96c5465dc8ee9832be0b'
 
 describe('CI workflow policy', () => {
   it('uses least privilege and tag-safe pull-request cancellation', () => {
@@ -64,8 +65,8 @@ describe('CI workflow policy', () => {
     expect(commands(stress)).toContain('pnpm run test:stress')
     expect(commands(packed).join('\n')).toContain('scripts/check-release.mjs')
     expect(commands(packed).join('\n')).toContain('--artifact-dir')
-    expect(officialCheckout(chromium).with.ref).toBe('a66e4702047846cdaa10c66c9d3df3951f5ea70d')
-    expect(officialCheckout(packed).with.ref).toBe('a66e4702047846cdaa10c66c9d3df3951f5ea70d')
+    expect(officialCheckout(chromium).with.ref).toBe('0a15e36e7f82b6ed45af6fa9759f29b40dcd965d')
+    expect(officialCheckout(packed).with.ref).toBe('0a15e36e7f82b6ed45af6fa9759f29b40dcd965d')
     expect(source).not.toMatch(/git\s+apply/u)
     expect(source).not.toMatch(/H prerequisite patch/u)
   })
@@ -90,6 +91,9 @@ describe('CI workflow policy', () => {
       for (const step of job.steps) {
         if (typeof step.uses !== 'string') continue
         expect(step.uses, `${name}: ${step.uses}`).toMatch(/^[^@\s]+@[0-9a-f]{40}$/u)
+        if (step.uses.startsWith('actions/setup-node@')) {
+          expect(step.uses, `${name}: resolvable setup-node pin`).toBe(`actions/setup-node@${setupNodeCommit}`)
+        }
         if (step.uses.startsWith('actions/checkout@')) expect(step.with?.['persist-credentials']).toBe(false)
       }
       expect(commands(job)).toContain('pnpm install --frozen-lockfile --ignore-scripts')

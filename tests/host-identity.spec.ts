@@ -35,15 +35,15 @@ async function fakeDsh(hostVersion: string, workflowVersion?: string): Promise<{
 
 describe('executing Host package identity', () => {
   it('reads both versions from the real DSH selected by argv rather than the plugin graph', async () => {
-    const supported = await fakeDsh('0.1.5-rc.1', '0.1.5-rc.1')
+    const supported = await fakeDsh('0.1.6-alpha.1', '0.1.6-alpha.1')
     const other = await fakeDsh('9.9.9', '8.8.8')
 
-    expect(resolveInstalledHostVersions(supported.link)).toEqual(['0.1.5-rc.1', '0.1.5-rc.1'])
+    expect(resolveInstalledHostVersions(supported.link)).toEqual(['0.1.6-alpha.1', '0.1.6-alpha.1'])
     expect(resolveInstalledHostVersions(other.link)).toEqual(['9.9.9', '8.8.8'])
   })
 
   it('does not fall back to the plugin copy for an incomplete or forged DSH executable', async () => {
-    const incomplete = await fakeDsh('0.1.5-rc.1')
+    const incomplete = await fakeDsh('0.1.6-alpha.1')
     expect(resolveInstalledHostVersions(incomplete.bin)).toBeUndefined()
 
     const root = await mkdtemp(join(tmpdir(), 'dsh-forged-entry-'))
@@ -54,6 +54,6 @@ describe('executing Host package identity', () => {
   })
 
   it('uses the package-local fallback only for a non-DSH programmatic entrypoint', () => {
-    expect(resolveInstalledHostVersions(import.meta.filename)).toEqual(['0.1.5-rc.1', '0.1.5-rc.1'])
+    expect(resolveInstalledHostVersions(import.meta.filename)).toEqual(['0.1.6-alpha.1', '0.1.6-alpha.1'])
   })
 })

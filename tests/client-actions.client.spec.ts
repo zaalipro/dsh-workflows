@@ -478,7 +478,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       nodeRequire.resolve('@deepseek-ai/dsh-client-ui-input-trigger/package.json'),
       'utf8',
     ))
-    expect(installed.version).toBe('0.1.5-rc.1')
+    expect(installed.version).toBe('0.1.6-alpha.1')
     const Controller = officialInputTriggerController()
     const earlierCommandMiss = {
       trigger: '/',

@@ -18,7 +18,7 @@ import { spawn } from 'node:child_process'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const OFFICIAL_COMMIT = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
+const OFFICIAL_COMMIT = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d'
 const DEFAULT_OFFICIALS = [
   process.env.DSH_HARNESS_CHECKOUT,
   resolve(ROOT, '../research/deepseek-harness'),

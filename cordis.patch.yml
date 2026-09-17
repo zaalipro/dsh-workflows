@@ -1,5 +1,5 @@
-- id: workflow-worker-thread
-  name: '@deepseek-ai/dsh-workflow-worker-thread'
+- id: workflow-ptc
+  name: '@deepseek-ai/dsh-workflow-ptc'
   disabled: false
   config:
     provider: spawn
