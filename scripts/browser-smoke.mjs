@@ -15,7 +15,7 @@ import { spawn } from 'node:child_process'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const PACKAGE_VERSION = '0.1.0-rc.8'
+const PACKAGE_VERSION = '0.1.0-rc.9'
 const HOST_VERSION = '0.1.6-alpha.1'
 const OFFICIAL_COMMIT = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d'
 const START_TIMEOUT_MS = 90_000

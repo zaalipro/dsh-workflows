@@ -52,6 +52,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
           echo "tag=$GITHUB_REF_NAME objecttype=$(git for-each-ref --format='%(objecttype)' "refs/tags/$GITHUB_REF_NAME")"
           echo "package-version=$(node -p "require('./package.json').version")"
           echo "official-head=$(git -C official-harness rev-parse HEAD) pin=$DSH_OFFICIAL_BASE_COMMIT"
