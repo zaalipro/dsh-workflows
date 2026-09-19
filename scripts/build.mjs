@@ -364,7 +364,9 @@ function cssModulesPlugin() {
       const file = resolve(ROOT, relativeFile)
       this.addWatchFile(file)
       const { code, exports: cssExports } = transform({
-        filename: file,
+        // The portable relative path seeds the [hash]: an absolute checkout
+        // path would make scoped class names machine-specific.
+        filename: relativeFile,
         code: await readFile(file),
         cssModules: { pattern: '[hash]_[local]' },
         minify: true,

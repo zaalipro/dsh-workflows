@@ -1,4 +1,4 @@
 # Bilingual-pair consistency record: git blob hash of each side at the last
 # confirmed-consistent state. Both languages carry equal authority.
-2026-08-20-installable-workflows-package.md: 13b4d0a49577286956dab26d2605c01d19d67007
-2026-08-20-installable-workflows-package.zh.md: 4f81e3ea93781606a4a93e3c9dc2c5d6048090ff
+2026-08-20-installable-workflows-package.md: 8270ae10e9fed7803a8264faff8c554648a546d3
+2026-08-20-installable-workflows-package.zh.md: 8cbccbc161a56f98c2baf626cee385a84730e3e8

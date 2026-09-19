@@ -7,7 +7,8 @@ const root = resolve(import.meta.dirname, '..')
 const source = readFileSync(resolve(root, '.github/workflows/release.yml'), 'utf8')
 const checkerSource = readFileSync(resolve(root, 'scripts/check-release.mjs'), 'utf8')
 const workflow = parse(source) as any
-const officialCommit = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
+const officialCommit = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d'
+const setupNodeCommit = '1e60f620b9541d16bece96c5465dc8ee9832be0b'
 
 describe('release workflow policy', () => {
   it('runs only for version tags and never cancels a release', () => {
@@ -119,6 +120,9 @@ describe('release workflow policy', () => {
       for (const step of job.steps) {
         if (typeof step.uses !== 'string') continue
         expect(step.uses, `${jobName}: ${step.uses}`).toMatch(/^[^@\s]+@[0-9a-f]{40}$/u)
+        if (step.uses.startsWith('actions/setup-node@')) {
+          expect(step.uses, `${jobName}: resolvable setup-node pin`).toBe(`actions/setup-node@${setupNodeCommit}`)
+        }
       }
     }
   })

@@ -83,13 +83,13 @@ function loadPatch(): Patch[] {
 }
 
 const webBase: Entry[] = [
-  { id: 'workflow-worker-thread', name: '@deepseek-ai/dsh-workflow-worker-thread', disabled: true },
+  { id: 'workflow-ptc', name: '@deepseek-ai/dsh-workflow-ptc', disabled: true },
   { id: 'ui-workflow-run', name: '@deepseek-ai/dsh-client-ui-workflow-run' },
   { id: 'tool-workflow', name: '@deepseek-ai/dsh-tool-workflow' },
 ]
 
 const headlessBase: Entry[] = [
-  { id: 'workflow-worker-thread', name: '@deepseek-ai/dsh-workflow-worker-thread', config: { provider: 'spawn' } },
+  { id: 'workflow-ptc', name: '@deepseek-ai/dsh-workflow-ptc', config: { provider: 'spawn' } },
   { id: 'headless-runner', name: '@deepseek-ai/dsh-headless' },
 ]
 
@@ -98,7 +98,7 @@ describe('installable bundle patch', () => {
     expect(manifest.dsh.bundle.patch).toBe('./cordis.patch.yml')
     expect(manifest.dsh.client.platform).toBe('web')
     const source = readFileSync(patchPath, 'utf8')
-    expect(source).toContain("name: '@deepseek-ai/dsh-workflow-worker-thread'")
+    expect(source).toContain("name: '@deepseek-ai/dsh-workflow-ptc'")
     expect(source).toContain('provider: spawn')
     expect(source).toContain('id: ui-workflow-run')
     expect(source).toContain('id: zaalipro-workflows')
@@ -107,19 +107,19 @@ describe('installable bundle patch', () => {
     expect(source).not.toMatch(/dsh-workflows\/registry/u)
   })
 
-  it('enables the official worker once, disables ui-workflow-run, and inserts the package row on Web', () => {
+  it('enables the official PTC workflow engine once, disables ui-workflow-run, and inserts the package row on Web', () => {
     const warnings: string[] = []
     const composed = applyEntryPatches(webBase, loadPatch(), (message, ...args) => {
       warnings.push([message, ...args].join(' '))
     })
     const byId = new Map(composed.map(entry => [entry.id, entry]))
-    expect(byId.get('workflow-worker-thread')).toMatchObject({
-      name: '@deepseek-ai/dsh-workflow-worker-thread',
+    expect(byId.get('workflow-ptc')).toMatchObject({
+      name: '@deepseek-ai/dsh-workflow-ptc',
       disabled: false,
       config: { provider: 'spawn' },
     })
     expect(byId.get('ui-workflow-run')).toMatchObject({ disabled: true })
-    expect(composed.filter(entry => entry.name === '@deepseek-ai/dsh-workflow-worker-thread')).toHaveLength(1)
+    expect(composed.filter(entry => entry.name === '@deepseek-ai/dsh-workflow-ptc')).toHaveLength(1)
     expect(composed.filter(entry => entry.id === 'zaalipro-workflows')).toEqual([
       { id: 'zaalipro-workflows', name: '@zaalipro/dsh-workflows' },
     ])
@@ -132,7 +132,7 @@ describe('installable bundle patch', () => {
     const composed = applyEntryPatches(headlessBase, loadPatch(), (message, ...args) => {
       warnings.push(`${message} ${args.map(String).join(' ')}`)
     })
-    expect(composed.filter(entry => entry.name === '@deepseek-ai/dsh-workflow-worker-thread')).toHaveLength(1)
+    expect(composed.filter(entry => entry.name === '@deepseek-ai/dsh-workflow-ptc')).toHaveLength(1)
     expect(composed.filter(entry => entry.id === 'zaalipro-workflows')).toHaveLength(1)
     expect(composed.some(entry => entry.id === 'ui-workflow-run')).toBe(false)
     expect(composed.some(entry => entry.name === '@zaalipro/dsh-workflows/client')).toBe(false)
@@ -142,7 +142,7 @@ describe('installable bundle patch', () => {
   it('add/remove round-trips a profile manifest to one dependency and one bundle', () => {
     const stock = {
       name: 'dsh-profile-web',
-      dependencies: { '@deepseek-ai/dsh-bundle-web-app': '0.1.0-rc.8' },
+      dependencies: { '@deepseek-ai/dsh-bundle-web-app': '0.1.0-rc.12' },
       dsh: { profile: { bundles: ['@deepseek-ai/dsh-bundle-web-app'] } },
     }
     const added = structuredClone(stock)

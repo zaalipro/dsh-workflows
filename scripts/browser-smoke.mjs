@@ -15,14 +15,16 @@ import { spawn } from 'node:child_process'
 
 const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const PACKAGE_NAME = '@zaalipro/dsh-workflows'
-const PACKAGE_VERSION = '0.1.0-rc.5'
-const HOST_VERSION = '0.1.2-rc.1'
-const OFFICIAL_COMMIT = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
+const PACKAGE_VERSION = '0.1.0-rc.12'
+const HOST_VERSION = '0.1.6-alpha.1'
+const OFFICIAL_COMMIT = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d'
 const START_TIMEOUT_MS = 90_000
 const COMMAND_TIMEOUT_MS = 180_000
 const TERM_GRACE_MS = 10_000
 const KILL_GRACE_MS = 5_000
 const OUTPUT_TAIL_BYTES = 64 * 1024
+const SOURCE_URL_TRAILER = /(?:\r?\n)?\/\/# sourceURL=[^\r\n]*(?:\r?\n)?$/
+const SOURCE_MAP_TRAILER = /(?:\r?\n)?\/\/# sourceMappingURL=[^\r\n]*(?:\r?\n)?$/
 
 let temporaryRoot
 let server
@@ -197,43 +199,105 @@ function assertInstalledManifest(manifest) {
 
 async function verifyServedProduct(url, installedRoot) {
   assertRunning()
-  const root = await boundedFetch(url, START_TIMEOUT_MS)
+  const exchange = await boundedFetch(url, START_TIMEOUT_MS, { redirect: 'manual' })
+  const cookie = exchange.headers.getSetCookie().map(value => value.split(';', 1)[0]).join('; ')
+  if (exchange.status !== 303 || exchange.headers.get('location') !== '/' || !cookie) {
+    throw new Error('official Web did not exchange the launch token for a session cookie')
+  }
+  await exchange.arrayBuffer()
+  const headers = { cookie }
+  const root = await boundedFetch(new URL('/', url), START_TIMEOUT_MS, { headers })
   assertRunning()
   if (root.status !== 200) throw new Error(`official Web root returned HTTP ${root.status}`)
-  await root.arrayBuffer()
+  const page = Buffer.from(await root.arrayBuffer()).toString('utf8')
   assertRunning()
-
-  for (const [endpoint, relative, contentType] of [
-    [`/plugins/${PACKAGE_NAME}/client.js`, join('lib', 'client.js'), 'text/javascript'],
-    [`/plugins/${PACKAGE_NAME}/client.js.map`, join('lib', 'client.js.map'), 'application/json'],
-  ]) {
-    assertRunning()
-    const response = await boundedFetch(new URL(endpoint, url), START_TIMEOUT_MS)
-    assertRunning()
-    if (response.status !== 200) throw new Error(`${endpoint} returned HTTP ${response.status}`)
-    if (!response.headers.get('content-type')?.startsWith(contentType)) {
-      throw new Error(`${endpoint} returned an unexpected content type`)
-    }
-    const served = Buffer.from(await response.arrayBuffer())
-    assertRunning()
-    const installed = await readFile(join(installedRoot, relative))
-    assertRunning()
-    if (sha256(served) !== sha256(installed)) {
-      throw new Error(`${endpoint} bytes differ from the tarball-installed artifact`)
-    }
+  const entry = bootEntry(page, PACKAGE_NAME)
+  const bundleUrl = `/plugins/??${PACKAGE_NAME}/client.js&rev=${entry.rev}`
+  if (entry.url !== bundleUrl) {
+    throw new Error(`workflow bundle URL is ${entry.url}, expected the single-id combo ${bundleUrl}`)
+  }
+  const mapUrl = `/plugins/??${PACKAGE_NAME}/client.js.map&rev=${entry.rev}`
+  assertRunning()
+  const response = await boundedFetch(new URL(entry.url, url), START_TIMEOUT_MS, { headers })
+  assertRunning()
+  if (response.status !== 200) throw new Error(`${entry.url} returned HTTP ${response.status}`)
+  if (!response.headers.get('content-type')?.startsWith('text/javascript')) {
+    throw new Error(`${entry.url} returned an unexpected content type`)
+  }
+  const served = Buffer.from(await response.arrayBuffer())
+  assertRunning()
+  const installed = await readFile(join(installedRoot, 'lib', 'client.js'))
+  assertRunning()
+  if (sha256(served) !== sha256(comboFramed(installed.toString('utf8'), mapUrl))) {
+    throw new Error(`${entry.url} bytes differ from the tarball-installed artifact`)
+  }
+  assertRunning()
+  const sourceMap = await boundedFetch(new URL(mapUrl, url), START_TIMEOUT_MS, { headers })
+  assertRunning()
+  if (sourceMap.status !== 200) throw new Error(`${mapUrl} returned HTTP ${sourceMap.status}`)
+  if (!sourceMap.headers.get('content-type')?.startsWith('application/json')) {
+    throw new Error(`${mapUrl} returned an unexpected content type`)
+  }
+  const parsed = JSON.parse(Buffer.from(await sourceMap.arrayBuffer()).toString('utf8'))
+  assertRunning()
+  if (parsed?.version !== 3 || !Array.isArray(parsed.sections) || parsed.sections.length === 0) {
+    throw new Error(`${mapUrl} is not an indexed Source Map v3 object`)
   }
 }
 
-async function boundedFetch(input, timeoutMs) {
+function bootEntry(page, packageName) {
+  const marker = page.indexOf('__DSH_BOOT__')
+  if (marker === -1) throw new Error('official Web root embeds no __DSH_BOOT__ roster')
+  const open = page.indexOf('{', marker)
+  if (open === -1) throw new Error('official Web root embeds no __DSH_BOOT__ roster')
+  const entries = JSON.parse(extractBalanced(page, open))?.entries
+  if (!Array.isArray(entries)) throw new Error('official Web __DSH_BOOT__ roster has no entries array')
+  const entry = entries.find(candidate => candidate?.id === packageName)
+  if (entry === undefined) throw new Error(`${packageName} is missing from the official Web __DSH_BOOT__ roster`)
+  if (typeof entry.url !== 'string' || typeof entry.rev !== 'string') {
+    throw new Error(`${packageName} __DSH_BOOT__ entry has no bundle URL and revision`)
+  }
+  return entry
+}
+
+function extractBalanced(text, open) {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = open; index < text.length; index++) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === '{') depth++
+    else if (char === '}') {
+      depth--
+      if (depth === 0) return text.slice(open, index + 1)
+    }
+  }
+  throw new Error('official Web __DSH_BOOT__ roster is not balanced JSON')
+}
+
+function comboFramed(installedSource, mapUrl) {
+  let source = installedSource.replace(SOURCE_URL_TRAILER, '').replace(SOURCE_MAP_TRAILER, '')
+  if (!source.endsWith('\n')) source += '\n'
+  return Buffer.from(`${source};\n//# sourceMappingURL=${mapUrl}\n`, 'utf8')
+}
+
+async function boundedFetch(input, timeoutMs, options = {}) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(new Error('HTTP verification timed out')), timeoutMs)
   timer.unref?.()
-  try { return await fetch(input, { signal: controller.signal }) } finally { clearTimeout(timer) }
+  try { return await fetch(input, { ...options, signal: controller.signal }) } finally { clearTimeout(timer) }
 }
 
 function officialReadiness(handle) {
   return awaitReadiness(handle, line => {
-    const match = line.match(/^dsh web: (http:\/\/127\.0\.0\.1:\d+)(?: \(LAN: [^)]+\))?$/u)
+    const match = line.match(/^dsh web: (http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+)(?: \(LAN: [^)]+\))?$/u)
     return match?.[1]
   })
 }

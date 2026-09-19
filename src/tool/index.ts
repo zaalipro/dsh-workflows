@@ -44,7 +44,7 @@ const MISSING_SHADOW = 'workflow package requires either verified atomic replace
 const MISSING_FS = 'workflow script_path requires either Host fs.readBytesNoFollow or the published RC2 local filesystem capability'
 
 /*
- * Stock 0.1.2-rc.1 predates the opaque contribution marker and atomic
+ * Stock 0.1.6-alpha.1 predates the opaque contribution marker and atomic
  * replacement seam. Its public registry deliberately supports an Agent-local
  * definition shadowing a global definition with the same name, but it exposes
  * no package provenance for that global. Match the complete, distinctive
@@ -288,7 +288,7 @@ export function installWorkflowShadow(
     }
   }
 
-  // Stock 0.1.2-rc.1: the ToolRuntime and SystemPrompt public APIs scope a
+  // Stock 0.1.6-alpha.1: the ToolRuntime and SystemPrompt public APIs scope a
   // registration made through agent.ctx to that exact Agent.  Such a local
   // contribution shadows the stock global one and its prompt section.  Never
   // use this route for a marker-only contribution: without CAS that would
@@ -498,7 +498,7 @@ function localReadError(path: string, error: unknown): never {
 }
 
 /**
- * Published 0.1.2-rc.1 has resolve/lstat/processPath/readBytes but not the
+ * Published 0.1.6-alpha.1 has resolve/lstat/processPath/readBytes but not the
  * later path-shaped readBytesNoFollow method. For that exact local service
  * shape, authorize and normalize through the Host, then open the Host's
  * lexical display path with O_NOFOLLOW and read a bounded snapshot from the

@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -20,8 +19,9 @@ const RUN_TIMEOUT_MS = 120_000
 const CLEANUP_TIMEOUT_MS = 15_000
 
 /**
- * The worker and AgentLoop are Harness-owned prerequisites, not package
- * runtime dependencies.  Prefer a built, read-only Harness checkout when one
+ * AgentLoop and the child provider are Harness-owned prerequisites, not package
+ * runtime dependencies. The workflow evaluator is the same built package asset
+ * used by the production aggregate.  Prefer a built, read-only Harness checkout when one
  * is available; the package-name fallback is what an installed official profile
  * supplies.  All imports stay inside the key-gated test body.
  */
@@ -65,16 +65,7 @@ interface HarnessModules {
   readonly ToolBash: any
   readonly SubagentRuntime: any
   readonly Spawn: any
-  readonly WorkerThreadWorkflowEngine: any
-}
-
-interface ExecutionStats {
-  maxSeq: number
-}
-
-interface EngineInstallation {
-  readonly original: any
-  readonly restore: () => void
+  readonly CompatibilityEngine: any
 }
 
 function moduleDefault(module: ModuleValue, named: string): any {
@@ -113,21 +104,21 @@ async function loadHarnessModules(): Promise<HarnessModules> {
     harnessModule('packages/shell/tool-bash/lib/index.js', '@deepseek-ai/dsh-tool-bash'),
     harnessModule('packages/subagent/subagent/lib/index.js', '@deepseek-ai/dsh-subagent'),
     harnessModule('packages/subagent/subagent-spawn-in-process/lib/index.js', '@deepseek-ai/dsh-subagent-spawn-in-process'),
-    harnessModule('packages/workflow/workflow-worker-thread/lib/index.js', '@deepseek-ai/dsh-workflow-worker-thread'),
+    importModule(new URL('../lib/compat-engine/index.js', import.meta.url).href),
   ])
 
   const Context = moduleDefault(cordis, 'Context')
   const SessionId = moduleDefault(session, 'SessionId')
   const mountAgentLoopTestDependencies = moduleDefault(testkit, 'mountAgentLoopTestDependencies')
   const AgentLoop = moduleDefault(agentLoop, 'AgentLoop')
-  const WorkerThreadWorkflowEngine = moduleDefault(worker, 'WorkerThreadWorkflowEngine')
+  const CompatibilityEngine = moduleDefault(worker, 'WorkerThreadWorkflowEngine')
   const LocalSubprocessRuntime = moduleDefault(subprocess, 'LocalSubprocessRuntime')
   const LocalBashExecutor = moduleDefault(bash, 'LocalBashExecutor')
   if (typeof Context !== 'function'
     || typeof SessionId !== 'function'
     || typeof mountAgentLoopTestDependencies !== 'function'
     || AgentLoop === undefined
-    || WorkerThreadWorkflowEngine === undefined
+    || CompatibilityEngine === undefined
     || LocalSubprocessRuntime === undefined
     || LocalBashExecutor === undefined) {
     throw new Error('real-provider Harness prerequisites are unavailable')
@@ -144,7 +135,7 @@ async function loadHarnessModules(): Promise<HarnessModules> {
     ToolBash: toolBash,
     SubagentRuntime: subagent,
     Spawn: spawn,
-    WorkerThreadWorkflowEngine,
+    CompatibilityEngine,
   }
 }
 
@@ -168,65 +159,6 @@ async function closeResource(resource: unknown, label: string): Promise<void> {
       : undefined
   if (disposer === undefined) return
   await bounded(Promise.resolve().then(disposer), CLEANUP_TIMEOUT_MS, `${label} cleanup timed out`)
-}
-
-/**
- * A partial stock worker handle can omit release/checkpoint. Keep this
- * compatibility adapter local to the opt-in test: it preserves the worker's
- * execution id and result, adds the supervisor's required lifecycle face, and
- * deliberately exposes an empty replay journal after settlement. A complete
- * worker handle takes the direct branch and exercises its replay authority.
- */
-function installEngineCompatibilityAdapter(ctx: any, workerFiber: any, starts: readonly { id: string; seq: number }[]): EngineInstallation {
-  const original = ctx.workflowEngine
-  const stats = new Map<string, ExecutionStats>()
-  for (const start of starts) {
-    const current = stats.get(start.id) ?? { maxSeq: 0 }
-    current.maxSeq = Math.max(current.maxSeq, start.seq)
-    stats.set(start.id, current)
-  }
-  const wrapped = {
-    start(request: any): any {
-      const raw = original.start.call(original, request)
-      if (typeof raw?.release === 'function' && typeof raw?.checkpoint === 'function') return raw
-      if (raw === undefined || raw === null || typeof raw.result?.then !== 'function') return raw
-
-      const id = typeof raw.id === 'string' && raw.id.length > 0 ? raw.id : randomUUID()
-      const execution = stats.get(id) ?? { maxSeq: 0 }
-      stats.set(id, execution)
-      let settled: any
-      let disposed = false
-      const result = Promise.resolve(raw.result).then(value => {
-        settled = value
-        return value
-      })
-      return {
-        id,
-        result,
-        cancel: (reason?: string) => raw.cancel?.(reason),
-        resume: () => raw.resume?.(),
-        // The old worker starts as soon as start() is called.  Its result is
-        // still detached from the caller; release is therefore intentionally
-        // a no-op for this compatibility path.
-        release: () => undefined,
-        async dispose() {
-          await raw.dispose?.()
-          disposed = true
-        },
-        checkpoint() {
-          if (settled === undefined || !disposed) throw new Error('workflow checkpoint is not ready')
-          const spend = Math.max(Number(settled?.agentsStarted) || 0, execution.maxSeq)
-          return { journal: [], agentSpend: spend, agentSeq: spend }
-        },
-      }
-    },
-  }
-  const owner = workerFiber?.ctx ?? workerFiber
-  owner.reflect.set('workflowEngine', wrapped)
-  return {
-    original,
-    restore: () => owner.reflect.set('workflowEngine', original),
-  }
 }
 
 function resultValue(view: any): any {
@@ -265,12 +197,10 @@ describe('real-provider workflow', () => {
     process.env.DSH_HOME = home
 
     let ctx: any
-    let workerFiber: any
     let registry: WorkflowRegistry | undefined
     let storage: Awaited<ReturnType<typeof openWorkflowStorage>> | undefined
     let supervisor: WorkflowSupervisor | undefined
     let parentHandle: any
-    let engineInstallation: EngineInstallation | undefined
     let eventDisposer: (() => void) | undefined
     const starts: Array<{ id: string; seq: number; label: string }> = []
     const ends: Array<{ id: string; seq: number; outcome: string }> = []
@@ -300,8 +230,8 @@ describe('real-provider workflow', () => {
         })
         await ctx.plugin(harness.ToolBash, { enableRunInBackground: false })
         await ctx.plugin(harness.SubagentRuntime)
-        workerFiber = await ctx.plugin(harness.Spawn, { providerName: 'spawn' })
-        const workerEngineFiber = await ctx.plugin(harness.WorkerThreadWorkflowEngine, {
+        await ctx.plugin(harness.Spawn, { providerName: 'spawn' })
+        const engine = new harness.CompatibilityEngine(ctx, {
           provider: 'spawn',
           maxTotalAgents: 2,
           maxConcurrentAgents: 2,
@@ -319,11 +249,6 @@ describe('real-provider workflow', () => {
         eventDisposer = () => {
           try { removeStart?.() } finally { removeEnd?.() }
         }
-        // The worker engine is the only service that needs this test compatibility
-        // shim.  It must be replaced through its owning fiber, not provided a
-        // second time (Cordis rejects duplicate service identities).
-        engineInstallation = installEngineCompatibilityAdapter(ctx, workerEngineFiber, starts)
-
         const config = resolveWorkflowPackageConfig({
           dshHome: home,
           runsRoot,
@@ -346,6 +271,7 @@ describe('real-provider workflow', () => {
         ctx.provide('workflowStorage', storage)
         ctx.provide('workflows', registry)
         supervisor = new WorkflowSupervisor(ctx, {
+          engine,
           defaultAgentBudget: 2,
           maxAgentBudget: 2,
           maxConcurrentAgents: 2,
@@ -431,7 +357,6 @@ describe('real-provider workflow', () => {
       await closeResource(supervisor, 'workflow supervisor').catch(() => cleanupFailures.push('workflow supervisor'))
       await closeResource(parentHandle, 'parent Agent').catch(() => cleanupFailures.push('parent Agent'))
       try { eventDisposer?.() } catch { cleanupFailures.push('workflow event listener') }
-      try { engineInstallation?.restore() } catch { cleanupFailures.push('workflow engine') }
       await closeResource(registry, 'workflow registry').catch(() => cleanupFailures.push('workflow registry'))
       await closeResource(ctx?.fiber, 'Harness context').catch(() => cleanupFailures.push('Harness context'))
       await closeResource(storage, 'workflow storage lease').catch(() => cleanupFailures.push('workflow storage lease'))

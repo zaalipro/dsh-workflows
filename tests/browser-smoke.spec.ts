@@ -58,6 +58,51 @@ async function fixtureServer(directory: string, body: string): Promise<string> {
   return path
 }
 
+interface BootEntry {
+  id: string
+  url: string
+  rev: string
+}
+
+function bootEntry(page: string, packageName: string): BootEntry {
+  const marker = page.indexOf('__DSH_BOOT__')
+  if (marker === -1) throw new Error('official Web root embeds no __DSH_BOOT__ roster')
+  const open = page.indexOf('{', marker)
+  if (open === -1) throw new Error('official Web root embeds no __DSH_BOOT__ roster')
+  const entries = (JSON.parse(extractBalanced(page, open)) as { entries?: unknown }).entries
+  if (!Array.isArray(entries)) throw new Error('official Web __DSH_BOOT__ roster has no entries array')
+  const entry = entries.find((candidate): candidate is BootEntry =>
+    typeof candidate === 'object' && candidate !== null
+    && (candidate as { id?: unknown }).id === packageName)
+  if (entry === undefined) throw new Error(`${packageName} is missing from the official Web __DSH_BOOT__ roster`)
+  if (typeof entry.url !== 'string' || typeof entry.rev !== 'string') {
+    throw new Error(`${packageName} __DSH_BOOT__ entry has no bundle URL and revision`)
+  }
+  return entry
+}
+
+function extractBalanced(text: string, open: number): string {
+  let depth = 0
+  let inString = false
+  let escaped = false
+  for (let index = open; index < text.length; index++) {
+    const char = text[index]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (char === '\\') escaped = true
+      else if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') inString = true
+    else if (char === '{') depth++
+    else if (char === '}') {
+      depth--
+      if (depth === 0) return text.slice(open, index + 1)
+    }
+  }
+  throw new Error('official Web __DSH_BOOT__ roster is not balanced JSON')
+}
+
 describe('tarball browser-smoke helper boundary', () => {
   it('runs the frozen published CLI without requiring checkout dependencies', async () => {
     const source = await readFile(helper, 'utf8')
@@ -250,16 +295,28 @@ describe('tarball browser-smoke helper boundary', () => {
             reject(new Error(`browser helper exited before readiness with ${String(code)}`))
           })
         })
-        expect(readiness).toMatchObject({ kind: 'ready', url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+$/u), pid: expect.any(Number) })
+        expect(readiness).toMatchObject({ kind: 'ready', url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/\?token=[A-Za-z0-9_-]+$/u), pid: expect.any(Number) })
 
-        const page = await fetch(readiness.url)
+        const exchange = await fetch(readiness.url, { redirect: 'manual' })
+        expect(exchange.status).toBe(303)
+        expect(exchange.headers.get('location')).toBe('/')
+        const cookie = exchange.headers.getSetCookie().map(value => value.split(';', 1)[0]).join('; ')
+        expect(cookie).not.toBe('')
+        await exchange.arrayBuffer()
+        const headers = { cookie }
+        const page = await fetch(new URL('/', readiness.url), { headers })
         expect(page.status).toBe(200)
-        await page.arrayBuffer()
-        const bundle = await fetch(new URL('/plugins/@zaalipro/dsh-workflows/client.js', readiness.url))
+        const entry = bootEntry(await page.text(), '@zaalipro/dsh-workflows')
+        const bundleUrl = `/plugins/??@zaalipro/dsh-workflows/client.js&rev=${entry.rev}`
+        expect(entry.url).toBe(bundleUrl)
+        const bundle = await fetch(new URL(entry.url, readiness.url), { headers })
         expect(bundle.status).toBe(200)
         expect(bundle.headers.get('content-type')).toMatch(/^text\/javascript/u)
         expect(await bundle.text()).toContain('@zaalipro/dsh-workflows')
-        const sourceMap = await fetch(new URL('/plugins/@zaalipro/dsh-workflows/client.js.map', readiness.url))
+        const sourceMap = await fetch(
+          new URL(`/plugins/??@zaalipro/dsh-workflows/client.js.map&rev=${entry.rev}`, readiness.url),
+          { headers },
+        )
         expect(sourceMap.status).toBe(200)
         expect((await sourceMap.json()) as { version?: unknown }).toMatchObject({ version: 3 })
       } finally {

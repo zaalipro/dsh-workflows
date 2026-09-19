@@ -47,11 +47,11 @@ describe('documentation verifier', () => {
     expectFailure(fixture, /README\.md: contains an absolute developer-machine path/u)
   }))
 
-  it('rejects a guessed rc9 compatibility claim in either language', () => withFixture(fixture => {
+  it('rejects a guessed rc13 compatibility claim in either language', () => withFixture(fixture => {
     const readme = join(fixture, 'README.zh.md')
-    mutate(readme, text => `${text.trimEnd()}\n\n0.1.0-rc.9 与本包兼容。\n`)
+    mutate(readme, text => `${text.trimEnd()}\n\n0.1.0-rc.13 与本包兼容。\n`)
     refreshMapping(fixture, 'README.md')
-    expectFailure(fixture, /README\.zh\.md: names unverified rc9/u)
+    expectFailure(fixture, /README\.zh\.md: names unverified rc13/u)
   }))
 
   it('checks required content in the Chinese companion', () => withFixture(fixture => {
@@ -82,7 +82,7 @@ describe('documentation verifier', () => {
     const testing = readFileSync(join(repository, 'docs/testing.md'), 'utf8')
     expect(testing).toContain('official-host-probe')
     expect(testing).toContain('no Harness source patch')
-    expect(testing).toContain('a66e4702047846cdaa10c66c9d3df3951f5ea70d')
+    expect(testing).toContain('0a15e36e7f82b6ed45af6fa9759f29b40dcd965d')
     expect(testing).toContain('ConversationNodeAssembler')
     expect(testing).not.toContain('applies a Harness patch')
   })

@@ -82,6 +82,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
         inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
         register: () => () => undefined,
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: { register: () => () => undefined, decorate: () => () => undefined },
       inputTriggers: { registerSource: () => () => { disposeCount.input += 1 } },
@@ -130,6 +131,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
         inject(_name: string, factory: () => unknown) { factory(); return () => { disposed.push('slot') } },
         register: () => () => undefined,
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         register: () => () => undefined,
@@ -197,6 +199,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
           return () => undefined
         },
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         register: () => () => undefined,
@@ -236,6 +239,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       remote: { $mount: async () => () => undefined, $on: () => () => undefined },
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: { inject: () => () => undefined, register: () => undefined },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       locale: { register: () => () => undefined, bind: () => (key: string) => key },
       connection: { hostDescription: { subscribe: () => () => undefined, getSnapshot: () => ({}) } },
@@ -272,6 +276,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       remote: {},
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: { inject: () => () => undefined, register: () => undefined },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register: () => () => { disposed.push('action') },
@@ -304,6 +309,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       remote: { $mount: async () => { throw new Error('typert projection unavailable') } },
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: { inject: () => () => undefined, register: () => undefined },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: {
         runAction() { /* action-capable dispatch face */ },
@@ -360,6 +366,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
           return () => undefined
         },
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register(contribution: any) {
@@ -437,6 +444,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
         inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
         register(entry: any) { entry.inject?.(actions); return () => undefined },
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register(contribution: any) { registered.push(contribution); return () => undefined },
@@ -470,7 +478,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       nodeRequire.resolve('@deepseek-ai/dsh-client-ui-input-trigger/package.json'),
       'utf8',
     ))
-    expect(installed.version).toBe('0.1.2-rc.1')
+    expect(installed.version).toBe('0.1.6-alpha.1')
     const Controller = officialInputTriggerController()
     const earlierCommandMiss = {
       trigger: '/',
@@ -541,6 +549,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
         binding: () => ({ session: { command: async () => ({ ok: true, value: { matched: true } }) } }),
       },
       slots: { inject: () => () => undefined, register: () => undefined },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register: () => () => undefined,
@@ -592,6 +601,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
       remote: { $mount: async () => () => undefined, $on: () => () => undefined },
       sessions: { list: { getSnapshot: () => ({ ids: [], phase: 'ready' }), subscribe: () => () => undefined } },
       slots: { inject: () => undefined, register: () => undefined },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register(contribution: any) { registered.push(contribution); return () => undefined },
@@ -629,6 +639,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
           return () => undefined
         },
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register(contribution: any) { registered.push(contribution); return () => undefined },
@@ -667,6 +678,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
         inject(_name: string, factory: () => unknown) { factory(); return () => undefined },
         register(entry: any) { slotEntries.push(entry); entry.inject?.(actions); return () => undefined },
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: { register: () => () => undefined, decorate: () => () => undefined },
       inputTriggers: {
@@ -766,6 +778,7 @@ describe('Client /workflows action (RC21-RC22)', () => {
         inject() { return () => undefined },
         register() { return () => undefined },
       },
+      uiConversation: { events: { register: () => () => undefined } },
       conversationEvents: { register: () => () => undefined },
       commandUi: actionCommandUi({
         register: () => () => undefined,

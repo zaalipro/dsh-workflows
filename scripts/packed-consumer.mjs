@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process'
 import vm from 'node:vm'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const OFFICIAL_COMMIT = 'a66e4702047846cdaa10c66c9d3df3951f5ea70d'
+const OFFICIAL_COMMIT = '0a15e36e7f82b6ed45af6fa9759f29b40dcd965d'
 const OUTPUT_TAIL_BYTES = 1024 * 1024
 const activeChildren = new Set()
 let interruptedSignal
@@ -57,16 +57,16 @@ try {
   // stable-only peer range emitted by the upstream package graph.
   await command('pnpm', [
     'add', '--config.dedupe-peer-dependents=true', '--save-dev', '--ignore-scripts',
-    'typescript@5.9.3', '@types/node@22.20.1', '@deepseek-ai/dsh@0.1.2-rc.1',
+    'typescript@5.9.3', '@types/node@22.20.1', '@deepseek-ai/dsh@0.1.6-alpha.1',
     '@deepseek-ai/schemastery@3.18.2', ...officialSpecs,
   ], { cwd: workspace, env })
   await command('pnpm', ['add', '--ignore-scripts', options.tarball], { cwd: workspace, env })
   const installedManifestPath = join(workspace, 'node_modules/@zaalipro/dsh-workflows/package.json')
   const installedManifest = JSON.parse(await readFile(installedManifestPath, 'utf8'))
-  if (installedManifest.version !== '0.1.0-rc.5'
+  if (installedManifest.version !== '0.1.0-rc.12'
     || installedManifest.dsh?.compatibility?.host !== '@deepseek-ai/dsh'
     || installedManifest.dsh?.compatibility?.evaluator !== 'plugin-compat-engine-v1'
-    || JSON.stringify(installedManifest.dsh?.compatibility?.versions) !== JSON.stringify(['0.1.2-rc.1'])) {
+    || JSON.stringify(installedManifest.dsh?.compatibility?.versions) !== JSON.stringify(['0.1.6-alpha.1'])) {
     throw new Error('installed plugin version or compatibility metadata does not match the release contract')
   }
   await requireFile(join(dirname(installedManifestPath), 'lib/compat-engine/index.js'), 'installed compatibility evaluator')
@@ -124,7 +124,7 @@ try {
   // version represented by this consumer checkout.
   stage = 'official-host-probe'
   const officialManifest = JSON.parse(await readFile(join(options.official, 'package.json'), 'utf8'))
-  if (officialManifest.version !== '0.1.2-rc.1') throw new Error(`official Harness 0.1.2-rc.1 is required, got ${String(officialManifest.version)}`)
+  if (officialManifest.version !== '0.1.6-alpha.1') throw new Error(`official Harness 0.1.6-alpha.1 is required, got ${String(officialManifest.version)}`)
   const revision = (await command('git', ['-C', options.official, 'rev-parse', 'HEAD'], { cwd: workspace, env, timeoutMs: 30_000 })).stdout.trim()
   if (revision !== OFFICIAL_COMMIT) throw new Error(`official Harness checkout must be ${OFFICIAL_COMMIT}, got ${revision}`)
   report(stage, { version: officialManifest.version, commit: revision, activation: 'verified' })

@@ -17,7 +17,7 @@ concurrency:
 env:
   CI: 'true'
   DSH_TELEMETRY_DISABLED: '1'
-  DSH_OFFICIAL_BASE_COMMIT: a66e4702047846cdaa10c66c9d3df3951f5ea70d
+  DSH_OFFICIAL_BASE_COMMIT: 0a15e36e7f82b6ed45af6fa9759f29b40dcd965d
 
 jobs:
   pack:
@@ -34,15 +34,16 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - name: Check out the read-only official Harness base
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: a66e4702047846cdaa10c66c9d3df3951f5ea70d
+          ref: 0a15e36e7f82b6ed45af6fa9759f29b40dcd965d
           path: official-harness
           persist-credentials: false
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
       - name: Install pinned pnpm
@@ -51,6 +52,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          echo "tag=$GITHUB_REF_NAME objecttype=$(git for-each-ref --format='%(objecttype)' "refs/tags/$GITHUB_REF_NAME")"
+          echo "package-version=$(node -p "require('./package.json').version")"
+          echo "official-head=$(git -C official-harness rev-parse HEAD) pin=$DSH_OFFICIAL_BASE_COMMIT"
           test "$(git for-each-ref --format='%(objecttype)' "refs/tags/$GITHUB_REF_NAME")" = tag
           test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
           test "$(git -C official-harness rev-parse HEAD)" = "$DSH_OFFICIAL_BASE_COMMIT"
@@ -116,7 +121,7 @@ jobs:
         with:
           name: dsh-workflows-release-artifact
           path: artifact
-      - uses: actions/setup-node@1e60f620b9541d7c243d886bdee0b9885f2b076c
+      - uses: actions/setup-node@1e60f620b9541d16bece96c5465dc8ee9832be0b
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
@@ -124,8 +129,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          file="artifact/${{ needs.pack.outputs.filename }}"
-          metadata="artifact/release-artifact.json"
+          file="./artifact/${{ needs.pack.outputs.filename }}"
+          metadata="./artifact/release-artifact.json"
           test -f "$file"
           test -f "$metadata"
           read_field() { node -e 'const m=require(process.argv[1]); const v=m[process.argv[2]]; if (typeof v !== "string" && typeof v !== "boolean") process.exit(2); process.stdout.write(String(v))' "$metadata" "$1"; }
@@ -139,7 +144,7 @@ jobs:
           test "$(sha256sum "$file" | cut -d' ' -f1)" = "${{ needs.pack.outputs.sha256 }}"
           (cd artifact && sha256sum --check "${{ needs.pack.outputs.filename }}.sha256")
       - name: Publish the same file with npm provenance
-        run: npm publish "artifact/${{ needs.pack.outputs.filename }}" --access public --provenance --tag "${{ needs.pack.outputs.dist_tag }}"
+        run: npm publish "./artifact/${{ needs.pack.outputs.filename }}" --access public --provenance --tag "${{ needs.pack.outputs.dist_tag }}"
       - name: Create the matching GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
